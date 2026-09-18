@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>孤高旅斗 v__VERSION__</title>
+<style>
+:root{
+  --bg:#080b16; --bg2:#0e1426; --panel:rgba(18,24,44,.92); --line:rgba(120,160,255,.18);
+  --txt:#e8eeff; --dim:#8fa0c8; --cyan:#22d3ee; --pink:#f472b6; --gold:#fbbf24;
+  --red:#fb7185; --green:#34d399; --violet:#a78bfa;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  background:radial-gradient(1200px 700px at 50% -10%,#1a2350 0%,var(--bg) 60%);
+  color:var(--txt);font-family:"HarmonyOS Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  display:flex;align-items:center;justify-content:center;overflow:hidden;user-select:none;
+}
+#app{position:relative;width:960px;height:600px;border-radius:16px;overflow:hidden;
+  box-shadow:0 0 0 1px rgba(120,160,255,.16),0 24px 70px rgba(0,0,0,.75)}
+canvas{display:block;width:960px;height:600px;background:#05070f}
+
+/* ============ HUD ============ */
+#hud{position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .25s}
+#hud.on{opacity:1}
+.topbar{position:absolute;top:0;left:0;right:0;height:42px;display:flex;align-items:center;gap:10px;
+  padding:0 12px;background:linear-gradient(180deg,rgba(8,11,22,.9),rgba(8,11,22,0));pointer-events:auto}
+.logo{font-weight:800;letter-spacing:2px;font-size:14px;color:#cfe0ff;text-shadow:0 0 12px rgba(34,211,238,.55)}
+.ver{font-size:10px;color:var(--dim);border:1px solid var(--line);border-radius:20px;padding:1px 7px}
+.spacer{flex:1}
+.tbtn{pointer-events:auto;cursor:pointer;border:1px solid var(--line);background:rgba(20,28,52,.75);
+  color:var(--txt);border-radius:8px;padding:5px 11px;font-size:12px;transition:.15s}
+.tbtn:hover{background:rgba(40,56,100,.9);border-color:rgba(120,160,255,.5)}
+
+.bars{position:absolute;top:50px;left:12px;width:300px;display:flex;flex-direction:column;gap:5px}
+.barrow{display:flex;align-items:center;gap:7px}
+.barlab{font-size:10px;color:var(--dim);width:34px;letter-spacing:1px}
+.bartrack{position:relative;flex:1;height:13px;background:rgba(10,14,28,.85);border:1px solid var(--line);
+  border-radius:7px;overflow:hidden}
+.barfill{position:absolute;inset:0;width:100%;transform-origin:left;transition:transform .16s}
+.hp .barfill{background:linear-gradient(90deg,#34d399,#22d3ee)}
+.hp.foe .barfill{background:linear-gradient(90deg,#fb7185,#f59e0b)}
+.en .barfill{background:linear-gradient(90deg,#a78bfa,#22d3ee)}
+.en.full .barfill{background:linear-gradient(90deg,#fbbf24,#f472b6);box-shadow:0 0 12px rgba(251,191,36,.7)}
+.bartxt{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-size:9px;font-weight:700;text-shadow:0 1px 2px #000;letter-spacing:.4px}
+/* 注意：不要定义裸的 .ghost 规则——ghost 是按钮的「透明背景」修饰类（.btn.ghost），
+   以前这里放过一条 .ghost{position:absolute;inset:0} 的血条残影规则，
+   会把所有 ghost 按钮拉成铺满整个界面的透明大按钮（点哪都触发按钮）。 */
+
+.enemyHud{position:absolute;top:50px;right:12px;width:290px;display:flex;flex-direction:column;gap:5px;align-items:flex-end}
+.enemyHud .barrow{width:100%}
+.tag{font-size:10px;color:var(--dim)}
+
+/* 技能槽 */
+.slots{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);display:flex;gap:10px}
+.slot{position:relative;width:62px;height:62px;border-radius:12px;background:rgba(14,20,38,.9);
+  border:1px solid var(--line);overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.slot.big{width:70px;height:70px;border-color:rgba(251,191,36,.35)}
+.slot .ic{font-size:20px;line-height:1}
+.slot .nm{font-size:9px;color:var(--dim);max-width:58px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.slot .kb{position:absolute;top:2px;left:5px;font-size:9px;color:#9fb3dd;font-weight:700}
+.slot .cd{position:absolute;inset:0;background:rgba(4,7,16,.78);display:flex;align-items:center;justify-content:center;
+  font-size:16px;font-weight:800;color:#dbe7ff}
+.slot.empty{opacity:.34}
+.slot.ready{border-color:rgba(34,211,238,.55);box-shadow:0 0 16px rgba(34,211,238,.25) inset}
+.slot.ultready{border-color:rgba(251,191,36,.9);box-shadow:0 0 18px rgba(251,191,36,.35)}
+.slot .en{position:absolute;bottom:0;left:0;right:0;height:3px;background:rgba(251,191,36,.85);transform-origin:left}
+
+/* ============ 覆盖层 ============ */
+/* 菜单背景：构建时 __MENU_BG__ 替换为 assets/menu-bg.jpg 的 data URI，
+   上层压一层深色渐变保证标题与卡片可读 */
+.ov{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  background:linear-gradient(180deg,rgba(6,9,18,.60) 0%,rgba(6,9,18,.78) 55%,rgba(6,9,18,.92) 100%),
+    url("__MENU_BG__") center/cover no-repeat,#080b16;
+  padding:26px 34px;overflow-y:auto;z-index:5}
+.ov.hide{display:none}
+h1{font-size:34px;letter-spacing:8px;background:linear-gradient(90deg,#22d3ee,#a78bfa,#f472b6);
+  -webkit-background-clip:text;background-clip:text;color:transparent;font-weight:900}
+h2{font-size:22px;letter-spacing:3px;margin-bottom:4px}
+.sub{color:var(--dim);font-size:12.5px;margin-top:6px;line-height:1.7;text-align:center;max-width:660px}
+.hr{width:100%;max-width:720px;height:1px;background:var(--line);margin:14px 0}
+
+.grid{display:grid;gap:12px;width:100%;max-width:760px}
+.g2{grid-template-columns:1fr 1fr}
+.g3{grid-template-columns:repeat(3,1fr)}
+.g4{grid-template-columns:repeat(4,1fr)}
+.card{cursor:pointer;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 16px;
+  transition:.16s;position:relative;overflow:hidden}
+.card:hover{transform:translateY(-2px);border-color:rgba(120,160,255,.55);box-shadow:0 10px 26px rgba(0,0,0,.45)}
+.card.sel{border-color:var(--cyan);box-shadow:0 0 0 1px var(--cyan),0 0 22px rgba(34,211,238,.28)}
+.card.lock{opacity:.5;cursor:not-allowed}
+.card.lock:hover{transform:none;border-color:var(--line);box-shadow:none}
+.card .t{font-size:16px;font-weight:800;letter-spacing:1px;margin-bottom:4px;display:flex;align-items:center;gap:7px}
+.card .d{font-size:11.5px;color:var(--dim);line-height:1.6}
+.card .badge{position:absolute;top:9px;right:10px;font-size:9.5px;padding:2px 7px;border-radius:20px;
+  background:rgba(34,211,238,.16);color:#7fe6f7;border:1px solid rgba(34,211,238,.35)}
+.card .badge.hard{background:rgba(251,113,133,.18);color:#ffa3b1;border-color:rgba(251,113,133,.4)}
+.card .badge.own{background:rgba(52,211,153,.16);color:#7ff0c4;border-color:rgba(52,211,153,.4)}
+.card .badge.eq{background:rgba(251,191,36,.18);color:#ffdb8a;border-color:rgba(251,191,36,.45)}
+
+.btn{cursor:pointer;border-radius:11px;padding:11px 24px;font-size:14px;font-weight:700;letter-spacing:1px;
+  border:1px solid rgba(120,160,255,.4);background:rgba(30,42,78,.9);color:var(--txt);transition:.15s}
+.btn:hover{background:rgba(48,66,120,.95);transform:translateY(-1px)}
+.btn.primary{background:linear-gradient(135deg,#22d3ee,#6366f1);border:none;color:#04121c;box-shadow:0 8px 22px rgba(34,211,238,.3)}
+.btn.gold{background:linear-gradient(135deg,#fbbf24,#f59e0b);border:none;color:#2a1a00}
+.btn.sm{padding:6px 14px;font-size:12px;border-radius:8px}
+.btn.ghost{background:transparent}
+.btn:disabled,.btn.dis{opacity:.42;cursor:not-allowed;transform:none}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:center}
+.coinbar{position:absolute;top:14px;right:16px;display:flex;align-items:center;gap:7px;font-weight:800;
+  background:rgba(251,191,36,.13);border:1px solid rgba(251,191,36,.4);color:#ffd98a;padding:6px 13px;border-radius:20px;font-size:13px}
+/* 纯 CSS 金币：不依赖系统表情字体（Windows 10 老版没有 <i class="coin"></i>这个字形，会显示成方框） */
+.coin{display:inline-block;width:13px;height:13px;border-radius:50%;
+  background:radial-gradient(circle at 34% 30%, #fff3c4 0%, #fbbf24 46%, #b45309 100%);
+  box-shadow:0 0 0 1px rgba(180,83,9,.75), inset 0 -1px 1px rgba(120,53,15,.55);flex:0 0 auto}
+.coin::after{content:"";display:block;width:5px;height:5px;margin:4px auto 0;border-radius:50%;
+  background:rgba(255,255,255,.55)}
+.back{position:absolute;top:14px;left:16px;cursor:pointer;font-size:12px;color:var(--dim);
+  border:1px solid var(--line);padding:6px 13px;border-radius:8px;z-index:9}
+/* 角色卡房间可能超出屏高：改为顶端对齐 + 子元素 margin:auto，避免内容顶出遮住返回按钮 */
+#ovDuelSetup,#ovWait{justify-content:flex-start}
+.roomwrap{margin:auto 0;padding:34px 8px 10px}
+.back:hover{color:var(--txt);border-color:rgba(120,160,255,.5)}
+
+.shop{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;width:100%;max-width:800px}
+.item{cursor:pointer;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:9px;text-align:center;transition:.15s;position:relative}
+.item:hover{border-color:rgba(120,160,255,.55);transform:translateY(-2px)}
+.item.own{border-color:rgba(52,211,153,.45)}
+.item.eq{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold)}
+.item .pv{height:62px;display:flex;align-items:center;justify-content:center}
+.item .nm{font-size:11px;margin-top:4px;font-weight:700}
+.item .pr{font-size:10.5px;color:#ffd98a;margin-top:3px}
+.item.can .pr{color:#7ff0c4}
+.item .st{position:absolute;top:5px;right:6px;font-size:9px;color:#7ff0c4}
+.item .st.eq{color:var(--gold)}
+
+.tabs{display:flex;gap:8px;margin-bottom:12px}
+.tab{cursor:pointer;padding:7px 18px;border-radius:20px;font-size:12.5px;border:1px solid var(--line);color:var(--dim)}
+.tab.on{background:rgba(34,211,238,.14);border-color:rgba(34,211,238,.5);color:#9beaf8;font-weight:700}
+
+.help{width:100%;max-width:780px;text-align:left;font-size:12.5px;line-height:1.85;color:#c6d4ef;
+  max-height:330px;overflow-y:auto;padding-right:10px}
+.help b{color:#fff}
+.help .k{display:inline-block;min-width:20px;text-align:center;border:1px solid var(--line);border-radius:5px;
+  padding:0 6px;font-size:11px;color:#9fb3dd;margin:0 2px;background:rgba(30,42,78,.6)}
+.help h3{color:#7fe6f7;font-size:13.5px;margin:14px 0 5px;letter-spacing:1px}
+.help ul{margin-left:17px}
+::-webkit-scrollbar{width:7px}
+::-webkit-scrollbar-thumb{background:rgba(120,160,255,.28);border-radius:4px}
+
+/* 配装 */
+.loadbar{display:flex;gap:10px;justify-content:center;margin:10px 0}
+.lslot{width:120px;background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:9px;text-align:center}
+.lslot .lb{font-size:10px;color:var(--dim);letter-spacing:1px}
+.lslot .ls{font-size:13px;font-weight:800;margin-top:4px}
+.lslot .lk{font-size:9.5px;color:#9fb3dd;margin-top:2px}
+.lslot.sel{border-color:var(--cyan);box-shadow:0 0 0 1px var(--cyan)}
+
+.pvwrap{display:flex;align-items:center;justify-content:center}
+canvas.pv{width:64px;height:80px;display:block}
+
+#tip{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);font-size:11.5px;color:#9fb3dd;
+  background:rgba(10,14,28,.85);border:1px solid var(--line);border-radius:20px;padding:5px 16px;opacity:0;transition:.25s;pointer-events:none;z-index:9}
+#tip.on{opacity:1}
+#toast{position:absolute;top:64px;left:50%;transform:translateX(-50%);z-index:9;display:flex;flex-direction:column;gap:6px;align-items:center;pointer-events:none}
+.tst{background:rgba(12,18,34,.94);border:1px solid rgba(34,211,238,.4);color:#bfe9f5;font-size:12px;
+  padding:7px 18px;border-radius:20px;animation:tin .3s;white-space:nowrap}
+.tst.gold{border-color:rgba(251,191,36,.5);color:#ffd98a}
+@keyframes tin{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:none}}
+.addrbox{font-family:ui-monospace,Consolas,monospace;font-size:15px;background:rgba(6,10,22,.9);
+  border:1px solid var(--line);border-radius:10px;padding:11px 18px;color:#7fe6f7;letter-spacing:.5px;max-width:100%;overflow-x:auto}
+.codebox{font-family:ui-monospace,Consolas,monospace;font-size:44px;font-weight:900;letter-spacing:12px;
+  color:var(--gold);text-shadow:0 0 26px rgba(251,191,36,.5);padding-left:12px}
+.input{background:rgba(6,10,22,.9);border:1px solid var(--line);border-radius:10px;color:var(--txt);
+  font-size:24px;letter-spacing:10px;text-align:center;padding:10px;width:230px;outline:none;font-family:ui-monospace,monospace}
+.input:focus{border-color:var(--cyan)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block;box-shadow:0 0 8px var(--green)}
+.dot.off{background:#64748b;box-shadow:none}
+.big-word{font-size:52px;font-weight:900;letter-spacing:10px;color:var(--gold);text-shadow:0 0 34px rgba(251,191,36,.6)}
+
+/* ============ 开房间式准备界面（角色卡） ============ */
+.roomwrap{width:100%;max-width:940px;display:flex;flex-direction:column;align-items:center}
+.roomwrap h2{font-size:20px;letter-spacing:3px;margin:6px 0 4px}
+.rulebar{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:8px 0 4px;max-width:940px}
+.rule{display:flex;flex-direction:column;align-items:flex-start;gap:2px;max-width:300px;text-align:left;
+  background:rgba(12,18,36,.72);border:1px solid var(--line);border-radius:10px;padding:7px 11px;cursor:pointer;color:var(--txt)}
+.rule b{font-size:12.5px}
+.rule span{font-size:10.5px;color:#8fa0c8;line-height:1.45}
+.rule.sel{border-color:var(--gold);box-shadow:0 0 0 1px rgba(251,191,36,.35) inset}
+.rule:disabled{opacity:.6;cursor:default}
+.cardgrid{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin:12px 0 4px}
+.pcard{position:relative;width:196px;background:linear-gradient(180deg,rgba(20,28,52,.92),rgba(10,14,28,.94));
+  border:1px solid rgba(120,160,255,.22);border-radius:14px;padding:10px 10px 12px;display:flex;flex-direction:column;align-items:center}
+.pcard.mine{border-color:var(--cyan);box-shadow:0 0 0 1px rgba(34,211,238,.35) inset}
+.pcard .pv{background:rgba(6,10,22,.55);border-radius:10px}
+.pcard .pn{font-size:13px;font-weight:700;margin:4px 0 2px;display:flex;align-items:center;justify-content:center;gap:5px}
+.ttag{width:9px;height:9px;border-radius:50%;display:inline-block;flex:none;box-shadow:0 0 6px rgba(255,255,255,.25)}
+.pcard .cb{position:absolute;top:7px;left:8px;font-size:9.5px;padding:1px 6px;border-radius:6px;color:#08101f;font-weight:800}
+.pcard .cb.me{background:var(--cyan)}
+.pcard .cb.bot{background:#a78bfa}
+.pcard .cb.p{background:#7ff0c4}
+.crow{display:flex;align-items:center;gap:5px;flex-wrap:wrap;justify-content:center;margin-top:5px;width:100%}
+.cl{font-size:10px;color:#8fa0c8;width:24px;text-align:right}
+.lvtabs{display:flex;gap:3px}
+.lv{font-size:10px;padding:2px 7px;border-radius:7px;background:rgba(8,14,28,.85);border:1px solid var(--line);color:var(--txt);cursor:pointer}
+.lv.sel{border-color:var(--gold);color:var(--gold)}
+.skgrid{display:flex;align-items:center;gap:3px 7px;flex-wrap:wrap;justify-content:center}
+.ski{display:inline-flex;align-items:center;gap:3px;white-space:nowrap}
+.tk{font-size:9.5px;color:#8fa0c8}
+.mini{background:#0b1220;color:#e8eeff;border:1px solid rgba(120,160,255,.25);border-radius:6px;padding:2px 3px;font-size:10px;max-width:82px;outline:none}
+.sktext{font-size:10.5px;color:#9fb3dd;gap:7px}
+.teamrow{display:flex;gap:3px;margin-top:6px;flex-wrap:wrap;justify-content:center}
+.tchip{display:flex;align-items:center;gap:4px;font-size:10px;padding:2px 6px;border-radius:7px;
+  background:rgba(8,14,28,.85);border:1px solid var(--line);color:var(--txt);cursor:pointer}
+.tchip i{width:9px;height:9px;border-radius:50%;display:inline-block}
+.tchip.sel{border-color:var(--gold);color:var(--gold)}
+.card.add{align-items:center;justify-content:center;font-size:34px;color:#8fa0c8;border-style:dashed;
+  background:rgba(12,18,36,.5);display:flex;flex-direction:column;cursor:pointer;min-height:180px}
+.card.add span{font-size:12px;margin-top:6px}
+.roomfoot{margin-top:12px;display:flex;flex-direction:column;align-items:center;gap:8px}
+.roomfoot .hint{font-size:11.5px;color:#8fa0c8;max-width:640px;text-align:center;line-height:1.6}
+.btnrow{display:flex;gap:14px;align-items:center}
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="cv" width="960" height="600"></canvas>
+  <div id="hud">
+    <div class="topbar">
+      <span class="logo">孤高旅斗</span><span class="ver" id="hudVer">v__VERSION__</span>
+      <span class="spacer"></span>
+      <button class="tbtn" id="btnMute">🔊 音效</button>
+      <button class="tbtn" id="btnQuit">⌂ 主菜单</button>
+    </div>
+    <div class="bars" id="pBars"></div>
+    <div class="enemyHud" id="eBars"></div>
+    <div class="slots" id="slots"></div>
+  </div>
+  <div id="tip"></div>
+  <div id="toast"></div>
+
+  <!-- 主菜单 -->
+  <div class="ov" id="ovMenu">
+    <h1>孤高旅斗</h1>
+    <div class="sub" id="menuVer">v__VERSION__ · 一人一剑，向死而生</div>
+    <div class="hr"></div>
+    <div class="grid g3" style="max-width:760px">
+      <div class="card" id="mSolo"><div class="t">🗺️ 单人游戏</div><div class="d">关卡征伐，巨龙格斗与勇者格斗</div></div>
+      <div class="card" id="mMulti"><div class="t">🌐 多人游戏</div><div class="d">局域网 2-4 人，房间内自由换装与编排人机</div></div>
+      <div class="card" id="mHelp"><div class="t">📖 游戏帮助</div><div class="d">玩法、技能、联机方法全在这里</div></div>
+      <div class="card" id="mSkin"><div class="t">🎨 皮肤商店</div><div class="d">头部 / 上身 / 下身，自由搭配</div></div>
+      <div class="card" id="mSkill"><div class="t">⚔️ 技能商店</div><div class="d">购买与装配普攻、技能、大招</div></div>
+      <div class="card" id="mLoad"><div class="t">🎽 我的配装</div><div class="d">查看当前外观与技能组合</div></div>
+    </div>
+  </div>
+
+  <!-- 单人 -->
+  <div class="ov hide" id="ovSolo">
+    <div class="back" data-back="ovMenu">‹ 返回</div>
+    <div class="coinbar"><i class="coin"></i><span class="coinNum">0</span></div>
+    <h2>单人游戏</h2>
+    <div class="sub">两个模式，技能与皮肤通用</div>
+    <div class="hr"></div>
+    <div class="grid g2" style="max-width:640px">
+      <div class="card" id="sDrag"><div class="t">🐉 巨龙格斗</div><div class="d">关卡制讨伐战。普通 / 困难两档难度，通关得金币</div></div>
+      <div class="card" id="sDuel"><div class="t">🤖 勇者格斗</div><div class="d">角色卡房间：编排人机、选模式，乱斗 / 阵营 / 霸主</div></div>
+    </div>
+  </div>
+
+  <!-- 关卡选择 -->
+  <div class="ov hide" id="ovLevels">
+    <div class="back" data-back="ovSolo">‹ 返回</div>
+    <div class="coinbar"><i class="coin"></i><span class="coinNum">0</span></div>
+    <h2>巨龙格斗 · 关卡</h2>
+    <div class="sub">困难模式的巨龙伤害、血量、攻击频率全面提升，奖励也更高</div>
+    <div class="hr"></div>
+    <div class="grid g2" id="levelGrid" style="max-width:700px"></div>
+  </div>
+
+  <!-- 人机设置（开房间式角色卡，内容由 75_room.js 渲染） -->
+  <div class="ov hide" id="ovDuelSetup">
+    <div class="back" data-back="ovSolo">‹ 返回</div>
+    <div class="coinbar"><i class="coin"></i><span class="coinNum">0</span></div>
+    <div id="roomBody" class="roomwrap"></div>
+  </div>
+
+  <!-- 多人 -->
+  <div class="ov hide" id="ovMulti">
+    <div class="back" data-back="ovMenu">‹ 返回</div>
+    <div class="coinbar"><i class="coin"></i><span class="coinNum">0</span></div>
+    <h2>多人游戏 · 局域网（2-4 人）</h2>
+    <div class="sub" id="multiState">正在连接服务器…</div>
+    <div class="hr"></div>
+    <div class="grid g2" style="max-width:640px">
+      <div class="card" id="btnCreate"><div class="t">🏠 创建房间</div><div class="d">当房主：挑模式、排人机、等朋友加入</div></div>
+      <div class="card" id="btnGoJoin"><div class="t">🔗 加入房间</div><div class="d">输入朋友给的 4 位房号，直接进房</div></div>
+    </div>
+    <div class="sub" style="margin-top:14px;font-size:11.5px">
+      同一 Wi-Fi 下：房主创建房间并把地址+房号发给朋友（1-3 位挑战者，2-4 人开打）；朋友用浏览器打开该地址即可，不需要安装任何东西。
+    </div>
+  </div>
+
+  <div class="ov hide" id="ovJoin">
+    <div class="back" data-back="ovMulti">‹ 返回</div>
+    <div class="coinbar"><i class="coin"></i><span class="coinNum">0</span></div>
+    <h2>加入房间</h2>
+    <div class="sub">输入房主给你的 4 位房号</div>
+    <input class="input" id="codeInput" maxlength="4" placeholder="0000" inputmode="numeric" autocomplete="off">
+    <div class="row" style="margin-top:16px;justify-content:center">
+      <button class="btn primary" id="btnJoin">加入房间</button>
+    </div>
+    <div class="sub" style="margin-top:14px;font-size:11.5px" id="joinTip">
+      房号只有 4 位数字，不区分大小写。加入后会先进入准备房间，房主点「开始对决」才开打。
+    </div>
+  </div>
+
+  <!-- 房间准备（角色卡，内容由 75_room.js 渲染） -->
+  <div class="ov hide" id="ovWait">
+    <div class="back" id="btnLeaveWait">‹ 离开房间</div>
+    <div id="netRoomBody" class="roomwrap"></div>
+  </div>
+
+  <!-- 皮肤商店 -->
+  <div class="ov hide" id="ovSkin">
+    <div class="back" data-back="ovMenu">‹ 返回</div>
+    <div class="coinbar"><i class="coin"></i><span class="coinNum">0</span></div>
+    <h2>皮肤商店</h2>
+    <div class="sub">Q 版三段式模型：头部 / 上身 / 下身，自由混搭，每件 6 金币</div>
+    <div class="tabs" id="skinTabs">
+      <div class="tab on" data-part="head">头部</div>
+      <div class="tab" data-part="upper">上身</div>
+      <div class="tab" data-part="lower">下身</div>
+    </div>
+    <div class="row" style="align-items:flex-start;gap:22px">
+      <div class="pvwrap"><canvas class="pv" id="skinPv" width="128" height="160"></canvas></div>
+      <div class="shop" id="skinShop"></div>
+    </div>
+  </div>
+
+  <!-- 技能商店 -->
+  <div class="ov hide" id="ovSkill">
+    <div class="back" data-back="ovMenu">‹ 返回</div>
+    <div class="coinbar"><i class="coin"></i><span class="coinNum">0</span></div>
+    <h2>技能商店</h2>
+    <div class="sub">普攻 / 技能各 6 金币，大招 10 金币。购买后点击「装配」，最多携带 1 普攻 + 2 技能 + 1 大招</div>
+    <div class="loadbar" id="loadBar"></div>
+    <div class="tabs" id="skillTabs">
+      <div class="tab on" data-kind="basic">普攻</div>
+      <div class="tab" data-kind="skill">技能</div>
+      <div class="tab" data-kind="ult">大招</div>
+    </div>
+    <div class="shop" id="skillShop" style="grid-template-columns:repeat(4,1fr);max-width:820px"></div>
+  </div>
+
+  <!-- 我的配装 -->
+  <div class="ov hide" id="ovLoad">
+    <div class="back" data-back="ovMenu">‹ 返回</div>
+    <div class="coinbar"><i class="coin"></i><span class="coinNum">0</span></div>
+    <h2>我的配装</h2>
+    <div class="hr"></div>
+    <div class="row" style="align-items:flex-start;gap:26px">
+      <div class="pvwrap"><canvas class="pv" id="loadPv" width="128" height="160"></canvas></div>
+      <div style="text-align:left;min-width:340px" id="loadInfo"></div>
+    </div>
+  </div>
+
+  <!-- 帮助 -->
+  <div class="ov hide" id="ovHelp">
+    <div class="back" data-back="ovMenu">‹ 返回</div>
+    <h2>游戏帮助</h2>
+    <div class="help" id="helpBody"></div>
+    <div class="hr"></div>
+    <div class="row">
+      <button class="btn sm ghost" id="btnCheat">💎 作弊：+10 金币</button>
+      <span class="tag" id="cheatCount"></span>
+    </div>
+  </div>
+
+  <!-- 结算 -->
+  <div class="ov hide" id="ovEnd">
+    <h1 id="endTitle">胜利</h1>
+    <div class="sub" id="endSub"></div>
+    <div class="hr"></div>
+    <div class="row" id="endBtns">
+      <button class="btn primary" id="btnAgain">再来一局</button>
+      <button class="btn" id="btnEndMenu">返回主菜单</button>
+    </div>
+  </div>
+</div>
+<script src="balance.js"></script><!-- 平衡配置（可选）：文件不存在时忽略，使用内置默认 -->
+<script>
+__SCRIPTS__
+</script>
+<!-- Author: RikkaLove0721 (https://github.com/RikkaLove0721) -->
+</body>
+</html>
