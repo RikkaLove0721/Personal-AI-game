@@ -151,6 +151,21 @@ function check(l, c, e) { if (c) { pass++; console.log("  ✔ " + l + (e ? "  ["
   check("房主看到对手进入", hLD.Net.peerIn === true, hLD.Net.peerName);
   check("双方已交换外观与配装", !!gLD.Net.peerLook && !!hLD.Net.peerLoadout, JSON.stringify(hLD.Net.peerLoadout));
 
+  console.log("\n=== 联机：房间角色卡全员可见 ===");
+  hLD.UI.netPushRoom();                       // 房主把房间状态（含角色卡名单）推给所有人
+  await pump(3);
+  const gRoomHtml = G.sb.document.getElementById("netRoomBody").innerHTML;
+  check("客机收到房间状态并渲染出 2 张玩家卡", (gRoomHtml.match(/pcard/g) || []).length >= 2, "cards=" + (gRoomHtml.match(/pcard/g) || []).length);
+  check("客机自己的卡可编辑（装扮/技能按钮）", gRoomHtml.indexOf("data-open") >= 0, "有 data-open 按钮");
+  check("客机能看到房主的卡（只读）", gRoomHtml.indexOf("房主") >= 0);
+  // 客机在阵营模式下选队 → 房主记账
+  gLD.UI.netRoom.rule = "team";
+  gLD.Net.toPeer({ t: "rt", side: gLD.Net.mySide, team: 2 });
+  await pump(3);
+  check("客机选队同步到房主", hLD.UI.netRoom.teams[gLD.Net.mySide] === 2,
+    "teams=" + JSON.stringify(hLD.UI.netRoom.teams));
+  hLD.UI.netRoom.rule = "brawl";              // 还原，避免影响后续开局断言
+
   console.log("\n=== 联机：开局与同步 ===");
   // v2.0 起房主通过角色卡房间开局（UI.netRoom → netHostStart）
   hLD.UI.netRoom.rule = "brawl";

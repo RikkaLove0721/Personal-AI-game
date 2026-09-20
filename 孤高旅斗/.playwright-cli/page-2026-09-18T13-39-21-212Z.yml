@@ -1,0 +1,28 @@
+- generic [ref=e2]:
+  - generic [ref=e4]:
+    - generic [ref=e5]: 孤高旅斗
+    - generic [ref=e6]: v2.1
+    - button "🔊 音效" [ref=e7] [cursor=pointer]
+    - button "⏸ 菜单" [ref=e8] [cursor=pointer]
+  - generic [ref=e9]:
+    - heading "孤高旅斗" [level=1] [ref=e10]
+    - generic [ref=e11]: v2.1 · 一人一剑，向死而生
+    - generic [ref=e13]:
+      - generic [ref=e14] [cursor=pointer]:
+        - generic [ref=e15]: 🗺️ 单人游戏
+        - generic [ref=e16]: 关卡征伐，巨龙格斗与勇者格斗
+      - generic [ref=e17] [cursor=pointer]:
+        - generic [ref=e18]: 🌐 多人游戏
+        - generic [ref=e19]: 局域网 2-4 人，房间内自由换装与编排人机
+      - generic [ref=e20] [cursor=pointer]:
+        - generic [ref=e21]: 📖 游戏帮助
+        - generic [ref=e22]: 玩法、技能、联机方法全在这里
+      - generic [ref=e23] [cursor=pointer]:
+        - generic [ref=e24]: 🎨 皮肤商店
+        - generic [ref=e25]: 头部 / 上身 / 下身，自由搭配
+      - generic [ref=e26] [cursor=pointer]:
+        - generic [ref=e27]: ⚔️ 技能商店
+        - generic [ref=e28]: 购买与装配普攻、技能、大招
+      - generic [ref=e29] [cursor=pointer]:
+        - generic [ref=e30]: 🎽 我的配装
+        - generic [ref=e31]: 查看当前外观与技能组合

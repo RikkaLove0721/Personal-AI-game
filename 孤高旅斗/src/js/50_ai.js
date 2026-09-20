@@ -30,6 +30,7 @@
     d.rateM = 1 / diff.rateM;      // CD 越短 = 出手越频繁
     d.dmgM = diff.dmgM;
     d.ctrl = { mx: 0, my: 0, hold: {}, press: {} };
+    d.cd.ult = (LD.DRAGON.ult && LD.DRAGON.ult.ultFirst) || 0;   // 开场大招延迟：开局不会马上开大
     return d;
     function st() { return { on: false, phase: "", t: 0, d: {} }; }
   };
@@ -60,17 +61,33 @@
       conf, t: 0, think: 0, strafe: Math.random() < 0.5 ? 1 : -1, strafeT: rnd(0.8, 2),
       desired: 0, holdParry: 0, medT: 0, actedT: 0
     };
-    f.name = level === "easy" ? "木桩" : level === "hard" ? "凶猛勇者" : "勇者";
+    /* 名字可辨识：外部（房间卡 / 花名册）给过名字就用外部的，否则按难度命名 */
+    if (!f.name || f.name === "电脑" || f.name === "勇者") {
+      f.name = level === "easy" ? "木桩" : level === "hard" ? "凶猛勇者" : "勇者人机";
+    }
     return f;
   };
 
   AI.tickHero = function (f, dt) {
     if (!f.bot || f.dead || LD.Cine.active) { if (f.ctrl) { f.ctrl.mx = f.ctrl.my = 0; f.ctrl.press = {}; } return; }
     const b = f.bot, cf = b.conf, ctrl = f.ctrl;
-    /* 索敌：霸主争霸里非霸主人机的仇恨会转向霸主；否则打最近的敌人（阵营模式自动跳过友军） */
+    /* 索敌：霸主争霸里非霸主人机的仇恨会转向霸主；否则动态选目标 ——
+     * 每隔 1~1.8 秒在「距离最近」和「血量最多」之间重新挑选，不再固定锁一个人 */
     let foe = null;
     if (B.rule === "overlord" && !f.overlord) foe = B.fighters.find(o => o.overlord && !o.dead) || null;
-    if (!foe) foe = B.foeOf(f);
+    if (!foe) {
+      if (!b.foe || b.foe.dead || B.sameTeam(f, b.foe) || (b.retargetT -= dt) <= 0) {
+        b.retargetT = rnd(1.0, 1.8);
+        const cands = B.fighters.filter(o => o !== f && !o.dead && !B.sameTeam(f, o));
+        if (cands.length) {
+          const dd = o => (o.x - f.x) * (o.x - f.x) + (o.y - f.y) * (o.y - f.y);
+          let near = cands[0], fat = cands[0];
+          cands.forEach(o => { if (dd(o) < dd(near)) near = o; if (o.hp > fat.hp) fat = o; });
+          b.foe = Math.random() < 0.5 ? near : fat;
+        } else b.foe = null;
+      }
+      foe = b.foe;
+    }
     if (foe && !B.sameTeam(f, foe)) f.lock = foe.side;    // 让 AI 也用索敌（追踪类技能会朝他瞄准）
     ctrl.press = {};
     if (!foe) return;
@@ -202,9 +219,9 @@
 
     const d = Math.hypot(foe.x - f.x, foe.y - f.y);
 
-    // 大招：CD 好 且 距离适中 → 播大招演出后落下火柱
+    // 大招：CD 好 且 距离适中 → 播大招演出后落下火柱（v2.1 大幅降低释放欲望）
     if (f.cd.ult <= 0 && d < 560) {
-      const chance = f.rageStage >= 1 ? 1.15 : 0.7;
+      const chance = f.rageStage >= 1 ? 0.5 : 0.22;
       if (Math.random() < dt * chance) { B.trySlot(f, "ult", f.ctrl); return; }
     }
     // 爪击：距离近，狂暴阶段更频繁
@@ -222,8 +239,8 @@
    * ========================================================== */
   AI.randomLoadout = function () {
     const basics = LD.skillsBy("basic").map(s => s.id);
-    const skills = LD.skillsBy("skill").map(s => s.id);
-    const ults = LD.skillsBy("ult").map(s => s.id);
+    const skills = LD.skillsBy("skill").filter(s => !s.noAI).map(s => s.id);
+    const ults = LD.skillsBy("ult").filter(s => !s.noAI).map(s => s.id);
     const pick = arr => arr[Math.floor(Math.random() * arr.length)];
     let s1 = pick(skills), s2 = pick(skills);
     let guard = 0;

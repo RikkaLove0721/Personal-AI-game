@@ -219,7 +219,7 @@
       ctx.stroke();
       if (!back) { eyes(ctx, r, "#1a1a1a"); }
 
-    } else { // tophat 高帽企业家
+    } else if (H.model === "tophat") {
       ctx.fillStyle = skin; circle(ctx, 0, 0.8, r); ctx.fill();
       ctx.fillStyle = V.shade(c1, -18);
       ctx.beginPath(); ctx.arc(0, 0, r, Math.PI * 1.06, Math.PI * 1.94); ctx.closePath(); ctx.fill();
@@ -235,6 +235,158 @@
         ctx.strokeStyle = c2; ctx.lineWidth = 1.5;
         circle(ctx, r * 0.36, 2.4, 4.0); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(r * 0.36 + 4, 2.4); ctx.lineTo(r * 0.95, 1.2); ctx.stroke();
+      }
+
+    } else if (H.model === "panda") {
+      // 熊猫：白脸 + 黑耳 + 黑眼圈
+      ctx.fillStyle = skin; circle(ctx, 0, 0.6, r); ctx.fill();
+      ctx.fillStyle = c1;
+      [-1, 1].forEach(s => { circle(ctx, s * r * 0.78, -r * 0.78, r * 0.34); ctx.fill(); });
+      [-1, 1].forEach(s => {
+        ctx.save(); ctx.translate(s * r * 0.42, 1.8); ctx.rotate(s * 0.5);
+        ell(ctx, 0, 0, r * 0.30, r * 0.40); ctx.fill(); ctx.restore();
+      });
+      if (!back) {
+        ctx.fillStyle = "#fff";
+        circle(ctx, -r * 0.42, 2.4, 2.0); ctx.fill(); circle(ctx, r * 0.42, 2.4, 2.0); ctx.fill();
+        ctx.fillStyle = "#20242c";
+        circle(ctx, -r * 0.42, 2.4, 1.1 * blink); ctx.fill(); circle(ctx, r * 0.42, 2.4, 1.1 * blink); ctx.fill();
+        ell(ctx, 0, r * 0.45, 2.4, 1.8); ctx.fill();
+      }
+
+    } else if (H.model === "ninja") {
+      // 忍者：包头蒙面 + 头带飘带，只露双眼
+      ctx.fillStyle = skin; circle(ctx, 0, 0.8, r); ctx.fill();
+      ctx.fillStyle = c1;
+      ctx.beginPath(); ctx.arc(0, 0, r + 0.5, Math.PI * 0.98, Math.PI * 2.02); ctx.closePath(); ctx.fill();
+      rr(ctx, -r - 0.5, r * 0.30, (r + 0.5) * 2, r * 0.72, 4); ctx.fill();
+      ctx.fillStyle = c2;
+      rr(ctx, -r, -r * 0.30, r * 2, r * 0.30, 2); ctx.fill();
+      ctx.strokeStyle = c2; ctx.lineWidth = 2.4; ctx.lineCap = "round";
+      ctx.beginPath(); ctx.moveTo(-r * 0.9, -r * 0.15);
+      ctx.quadraticCurveTo(-r * 1.7, -r * 0.5 + Math.sin(t * 5) * 3, -r * 2.2, -r * 0.1 + Math.sin(t * 5 + 1) * 4);
+      ctx.stroke();
+      if (!back) {
+        ctx.fillStyle = "#fff";
+        ell(ctx, -r * 0.38, r * 0.02, 2.6, 2.2 * blink); ctx.fill();
+        ell(ctx, r * 0.38, r * 0.02, 2.6, 2.2 * blink); ctx.fill();
+        ctx.fillStyle = "#151821";
+        circle(ctx, -r * 0.38, r * 0.02, 1.3 * blink); ctx.fill(); circle(ctx, r * 0.38, r * 0.02, 1.3 * blink); ctx.fill();
+      }
+
+    } else if (H.model === "emperor") {
+      // 皇帝：冕冠 + 垂珠
+      ctx.fillStyle = skin; circle(ctx, 0, 0.8, r); ctx.fill();
+      ctx.fillStyle = c1;
+      rr(ctx, -r * 0.92, -r * 1.5, r * 1.84, r * 0.9, 3); ctx.fill();
+      ctx.fillStyle = c2;
+      [-1, 0, 1].forEach(i => { circle(ctx, i * r * 0.55, -r * 1.56, r * 0.14); ctx.fill(); });
+      ctx.strokeStyle = c2; ctx.lineWidth = 1.2;
+      [-1, 1].forEach(s => {
+        ctx.beginPath(); ctx.moveTo(s * r * 0.8, -r * 0.62); ctx.lineTo(s * r * 0.95, r * 0.1); ctx.stroke();
+        ctx.fillStyle = c2; circle(ctx, s * r * 0.95, r * 0.2, r * 0.10); ctx.fill();
+      });
+      if (!back) { eyes(ctx, r, "#3a2a10"); }
+
+    } else if (H.model === "cat") {
+      // 猫：三角耳 + 竖瞳 + 胡须
+      ctx.fillStyle = c1;
+      [-1, 1].forEach(s => {
+        ctx.beginPath(); ctx.moveTo(s * r * 0.35, -r * 0.85); ctx.lineTo(s * r * 0.95, -r * 1.5);
+        ctx.lineTo(s * r * 1.0, -r * 0.55); ctx.closePath(); ctx.fill();
+      });
+      ctx.fillStyle = skin; circle(ctx, 0, 0.5, r); ctx.fill();
+      if (!back) {
+        ctx.fillStyle = "#2b2b3a";
+        ell(ctx, -r * 0.38, 2.2, 2.2, 2.9 * blink); ctx.fill();
+        ell(ctx, r * 0.38, 2.2, 2.2, 2.9 * blink); ctx.fill();
+        ctx.fillStyle = c2; ell(ctx, 0, r * 0.42, 2.0, 1.5); ctx.fill();
+        ctx.strokeStyle = "rgba(70,58,46,.6)"; ctx.lineWidth = 1.1;
+        [-1, 1].forEach(s => {
+          ctx.beginPath(); ctx.moveTo(s * r * 0.35, r * 0.45); ctx.lineTo(s * r * 1.05, r * 0.3); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(s * r * 0.35, r * 0.55); ctx.lineTo(s * r * 1.05, r * 0.72); ctx.stroke();
+        });
+      }
+
+    } else if (H.model === "dog") {
+      // 狗：垂耳 + 吻部
+      ctx.fillStyle = c1;
+      [-1, 1].forEach(s => { ell(ctx, s * r * 1.02, r * 0.1, r * 0.34, r * 0.72); ctx.fill(); });
+      ctx.fillStyle = skin; circle(ctx, 0, 0.4, r); ctx.fill();
+      if (!back) {
+        ctx.fillStyle = "#2b2b3a";
+        circle(ctx, -r * 0.38, 1.4, 2.1 * blink); ctx.fill(); circle(ctx, r * 0.38, 1.4, 2.1 * blink); ctx.fill();
+        ctx.fillStyle = "#fff";
+        circle(ctx, -r * 0.32, 0.8, 0.8); ctx.fill(); circle(ctx, r * 0.44, 0.8, 0.8); ctx.fill();
+        ctx.fillStyle = c2; ell(ctx, 0, r * 0.55, r * 0.42, r * 0.32); ctx.fill();
+        ctx.fillStyle = "#2b2b3a"; ell(ctx, 0, r * 0.42, 2.2, 1.6); ctx.fill();
+      }
+
+    } else if (H.model === "dragon") {
+      // 龙：鳞色方颐 + 双角 + 发光龙瞳
+      ctx.fillStyle = c1;
+      rr(ctx, -r, -r * 0.5, r * 2, r * 1.45, r * 0.55); ctx.fill();
+      ctx.fillStyle = V.shade(c1, -30);
+      [-1, 1].forEach(s => {
+        ctx.beginPath(); ctx.moveTo(s * r * 0.4, -r * 0.5); ctx.lineTo(s * r * 0.75, -r * 1.15);
+        ctx.lineTo(s * r * 0.15, -r * 0.6); ctx.closePath(); ctx.fill();
+      });
+      ctx.save(); ctx.globalCompositeOperation = "lighter";
+      glow(ctx, -r * 0.34, r * 0.15, r * 0.4, c2, 0.8); glow(ctx, r * 0.34, r * 0.15, r * 0.4, c2, 0.8);
+      ctx.restore();
+      if (!back) {
+        ctx.fillStyle = c2;
+        ell(ctx, -r * 0.34, r * 0.15, 2.4, 1.8 * blink); ctx.fill();
+        ell(ctx, r * 0.34, r * 0.15, 2.4, 1.8 * blink); ctx.fill();
+        ctx.fillStyle = V.shade(c1, -45);
+        circle(ctx, -r * 0.16, r * 0.62, 1.1); ctx.fill(); circle(ctx, r * 0.16, r * 0.62, 1.1); ctx.fill();
+      }
+
+    } else if (H.model === "golem") {
+      // 石头人：岩石块 + 裂纹 + 发光眼缝
+      ctx.fillStyle = V.shade(c1, -22);
+      rr(ctx, -r, -r + 2, r * 2, r * 2 - 2, 5); ctx.fill();
+      ctx.fillStyle = c1;
+      rr(ctx, -r + 2, -r + 4, r * 2 - 4, r * 2 - 6, 4); ctx.fill();
+      ctx.strokeStyle = V.shade(c1, -34); ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.moveTo(-r * 0.5, -r * 0.3); ctx.lineTo(-r * 0.1, r * 0.1); ctx.lineTo(-r * 0.3, r * 0.6); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(r * 0.55, -r * 0.5); ctx.lineTo(r * 0.25, r * 0.05); ctx.stroke();
+      ctx.save(); ctx.globalCompositeOperation = "lighter";
+      glow(ctx, 0, r * 0.2, r * 0.55, c2, 0.65); ctx.restore();
+      ctx.fillStyle = c2;
+      rr(ctx, -r * 0.52, r * 0.08, r * 1.04, Math.max(1, 3.4 * blink), 1.7); ctx.fill();
+
+    } else if (H.model === "gold") {
+      // 黄金圣像：金属渐变头 + 顶饰 + 流转高光
+      const gg = ctx.createLinearGradient(-r, -r, r, r);
+      gg.addColorStop(0, V.shade(c1, 36)); gg.addColorStop(0.5, c1); gg.addColorStop(1, V.shade(c1, -36));
+      ctx.fillStyle = gg; circle(ctx, 0, 0.4, r); ctx.fill();
+      ctx.fillStyle = c2;
+      rr(ctx, -r * 0.16, -r * 1.5, r * 0.32, r * 0.6, 2); ctx.fill();
+      circle(ctx, 0, -r * 1.62, r * 0.20); ctx.fill();
+      ctx.save(); ctx.globalCompositeOperation = "lighter";
+      glow(ctx, -r * 0.4, -r * 0.35, r * 0.5, "rgba(255,255,220,.5)", 0.85 + Math.sin(t * 3) * 0.15);
+      ctx.restore();
+      if (!back) { eyes(ctx, r, "#3a2a08"); }
+
+    } else if (H.model === "elder") {
+      // 白发老者：白发白须 + 皱纹
+      ctx.fillStyle = c1;
+      ctx.beginPath(); ctx.arc(0, -0.2, r * 1.06, Math.PI * 0.95, Math.PI * 2.05); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = skin; circle(ctx, 0, 0.8, r * 0.95); ctx.fill();
+      if (!back) {
+        ctx.strokeStyle = "rgba(150,120,90,.55)"; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(-r * 0.5, -r * 0.1); ctx.lineTo(-r * 0.2, -r * 0.05); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(r * 0.5, -r * 0.1); ctx.lineTo(r * 0.2, -r * 0.05); ctx.stroke();
+        ctx.fillStyle = "#2b2b3a";
+        ell(ctx, -r * 0.36, 2.4, 2.0, 2.4 * blink); ctx.fill();
+        ell(ctx, r * 0.36, 2.4, 2.0, 2.4 * blink); ctx.fill();
+        ctx.fillStyle = c1;
+        ctx.beginPath(); ctx.moveTo(-r * 0.55, r * 0.55);
+        ctx.quadraticCurveTo(0, r * 0.5 + Math.sin(t * 2) * 1.5, r * 0.55, r * 0.55);
+        ctx.quadraticCurveTo(r * 0.35, r * 1.75, 0, r * 1.9);
+        ctx.quadraticCurveTo(-r * 0.35, r * 1.75, -r * 0.55, r * 0.55);
+        ctx.closePath(); ctx.fill();
       }
     }
     ctx.restore();
@@ -505,10 +657,10 @@
    *  大招演出（全局暂停 + 局部特写 + 逐字显示技能名）
    * ========================================================== */
   const Cine = LD.Cine = {
-    active: false, who: null, name: "", sub: "", t: 0, dur: 2.6, color: "#fbbf24", side: 0,
-    start(who, name, sub, color) {
+    active: false, who: null, name: "", sub: "", t: 0, dur: 2.6, color: "#fbbf24", side: 0, verb: null,
+    start(who, name, sub, color, verb) {
       this.active = true; this.who = who; this.name = name; this.sub = sub || "";
-      this.t = 0; this.color = color || "#fbbf24"; this.side = who.side;
+      this.t = 0; this.color = color || "#fbbf24"; this.side = who.side; this.verb = verb != null ? verb : null;
       /* 名字从 0.35s 开始逐字出现，每字 0.12s；显示完毕立刻结束演出并释放大招，
          只留 0.06s 缓冲，不再整段停留（旧版固定 2.6s，5 字名字会空等 1.6 秒） */
       this.dur = 0.35 + name.length * 0.12 + 0.06;
@@ -565,7 +717,8 @@
       // 已出现的字做描边强调
       ctx.font = "900 " + fs + "px system-ui,'PingFang SC',sans-serif";
       ctx.textAlign = "center";
-      const who_txt = (who.name || (who.side === 0 ? "勇者" : (who.kind === "dragon" ? "巨龙" : "对手"))) + " 释放";
+      const who_txt = this.verb != null ? this.verb
+        : (who.name || (who.side === 0 ? "勇者" : (who.kind === "dragon" ? "巨龙" : "对手"))) + " 释放";
       ctx.font = "600 15px system-ui,sans-serif"; ctx.fillStyle = "rgba(220,232,255,.85)";
       ctx.fillText(who_txt, W / 2, H * 0.80 - 62);
       ctx.restore();

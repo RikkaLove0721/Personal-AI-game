@@ -15,8 +15,9 @@
     return {
       rev: 0,                              // 存档修订号：本地与文件比新用
       coins: 0,
+      name: "",                            // 玩家名字（空 = 显示「勇者」）
       ownedParts: [LD.FREE.head, LD.FREE.upper, LD.FREE.lower],
-      ownedSkills: ["slash", "parry"],     // 默认普攻斩击 + 技能格挡
+      ownedSkills: ["slash", "fireball"],  // 新档只解锁：斩击 + 火球，其余靠金币购买
       equip: { head: LD.FREE.head, upper: LD.FREE.upper, lower: LD.FREE.lower },
       loadout: Object.assign({}, LD.DEFAULT_LOADOUT),
       progress: {},                        // "1_normal": true
@@ -51,7 +52,8 @@
       ["head", "upper", "lower"].forEach(k => {
         if (!this.ownsPart(this.d.equip[k])) this.d.equip[k] = LD.FREE[k];
       });
-      ["slash", "parry"].forEach(id => { if (this.d.ownedSkills.indexOf(id) < 0) this.d.ownedSkills.push(id); });
+      /* v2.1 起新档只送斩击 + 火球；旧档已有的一切保留，仅补齐这两件基础普攻 */
+      ["slash", "fireball"].forEach(id => { if (this.d.ownedSkills.indexOf(id) < 0) this.d.ownedSkills.push(id); });
       /* v2.0 迁移：格挡从「技能」改成「普攻」，旧档放在 K/L 的格挡自动挪到 J 槽，
        * 避免玩家升级后发现技能槽莫名空掉。 */
       const lo = this.d.loadout;
@@ -107,6 +109,13 @@
       }
     },
     get coins() { return this.d.coins; },
+    displayName() { return this.d.name || "勇者"; },
+    rename(n) {
+      n = String(n || "").trim().slice(0, 8);
+      if (!n) return { ok: false, why: "名字不能为空" };
+      this.d.name = n; this.save();
+      return { ok: true, name: n };
+    },
 
     addCoins(n) { this.d.coins = Math.max(0, this.d.coins + n); this.save(); return this.d.coins; },
     spend(n) { if (this.d.coins < n) return false; this.d.coins -= n; this.save(); return true; },

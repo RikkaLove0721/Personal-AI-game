@@ -24,6 +24,7 @@ import random
 import socket
 import socketserver
 import struct
+import tempfile
 import sys
 import threading
 import time
@@ -85,9 +86,23 @@ def resource_path(name):
     here = os.path.join(os.path.dirname(os.path.abspath(__file__)), name)
     if os.path.exists(here):
         return here
+    root = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        os.pardir, os.pardir, "assets", os.path.basename(name))
+    if os.path.basename(name) in ("icon.ico", "menu-bg.jpg") and os.path.exists(root):
+        return root                                     # ③ 开发态：仓库根 assets/
     dev = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                       os.pardir, os.pardir, "dist", name)   # ③ 开发态：源码运行时找仓库 dist/
+                       os.pardir, os.pardir, "dist", name)   # ④ 开发态：源码运行时找仓库 dist/
     return dev if os.path.exists(dev) else packaged
+
+
+def music_dir_path():
+    """BGM 素材目录：exe/dist 旁边的 music/（开发态自动找到仓库 dist/music/）。"""
+    beside = os.path.join(app_dir(), "music")
+    if os.path.isdir(beside):
+        return beside
+    dev = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                       os.pardir, os.pardir, "dist", "music")
+    return dev
 
 
 def profile_path():
@@ -422,6 +437,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path == "/balance.js":
             self.serve_file(resource_path("balance.js"), "application/javascript; charset=utf-8")
             return
+        if path == "/music/list":
+            self.handle_music_list()
+            return
+        if path.startswith("/music/"):
+            from urllib.parse import unquote
+            name = os.path.basename(unquote(path[len("/music/"):]))   # 解 URL 编码 + 只取文件名防目录穿越
+            ctype = "audio/ogg" if name.lower().endswith(".ogg") else "audio/mpeg"
+            self.serve_file(resource_path(os.path.join("music", name)), ctype)
+            return
         if path == "/api/profile":
             self.handle_profile_get()
             return
@@ -459,6 +483,21 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def handle_profile_get(self):
         # 存档文件放在 exe 旁边（开发态放在 py 脚本旁边），端口漂移也不丢档
         self.serve_file(profile_path(), "application/json; charset=utf-8")
+
+    def handle_music_list(self):
+        """BGM 歌单：列出 music/ 目录下的音频文件（压缩过的 ogg 优先）。"""
+        music_dir = music_dir_path()
+        names = []
+        if os.path.isdir(music_dir):
+            names = sorted(f for f in os.listdir(music_dir)
+                           if f.lower().endswith((".ogg", ".mp3")))
+        body = json.dumps({"music": names}).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
     def do_ws(self):
         key = self.headers.get("Sec-WebSocket-Key")
@@ -623,14 +662,42 @@ def print_banner(port):
     return ips
 
 
+def _set_app_user_model_id():
+    """给进程设置固定的 AppUserModelID。
+
+    不设置的话，Windows 任务栏会把窗口当作临时的 python/WebView2 进程，
+    显示系统默认图标——这就是「任务栏图标没有变成应用图标」的根因。
+    设置后任务栏按钮与 exe 图标正确关联，窗口分组也稳定。
+    """
+    if os.name != "nt":
+        return
+    try:
+        import ctypes
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("RikkaLove0721.GuGaoLvDou")
+    except Exception:      # noqa: BLE001
+        pass
+
+
 def open_native_window(url):
-    """优先用原生窗口；不行就退回浏览器。"""
+    """优先用原生窗口；不行就退回浏览器。
+
+    注意：不要给 webview.start 传 func 去手动改窗口图标——
+    pywebview 的 func 线程在窗口创建完成前就会启动，冻结态下它与
+    WinForms 初始化存在竞态，会把窗口卡在「已创建未显示」状态。
+    图标由 start(icon=...) 在 UI 线程构造窗口时设置，任务栏分组由
+    _set_app_user_model_id 保证。
+    """
     try:
         import webview  # noqa
 
         window = webview.create_window(APP_NAME, url, width=1010, height=670,
                                        min_size=(760, 520), background_color="#05070f")
-        webview.start()
+        _set_app_user_model_id()
+        ico = resource_path(os.path.join("assets", "icon.ico"))
+        kwargs = {}
+        if os.path.exists(ico):
+            kwargs["icon"] = ico     # pywebview >= 6.1 在窗口构造时（UI 线程）应用图标
+        webview.start(**kwargs)
         return True
     except Exception as exc:      # noqa: BLE001
         log("[提示] 原生窗口不可用（%s），改用浏览器打开。" % exc)

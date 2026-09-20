@@ -52,9 +52,9 @@
   }
 
   /* ---------------- 卡片渲染 ---------------- */
-  function teamBar(sel) {
+  function teamBar(sel, who) {
     return '<div class="teamrow">' + LD.TEAM_COLORS.map((c, i) =>
-      '<button class="tchip' + (sel === i ? " sel" : "") + '" data-team="' + i + '" style="--tc:' + c + '">' +
+      '<button class="tchip' + (sel === i ? " sel" : "") + '" data-team="' + i + '" data-twho="' + who + '" style="--tc:' + c + '">' +
       '<i style="background:' + c + '"></i>' + LD.TEAM_NAMES[i] + '</button>').join("") + '</div>';
   }
 
@@ -98,7 +98,7 @@
         return '<span>' + SLOT_LAB[slot] + ' ' + (s ? s.icon : "—") + '</span>';
       }).join("") + '</div>';
     }
-    if (teamMode && opts.teamSel) body += teamBar(opts.team);
+    if (teamMode && opts.teamSel) body += teamBar(opts.team, opts.twho || "me");
     return '<div class="pcard' + (k === "me" ? " mine" : "") + '">' +
       '<canvas class="pv" width="112" height="126"></canvas>' + badge +
       '<div class="pn">' + (teamMode ? teamTag(opts.team) : "") + (opts.name || "玩家") + '</div>' + body + '</div>';
@@ -124,8 +124,8 @@
     }
     const ruleBar = '<div class="rulebar">' + LD.RULES.map(r =>
       '<button class="rule' + (room.rule === r.id ? " sel" : "") + '" data-rule="' + r.id + '"><b>' + r.icon + " " + r.name + '</b><span>' + r.desc + '</span></button>').join("") + '</div>';
-    const cards = [cardHtml(0, null, { kind: "me", name: (P.d.name || "你"), look: P.look(), team: myTeam(), teamSel: true, level: null, loadout: P.d.loadout, rule: room.rule })]
-      .concat(room.bots.map((bb, i) => cardHtml(i, null, { kind: "bot", name: "人机 " + (i + 1), look: bb.look, team: botTeam(i), level: bb.level, loadout: bb.loadout, rule: room.rule })));
+    const cards = [cardHtml(0, null, { kind: "me", name: (P.d.name || "你"), look: P.look(), team: myTeam(), teamSel: true, twho: "me", level: null, loadout: P.d.loadout, rule: room.rule })]
+      .concat(room.bots.map((bb, i) => cardHtml(i, null, { kind: "bot", name: "人机 " + (i + 1), look: bb.look, team: botTeam(i), teamSel: true, twho: "b" + i, level: bb.level, loadout: bb.loadout, rule: room.rule })));
     host.innerHTML =
       '<h2>创建房间 · 选择模式</h2>' + ruleBar +
       '<div class="cardgrid">' + cards.join("") +
@@ -141,9 +141,11 @@
     bindRoom(host);
   };
 
-  /* 人机阵营：阵营模式下按顺序轮流分到 4 个阵营，且尽量避开与玩家同队 */
+  /* 人机阵营：阵营模式下默认按顺序轮流分到 4 个阵营；房主点卡片上的队伍色可手动指定 */
   function botTeam(i) {
     if (room.rule !== "team") return -1;
+    const bb = room.bots[i];
+    if (bb && bb.team != null && bb.team >= 0) return bb.team;
     return (i + 1) % 4;
   }
 
@@ -168,7 +170,16 @@
       el.onclick = () => { A.ui(); UI.backTo = "ovDuelSetup"; UI.show(el.dataset.open); };
     });
     q("[data-team]").forEach(el => {
-      el.onclick = () => { A.ui(); room.myTeam = +el.dataset.team; UI.renderRoom(); };
+      el.onclick = () => {
+        A.ui();
+        const t = +el.dataset.team, who = el.dataset.twho || "me";
+        if (who === "me") room.myTeam = t;
+        else {
+          const i = +String(who).slice(1);
+          if (room.bots[i]) room.bots[i].team = t;
+        }
+        UI.renderRoom();
+      };
     });
     q("[data-blv]").forEach(el => {
       el.onclick = () => { A.ui(); room.bots[+el.dataset.blv].level = el.dataset.lv; UI.renderRoom(); };
@@ -211,7 +222,7 @@
     }
     UI.duel.level = hardLevelOf(room.bots);
     const fighters = [];
-    const me = B.mkHero(0, { x: 0, y: 0, look: P.look(), loadout: Object.assign({}, P.d.loadout), name: "勇者" });
+    const me = B.mkHero(0, { x: 0, y: 0, look: P.look(), loadout: Object.assign({}, P.d.loadout), name: P.displayName() });
     me.ctrl = UI.ctrl;
     me.team = room.rule === "team" ? myTeam() : -1;
     fighters.push(me);
@@ -241,8 +252,8 @@
     if (!N.isHost && R.players && R.players.length) {
       return R.players.map(p => ({
         side: p.side, mine: p.side === N.mySide, name: p.name, team: p.team == null ? -1 : p.team,
-        look: p.side === N.mySide ? P0.look() : ((N.roster[p.side] && N.roster[p.side].look) || P0.look()),
-        loadout: p.side === N.mySide ? P0.d.loadout : ((N.roster[p.side] && N.roster[p.side].loadout) || LD.DEFAULT_LOADOUT)
+        look: p.side === N.mySide ? P0.look() : (p.look || (N.roster[p.side] && N.roster[p.side].look) || P0.look()),
+        loadout: p.side === N.mySide ? P0.d.loadout : (p.loadout || (N.roster[p.side] && N.roster[p.side].loadout) || LD.DEFAULT_LOADOUT)
       }));
     }
     const seats = [0].concat(N.peersIn.slice().sort((a, b) => a - b));
@@ -291,13 +302,17 @@
 
     const cards = players.map((p, i) => cardHtml(i, null, {
       kind: p.mine ? "me" : "player", name: p.name, look: p.look,
-      team: R.rule === "team" ? netTeamOf(players, i) : -1, teamSel: p.mine,
+      team: R.rule === "team" ? netTeamOf(players, i) : -1,
+      teamSel: R.rule === "team" && (p.mine || isHost), twho: p.mine ? "me" : "s" + p.side,
       loadout: p.loadout, rule: R.rule
     }));
     R.bots.forEach((bb, i) => {
-      cards.push(cardHtml(100 + i, null, {
+      /* 注意：这里必须传 i 而不是 100+i —— cardHtml 会把 idx 写进 data-blv/data-bdel 等属性，
+         绑定层直接用 +dataset 索引 R.bots，传 100+i 会导致删除 / 难度 / 技能全部失灵 */
+      cards.push(cardHtml(i, null, {
         kind: isHost ? "bot" : "player", name: "人机 " + (i + 1), look: bb.look,
         team: R.rule === "team" ? (bb.team == null || bb.team < 0 ? netBotTeam(i, players.length) : bb.team) : -1,
+        teamSel: R.rule === "team" && isHost, twho: "b" + i,
         level: bb.level, loadout: bb.loadout, rule: R.rule
       }));
     });
@@ -326,7 +341,19 @@
       el.onclick = () => { A.ui(); UI.backTo = "ovWait"; UI.show(el.dataset.open); };
     });
     host.querySelectorAll("[data-team]").forEach(el => {
-      el.onclick = () => { A.ui(); UI.netRoom.teams[LD.Net.mySide] = +el.dataset.team; UI.netPushRoom(); };
+      el.onclick = () => {
+        A.ui();
+        const t = +el.dataset.team, who = el.dataset.twho || "me", N = LD.Net;
+        if (who === "me") {
+          if (N.isHost) { R.teams[N.mySide] = t; UI.netPushRoom(); }
+          else { N.toPeer({ t: "rt", side: N.mySide, team: t }); R.teams[N.mySide] = t; UI.renderNetRoom(); }
+        } else if (N.isHost) {
+          /* 房主可以给任何玩家 / 人机指定阵营 */
+          if (who[0] === "s") R.teams[+who.slice(1)] = t;
+          else if (R.bots[+who.slice(1)]) R.bots[+who.slice(1)].team = t;
+          UI.netPushRoom();
+        }
+      };
     });
     host.querySelectorAll("[data-blv]").forEach(el => {
       el.onclick = () => { A.ui(); R.bots[+el.dataset.blv].level = el.dataset.lv; UI.netPushRoom(); };
@@ -371,19 +398,23 @@
     const teams = players.map((p, i) => (R.rule === "team" ? netTeamOf(players, i) : -1));
     N.toPeer({
       t: "room", rule: R.rule, bots: R.bots,
-      players: players.map((p, i) => ({ side: p.side, name: p.name, team: teams[i] }))
+      /* 外观与配装随房间状态一起下发：客机之间可能互相漏收 pl 消息，
+         只靠花名册兜底会让某些客机眼里两个非房主穿成一模一样 */
+      players: players.map((p, i) => ({ side: p.side, name: p.name, team: teams[i], look: p.look, loadout: p.loadout }))
     });
     UI.renderNetRoom();
   };
 
   /* 客机：收到房间状态后渲染 */
   UI.applyNetRoom = function (d) {
-    const R = UI.netRoom;
+    const R = UI.netRoom, N = LD.Net, P0 = LD.Profile;
     R.rule = d.rule || R.rule;
     R.bots = d.bots || [];
     R.players = (d.players || []).map(p => ({
       side: p.side, name: p.name, team: p.team == null ? -1 : p.team,
-      look: LD.Profile.look(), loadout: LD.Profile.d.loadout
+      /* 优先用房主下发的真实外观；旧版房间消息没有 look 时按花名册兜底 */
+      look: p.look || (p.side === N.mySide ? P0.look() : (N.roster[p.side] && N.roster[p.side].look) || P0.look()),
+      loadout: p.loadout || (p.side === N.mySide ? P0.d.loadout : (N.roster[p.side] && N.roster[p.side].loadout) || LD.DEFAULT_LOADOUT)
     }));
     UI.renderNetRoom();
   };

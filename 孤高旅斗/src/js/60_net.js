@@ -85,6 +85,8 @@
         this.peerLook = d.look; this.peerLoadout = d.loadout;   // 兼容 1v1
         this.emit("profile", d); break;
       }
+      case "rt": this.emit("roomTeam", d); break;   // 客机 → 房主：改自己的阵营
+      case "room": this.emit("room", d); break;     // 房主 → 客机：房间状态（角色卡名单）
       case "go": this.emit("start", d); break;
       case "i": this.applyRemoteInput(d); break;
       case "s": this.applySnapshot(d); break;
@@ -152,7 +154,8 @@
       SLOTS.map(k => r(f.cd ? f.cd[k] : 0, 2)),
       SLOTS.map(k => (f.slot && f.slot[k] && f.slot[k].on) ? (f.slot[k].phase || "1") : ""),
       f.kind === "dragon" ? [f.mode, r(f.charge, 2), r(f.chargeMax, 2), f.rageStage || 0] : null,
-      r(f.blind || 0, 2), f.overlord ? 1 : 0, f.team == null ? -1 : f.team, f.lock == null ? -1 : f.lock
+      r(f.blind || 0, 2), f.overlord ? 1 : 0, f.team == null ? -1 : f.team, f.lock == null ? -1 : f.lock,
+      r(f.stealthT || 0, 2)
     ];
     function r(v, n) { return n ? Math.round(v * Math.pow(10, n)) / Math.pow(10, n) : Math.round(v); }
   }
@@ -160,7 +163,8 @@
   function packProj(p) {
     return [Math.round(p.x), Math.round(p.y), Math.round(p.vx), Math.round(p.vy), Math.round(p.r),
       r2(p.life), p.side, p.reflect ? 1 : 0, p.type, p.color, r2(p.maxLife), p.data && p.data.R ? p.data.R : 0,
-      p.trail ? 1 : 0, p.basic ? 1 : 0, p.kindTag === "basic" ? 0 : p.kindTag === "ult" ? 2 : 1, r2(p.stun || 0), r2(p.blind || 0)];
+      p.trail ? 1 : 0, p.basic ? 1 : 0, p.kindTag === "basic" ? 0 : p.kindTag === "ult" ? 2 : 1, r2(p.stun || 0), r2(p.blind || 0),
+      r2(p.data && p.data.timer || 0)];
     function r2(v) { return Math.round(v * 100) / 100; }
   }
 
@@ -201,6 +205,7 @@
     f.overlord = !!a[29];
     f.team = a[30] == null ? -1 : a[30];
     f.lock = a[31] == null ? -1 : a[31];
+    f.stealthT = a[32] || 0;
     if (!wasDead && f.dead) { LD.FX.shake(14); LD.FX.burst(f.x, f.y - 26, 34, ["#fff", "#fb7185"], { speed: 340, life: 0.9 }); }
   }
 
@@ -215,12 +220,22 @@
     if (s.ct != null) B.countdown = s.ct;
     if (s.rt) B.roundT = s.rt;
     B.score = s.sc; B.roundWinner = s.rw; B.matchWinner = s.mw;
+    /* 客机补胜者特写：权威端 endRound 播放大招式演出，客机靠快照里 roundWinner 的变化本地触发 */
+    if (s.rw !== this._lastRW) {
+      if (s.rw != null && s.rw >= 0 && B.state === "roundEnd") {
+        const wf = B.fighters[s.rw];
+        if (wf && wf.kind === "hero")
+          LD.Cine.start(wf, "胜者：" + (wf.name || ("玩家" + (s.rw + 1))), "",
+            wf.team != null && wf.team >= 0 ? (LD.TEAM_COLORS[wf.team] || "#fcd34d") : "#fcd34d", "赢得了本局胜利");
+      }
+      this._lastRW = s.rw;
+    }
     s.f.forEach((a, i) => { if (B.fighters[i]) unpackFighter(B.fighters[i], a); });
     // 弹道：直接重建
     B.projs = s.p.map(a => ({
       x: a[0], y: a[1], vx: a[2], vy: a[3], r: a[4], life: a[5], maxLife: a[10], side: a[6], reflect: !!a[7],
       type: a[8], color: a[9], core: "#fff", owner: B.fighters[a[6]] || B.fighters[0], pierce: false,
-      data: { R: a[11] }, tick: 0, hits: {}, absorb: 0, absorbed: 0, spin: 0,
+      data: { R: a[11], timer: a[17] || 0, boomR: 150, dmg: 28 }, tick: 0, hits: {}, absorb: 0, absorbed: 0, spin: 0,
       trail: !!a[12], basic: !!a[13], kindTag: a[14] === 0 ? "basic" : a[14] === 2 ? "ult" : "skill",
       stun: a[15] || 0, blind: a[16] || 0,
       dmg: 0, homing: 0, scale: 1
@@ -244,8 +259,12 @@
       if (f.blinkAmt != null && f.blinkAmt < 1) f.blinkAmt = Math.min(1, f.blinkAmt + dt * 12);
       f.atkAnim = Math.max(0, f.atkAnim - dt);
     });
-    // 客机补拖尾：快照只带静态位置，尾迹要在本地逐帧生成（否则非房主看不到远程普攻的拖尾）
-    B.projs.forEach(p => { if (p.trail) LD.FX.trail(p.x, p.y, p.color, p.r * 0.55, 0.26); });
+    // 客机补拖尾：快照只带静态位置，弹道要在本地按速度推进 + 逐帧生成尾迹
+    // （否则非房主看到的远程普攻是 30Hz 传送、拖尾稀疏甚至看不见）
+    B.projs.forEach(p => {
+      if (p.type !== "bomb" && p.type !== "hbomb") { p.x += (p.vx || 0) * dt; p.y += (p.vy || 0) * dt; }
+      if (p.trail || p.type === "fireball" || p.type === "sword") LD.FX.trail(p.x, p.y, p.color, p.r * 0.55, 0.26);
+    });
     LD.FX.update(dt);
     if (LD.Cine.active) LD.Cine.update(dt);
   };

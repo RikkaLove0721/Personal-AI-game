@@ -122,6 +122,14 @@ h2{font-size:22px;letter-spacing:3px;margin-bottom:4px}
 /* 角色卡房间可能超出屏高：改为顶端对齐 + 子元素 margin:auto，避免内容顶出遮住返回按钮 */
 #ovDuelSetup,#ovWait{justify-content:flex-start}
 .roomwrap{margin:auto 0;padding:34px 8px 10px}
+/* 商店 / 配装内容超出屏高时改为顶端对齐：
+   flex 居中 + 滚动会让顶部内容永远滚不到（技能栏被顶出屏幕后切不回普攻 / 大招页） */
+#ovSkin,#ovSkill,#ovLoad{justify-content:flex-start}
+#ovSkin>h2,#ovSkill>h2,#ovLoad>h2{margin-top:30px}
+/* 商店 / 配装内容超出屏高时同样改为顶端对齐：
+   flex 居中 + 滚动会让顶部内容永远滚不到（技能栏被顶出屏幕后切不回普攻 / 大招页） */
+#ovSkin,#ovSkill,#ovLoad{justify-content:flex-start}
+#ovSkin>h2,#ovSkill>h2,#ovLoad>h2{margin-top:30px}
 .back:hover{color:var(--txt);border-color:rgba(120,160,255,.5)}
 
 .shop{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;width:100%;max-width:800px}
@@ -222,6 +230,8 @@ canvas.pv{width:64px;height:80px;display:block}
 .roomfoot{margin-top:12px;display:flex;flex-direction:column;align-items:center;gap:8px}
 .roomfoot .hint{font-size:11.5px;color:#8fa0c8;max-width:640px;text-align:center;line-height:1.6}
 .btnrow{display:flex;gap:14px;align-items:center}
+/* 房间底部的「返回」按钮跟随布局排，不悬浮到左上角与标题重叠 */
+.roomfoot .back{position:static}
 </style>
 </head>
 <body>
@@ -232,7 +242,7 @@ canvas.pv{width:64px;height:80px;display:block}
       <span class="logo">孤高旅斗</span><span class="ver" id="hudVer">v__VERSION__</span>
       <span class="spacer"></span>
       <button class="tbtn" id="btnMute">🔊 音效</button>
-      <button class="tbtn" id="btnQuit">⌂ 主菜单</button>
+      <button class="tbtn" id="btnQuit">⏸ 菜单</button>
     </div>
     <div class="bars" id="pBars"></div>
     <div class="enemyHud" id="eBars"></div>
@@ -385,7 +395,20 @@ canvas.pv{width:64px;height:80px;display:block}
     <div class="hr"></div>
     <div class="row" id="endBtns">
       <button class="btn primary" id="btnAgain">再来一局</button>
+      <button class="btn" id="btnEndRoom">返回房间</button>
       <button class="btn" id="btnEndMenu">返回主菜单</button>
+    </div>
+  </div>
+
+  <!-- 战斗中暂停面板：Esc 或右上角按钮呼出 -->
+  <div class="ov hide" id="ovPause">
+    <h2>暂停</h2>
+    <div class="sub">对局仍在进行（联机不会因此暂停）</div>
+    <div class="hr"></div>
+    <div class="row" style="flex-direction:column;gap:10px">
+      <button class="btn primary" id="btnPauseResume">继续战斗</button>
+      <button class="btn" id="btnPauseRoom">‹ 返回房间（不退房）</button>
+      <button class="btn ghost" id="btnPauseMenu">回主菜单</button>
     </div>
   </div>
 </div>

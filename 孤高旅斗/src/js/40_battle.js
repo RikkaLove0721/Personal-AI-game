@@ -49,6 +49,12 @@
       stun: 0, root: 0, invuln: 0, dead: false,
       shield: 0, shieldT: 0,
       blind: 0,                    // 视野被遮挡剩余秒数（粪击）
+      slowT: 0,                    // 减速剩余秒数（冰痕 / 苍）
+      stealthT: 0,                 // 隐匿剩余秒数（>0 = 隐身）
+      silenceT: 0,                 // 被囚牢禁言剩余判定（圈内持续刷新）
+      knockLeft: 0, knockA: 0, knockWall: false,   // 赫的定向击飞（剩余距离/方向/撞墙惩罚）
+      hpHist: [],                  // 血量历史（败者食尘：回溯 3 秒）
+      kingMark: null,              // 王从天降：红圈记号 {x, y, global}
       lock: -1,                    // 索敌：锁定的目标座位（-1 = 自动选最近）
       team: opts.team == null ? -1 : opts.team,   // 阵营模式 0-3；-1 表示无阵营
       overlord: false,             // 霸主争霸：是否持有能量石
@@ -148,17 +154,32 @@
   B.alive = function (side) { const f = this.fighters.find(o => o.side === side); return f && !f.dead; };
 
   B.resetRound = function (keepScore) {
+    /* 开局位置随机：勇者出生点在场地中下部随机抽取，彼此保持最小间距（巨龙保留原出生点） */
+    const placed = [];
     this.fighters.forEach(f => {
-      const SX = [0.22, 0.78, 0.22, 0.78], SY = [0.52, 0.52, 0.72, 0.72];
-      f.x = C.W * (SX[f.side] != null ? SX[f.side] : 0.5);
-      f.y = C.H * (SY[f.side] != null ? SY[f.side] : 0.54);
+      if (f.kind === "hero") {
+        let bx = C.W * 0.5, by = C.H * 0.6;
+        for (let tries = 0; tries < 40; tries++) {
+          const tx = C.W * (0.12 + Math.random() * 0.76);
+          const ty = C.H * (0.42 + Math.random() * 0.46);
+          if (placed.every(p => Math.hypot(p.x - tx, p.y - ty) > 170)) { bx = tx; by = ty; break; }
+        }
+        placed.push({ x: bx, y: by });
+        f.x = bx; f.y = by;
+      }
       f.hp = f.maxHp; f.dead = false; f.stun = 0; f.root = 0; f.invuln = 0;
       f.vx = 0; f.vy = 0; f.moving = false;
-      f.shield = 0; f.shieldT = 0; f.hitFlash = 0; f.blind = 0;
+      f.shield = 0; f.shieldT = 0; f.hitFlash = 0; f.blind = 0; f.slowT = 0;
+      f.stealthT = 0; f.silenceT = 0; f.knockLeft = 0; f.knockWall = false;
+      f.kingMark = null; f.hpHist = [{ t: this.t || 0, hp: f.hp }];
       f.buff = { rage: 0, thousand: 0, rush: 0 };
       f.meditate = 0; f.parryT = 0; f.atkAnim = 0;
       if (f.kind === "hero") f.energy = 0;
-      if (f.cd) { f.cd.basic = 0; f.cd.skill1 = 0; f.cd.skill2 = 0; f.cd.ult = 1.5; f.cd.dodge = 0; }
+      if (f.cd) {
+        f.cd.basic = 0; f.cd.skill1 = 0; f.cd.skill2 = 0; f.cd.dodge = 0;
+        /* 勇者开局大招短延迟；巨龙用 ultFirst（大幅延后首次开大） */
+        f.cd.ult = f.kind === "dragon" ? ((LD.DRAGON.ult && LD.DRAGON.ult.ultFirst) || 12) : 1.5;
+      }
       Object.keys(f.slot || {}).forEach(k => { f.slot[k] = { on: false, phase: "", t: 0, d: {} }; });
       f.lock = -1;                                        // 索敌锁定每回合重置
       if (f.kind === "dragon") { f.mode = "idle"; f.modeT = 0; f.charge = 0; f.telegraph = null; f.rageStage = 0; }
@@ -166,6 +187,7 @@
     });
     this.projs = []; this.zones = [];
     this.stone = null;                                  // 能量石（霸主争霸）
+    this.dragonCorpseT = 0;
     this.roundT = (this.mode === "dragon" || this.rule === "overlord") ? 0 : 75;   // 每回合重置限时
     this.countdown = 2.0; this.state = "countdown"; this.roundWinner = -1;
     if (!keepScore) { this.score = this.fighters.map(() => 0); this.round = 1; }
@@ -198,13 +220,14 @@
 
   B.spawnProj = function (o) {
     const p = {
-      x: o.x, y: o.y, vx: o.vx, vy: o.vy, r: o.r || 9, dmg: o.dmg || 10,
+      x: o.x, y: o.y, vx: o.vx, vy: o.vy, r: o.r || 9, dmg: o.dmg != null ? o.dmg : 10,
       owner: o.owner, side: o.owner.side, life: 0, maxLife: o.life || 2,
       color: o.color || "#fb923c", core: o.core || "#fef3c7",
       type: o.type || "fireball", pierce: !!o.pierce, reflect: !!o.reflect,
       absorb: o.absorb || 0, absorbed: 0, tick: o.tick || 0, tickMax: o.tickMax || 0,
       hits: {}, data: o.data || {}, homing: o.homing || 0, scale: o.scale || 1,
-      root: o.root || 0, stun: o.stun || 0, blind: o.blind || 0, trail: !!o.trail, spin: 0, kindTag: o.kindTag || "skill"
+      root: o.root || 0, stun: o.stun || 0, blind: o.blind || 0, trail: !!o.trail, spin: 0, kindTag: o.kindTag || "skill",
+      boomerang: !!o.boomerang
     };
     this.projs.push(p);
     return p;
@@ -288,6 +311,7 @@
       this.ev.push(["b", tgt.x, tgt.y - 66, "致盲 " + o.blind + "s", "#a16207"]);
     }
     if (o.kb) this.knock(tgt, o.from || src, o.kb);
+    else if (o.kbDist) this.knockDist(tgt, o.from || src, o.kbDist, o.wallHit);
     if (tgt.hp <= 0) this.kill(tgt, src);
 
     // 被击打断冥想
@@ -352,6 +376,41 @@
     f.vx += Math.cos(a) * force; f.vy += Math.sin(a) * force;
   };
 
+  /* 定向击飞（赫）：按固定距离位移，撞到墙体（边界 / 绝望囚牢圈壁）会额外受伤 */
+  B.knockDist = function (f, from, dist, wallHit) {
+    if (!from || f.kind === "dragon") return;
+    f.knockA = Math.atan2(f.y - from.y, f.x - from.x);
+    f.knockLeft = dist;
+    f.knockWall = !!wallHit;
+  };
+
+  /* 每帧定向击飞位移 + 撞墙判定。返回 true 表示本帧发生了撞墙 */
+  B.knockStep = function (f, dt) {
+    if (f.knockLeft <= 0) return false;
+    const spd = 2300;
+    const step = Math.min(f.knockLeft, spd * dt);
+    f.x += Math.cos(f.knockA) * step;
+    f.y += Math.sin(f.knockA) * step;
+    f.knockLeft -= step;
+    return false;   // 撞墙由位置钳制后的 wallCheck 统一判定
+  };
+
+  /* 击飞撞墙判定：位置已被钳到边界或囚牢圈壁时调用 */
+  B.wallHit = function (f) {
+    if (f.knockLeft <= 0 || !f.knockWall) return false;
+    f.knockLeft = 0;
+    f.knockWall = false;
+    const dmg = LD.skill("he") ? LD.skill("he").wallDmg : 10;
+    const stun = LD.skill("he") ? LD.skill("he").wallStun : 0.4;
+    this.damage(null, f, dmg, { type: "dot", kb: 0 });
+    f.stun = Math.max(f.stun, stun);
+    FX.burst(f.x, f.y - 26, 16, ["#fca5a5", "#fff"], { speed: 240 });
+    FX.float(f.x, f.y - 60, "撞墙！", "#f87171", 16);
+    this.ev.push(["h", f.x, f.y - 60, "撞墙！", "#f87171"]);
+    FX.shake(8);
+    return true;
+  };
+
   B.heal = function (f, amt) { f.hp = Math.min(f.maxHp, f.hp + amt); };
 
   B.kill = function (f, by) {
@@ -367,8 +426,8 @@
       else this.finish(true);
       return;
     }
-    // 霸主争霸：巨龙被击败 → 爆出能量石
-    if (this.rule === "overlord" && f.kind === "dragon") { this.spawnStone(f.x, f.y); return; }
+    // 霸主争霸：巨龙被击败 → 爆出能量石（尸体 3 秒后消失）
+    if (this.rule === "overlord" && f.kind === "dragon") { this.spawnStone(f.x, f.y); this.dragonCorpseT = 0; return; }
     // 霸主争霸：霸主阵亡 → 能量石掉回场上，重新争夺
     if (this.rule === "overlord" && f.overlord) { f.overlord = false; this.spawnStone(f.x, f.y); }
     // 霸主争霸：场上只剩一名存活勇者（巨龙不算）时回合结束
@@ -406,7 +465,8 @@
 
   /* ---------------- 霸主争霸：能量石 ---------------- */
   B.spawnStone = function (x, y) {
-    const a = Math.random() * TAU, sp = rand(320, 520);
+    /* 能量石大距离随机散落：初速更快，保证飞出足够远而不是原地落下 */
+    const a = Math.random() * TAU, sp = rand(560, 860);
     this.stone = { x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0, landed: false, holder: null };
     FX.ring(x, y - 26, 90, "rgba(252,211,77,.95)", 6, 0.5);
     FX.burst(x, y - 26, 30, ["#fcd34d", "#fff7d6", "#fbbf24"], { speed: 340 });
@@ -420,7 +480,7 @@
     s.life += dt;
     if (!s.landed) {
       s.x += s.vx * dt; s.y += s.vy * dt;
-      const damp = Math.exp(-3.2 * dt); s.vx *= damp; s.vy *= damp;
+      const damp = Math.exp(-2.2 * dt); s.vx *= damp; s.vy *= damp;
       FX.trail(s.x, s.y, "#fcd34d", 6, 0.3);
       if (Math.hypot(s.vx, s.vy) < 40) { s.landed = true; s.vx = s.vy = 0; s.y = Math.max(s.y, C.H * 0.34); }
       s.x = clamp(s.x, 40, C.W - 40);
@@ -540,7 +600,7 @@
       FX.trail(f.x + f.facing.x * 30 + rand(-6, 6), f.y - 34 + f.facing.y * 10, "#fb923c", 4, 0.2);
       if (s.t >= sk.windup) {
         f.facing = s.d.dir || f.facing;
-        const hit = B.melee(f, { reach: sk.reach, half: sk.half, dmg: sk.dmg, type: "basic", kb: 260, basic: true });
+        const hit = B.melee(f, { reach: sk.reach, half: sk.half, dmg: sk.dmg, type: "basic", kb: 260, basic: true, stun: sk.stun });
         arcFX(f, "#fb923c", sk.reach);
         FX.shake(hit ? 7 : 3);
         B.endSlot(f, slot, sk.cd);
@@ -581,14 +641,25 @@
       if (s.phase === "dash") {
         s.t += dt;
         const p = Math.min(1, s.t / sk.dashT);
-        const tx = d.sx + d.dir.x * sk.dash * (d.back ? -1 : 1) * p;
-        const ty = d.sy + d.dir.y * sk.dash * (d.back ? -1 : 1) * p;
+        let tx, ty;
+        if (d.back) {
+          // 二段：从当前位置直线滑回起手原位（不再反向多闪一段）
+          tx = d.bx + (d.sx - d.bx) * p;
+          ty = d.by + (d.sy - d.by) * p;
+        } else {
+          tx = d.sx + d.dir.x * sk.dash * p;
+          ty = d.sy + d.dir.y * sk.dash * p;
+        }
         FX.trail(f.x, f.y, "#7fe6f7", 7, 0.3);
         f.x = tx; f.y = ty;
-        const foe = B.foeOf(f);
-        if (foe && !foe.dead && !d.hit[foe.side] && dist(f, foe) < 44 + foe.r) {
-          d.hit[foe.side] = 1;
-          B.damage(f, foe, sk.dmg, { type: "skill", kb: 150, from: f, hitDir: Math.atan2(foe.y - f.y, foe.x - f.x) });
+        // 路径伤害：一段与二段（回原位）都对路径上的所有敌人各结算一次
+        for (const o of B.fighters) {
+          if (o === f || o.dead || o.kind !== "hero" || B.sameTeam(f, o)) continue;
+          if (d.hit[o.side]) continue;
+          if (dist(f, o) < 44 + o.r) {
+            d.hit[o.side] = 1;
+            B.damage(f, o, sk.dmg, { type: "skill", kb: 150, from: f, hitDir: Math.atan2(o.y - f.y, o.x - f.x) });
+          }
         }
         if (p >= 1) {
           if (!d.back) { s.phase = "second"; s.t = 0; d.secondLeft = sk.second; }
@@ -603,6 +674,7 @@
       const s = f.slot[slot];
       if (s.phase !== "second") return false;
       s.phase = "dash"; s.t = 0; s.d.back = true; s.d.hit = {};
+      s.d.bx = f.x; s.d.by = f.y;              // 回程起点 = 当前位置，终点 = 起手原位
       f.invuln = Math.max(f.invuln, sk.invuln);
       f.atkAnim = sk.dashT + 0.08; f.atkDur = sk.dashT + 0.08;
       FX.ring(f.x, f.y - 26, 46, "rgba(34,211,238,.9)", 3, 0.25);
@@ -726,16 +798,18 @@
       const s = f.slot[slot];
       if (s.phase !== "rush") return;
       s.t += dt;
-      f.buff.rush = Math.max(f.buff.rush, 0.01);
+      /* 加速 buff 严格跟随技能剩余时间：撞到人提前结束、到 3 秒正常结束，都不会再拖尾 */
+      f.buff.rush = Math.max(0, sk.dur - s.t);
       FX.trail(f.x + rand(-12, 12), f.y - rand(4, 34), "#fbbf24", 5, 0.35);
       const foe = B.foeOf(f);
       if (foe && !foe.dead && dist(f, foe) < f.r + foe.r + 6) {
         B.damage(f, foe, sk.dmg, { type: "skill", stun: sk.stun, kb: 300, from: f });
         FX.ring(foe.x, foe.y - 26, 80, "rgba(251,191,36,.9)", 5, 0.4);
+        f.buff.rush = 0;
         B.endSlot(f, slot, sk.cd);
         return;
       }
-      if (s.t >= sk.dur) B.endSlot(f, slot, sk.cd);
+      if (s.t >= sk.dur) { f.buff.rush = 0; B.endSlot(f, slot, sk.cd); }
     }
   };
 
@@ -764,6 +838,11 @@
         FX.shake(9); FX.hitstop(0.05);
         f.atkAnim = 0.34; f.atkDur = 0.34;
         if (foe && !foe.dead && dist(f, foe) < 70 + foe.r) B.damage(f, foe, sk.dmg, { type: "skill", kb: 200, from: f });
+        /* 瞬身改版：瞬移后获得护盾（吸收 20 点伤害，持续 2 秒） */
+        f.shield = Math.max(f.shield, sk.shield || 20);
+        f.shieldT = Math.max(f.shieldT, sk.shieldT || 2);
+        FX.ring(f.x, f.y - 26, 54, "rgba(252,211,77,.9)", 4, 0.5);
+        FX.float(f.x, f.y - 60, "护盾 " + (sk.shield || 20), "#fcd34d", 13);
         B.endSlot(f, slot, sk.cd);
       }
     }
@@ -887,6 +966,293 @@
     }
   };
 
+  /* ---- 冰霜行者：4 秒内走过的地方结冰痕，踩上持续冻伤 + 减速 ---- */
+  IMPL.frostWalk = {
+    start(f, slot, sk) {
+      const s = f.slot[slot]; s.on = true; s.phase = "frost"; s.t = 0;
+      s.d.acc = 0; s.d.lx = null; s.d.ly = null;
+      FX.ring(f.x, f.y - 20, 60, "rgba(147,197,253,.95)", 4, 0.5);
+    },
+    update(f, slot, sk, dt) {
+      const s = f.slot[slot];
+      if (s.phase !== "frost") return;
+      s.t += dt; s.d.acc += dt;
+      FX.trail(f.x + rand(-10, 10), f.y + rand(-2, 6), "#93c5fd", 4, 0.4);
+      /* 只有离上一块冰痕足够远才铺新的：原地站着不会把伤害叠上天 */
+      const far = s.d.lx == null || Math.hypot(f.x - s.d.lx, f.y - s.d.ly) >= sk.zoneR * 1.6;
+      if (s.d.acc >= 0.12 && far) {
+        s.d.acc = 0; s.d.lx = f.x; s.d.ly = f.y;
+        B.zones.push({ type: "frost", x: f.x, y: f.y, r: sk.zoneR, life: 0, max: sk.zoneLife,
+          owner: f, hits: {}, color: "#93c5fd" });
+      }
+      if (s.t >= sk.dur) B.endSlot(f, slot, sk.cd);
+    }
+  };
+
+  /* ---- 苍：把范围内敌人吸到自己身边 + 减速 ---- */
+  IMPL.cang = {
+    start(f, slot, sk) {
+      const R = sk.range;
+      FX.ring(f.x, f.y - 24, R, "rgba(103,232,249,.9)", 6, 0.45);
+      FX.ring(f.x, f.y - 24, R * 0.6, "rgba(165,243,252,.95)", 5, 0.4);
+      FX.shake(6);
+      B.fighters.forEach(o => {
+        if (o === f || o.dead || o.kind !== "hero" || B.sameTeam(f, o)) return;
+        if (dist(f, o) > R + o.r) return;
+        const a = Math.atan2(o.y - f.y, o.x - f.x);
+        o.x = clamp(f.x + Math.cos(a) * (f.r + o.r + 6), 40, C.W - 40);
+        o.y = clamp(f.y + Math.sin(a) * (f.r + o.r + 6), C.H * 0.32, C.H - 40);
+        o.slowT = Math.max(o.slowT || 0, sk.slow);
+        B.damage(f, o, sk.dmg, { type: "skill", kb: 0, from: f });
+        FX.burst(o.x, o.y - 26, 12, ["#67e8f9", "#fff"], { speed: 180 });
+      });
+      B.endSlot(f, slot, sk.cd);
+    }
+  };
+
+  /* ---- 赫：范围强击飞（固定距离位移，无撞墙惩罚） ---- */
+  IMPL.he = {
+    start(f, slot, sk) {
+      const R = sk.range;
+      FX.ring(f.x, f.y - 24, R, "rgba(248,113,113,.95)", 7, 0.45);
+      FX.ring(f.x, f.y - 24, R * 0.55, "rgba(254,202,202,.9)", 5, 0.35);
+      FX.shake(12); FX.flash(0.12, "255,120,120");
+      B.fighters.forEach(o => {
+        if (o === f || o.dead || o.kind !== "hero" || B.sameTeam(f, o)) return;
+        if (dist(f, o) > R + o.r) return;
+        B.damage(f, o, sk.dmg, { type: "skill", kbDist: sk.kbDist || 400, from: f,
+          hitDir: Math.atan2(o.y - f.y, o.x - f.x) });
+        FX.ring(o.x, o.y - 30, 60, "rgba(248,113,113,.85)", 5, 0.35);
+      });
+      B.endSlot(f, slot, sk.cd);
+    }
+  };
+
+  /* ---- 回旋镖：中速掷出 → 尽头高速折返追踪主人，回手才进 CD ---- */
+  IMPL.boomerang = {
+    start(f, slot, sk) {
+      const s = f.slot[slot];
+      f.facing = aimAt(f, this);
+      const a = Math.atan2(f.facing.y, f.facing.x);
+      s.on = true; s.phase = "boom"; s.t = 0;
+      const p = B.spawnProj({
+        x: f.x + Math.cos(a) * 24, y: f.y - 26 + Math.sin(a) * 14,
+        vx: Math.cos(a) * sk.proj.speed, vy: Math.sin(a) * sk.proj.speed,
+        r: sk.proj.r, dmg: sk.dmg, life: sk.proj.life, owner: f, pierce: true, boomerang: true,
+        color: "#a3e635", core: "#f7fee7", type: "boomerang", kindTag: "skill", trail: true,
+        data: { phase: "out", ox: f.x, oy: f.y - 26, maxDist: sk.maxDist, backSpeed: sk.backSpeed, backDmg: sk.backDmg }
+      });
+      s.d.p = p;
+      f.atkAnim = 0.26; f.atkDur = 0.26;
+      FX.burst(f.x + Math.cos(a) * 26, f.y - 26, 8, ["#a3e635", "#fff"], { speed: 160, dir: a });
+    },
+    update(f, slot, sk, dt) {
+      const s = f.slot[slot];
+      if (s.phase !== "boom") return;
+      s.t += dt;
+      const p = s.d.p;
+      const alive = p && B.projs.indexOf(p) >= 0;
+      if (!alive) { B.endSlot(f, slot, sk.cd); return; }   // 被弹反等情况：直接结束进 CD
+      if (p.data.phase === "out") {
+        p.dmg = sk.dmg;
+        const dx = p.x - p.data.ox, dy = p.y - p.data.oy;
+        if (Math.hypot(dx, dy) >= p.data.maxDist) {        // 到尽头 → 高速折返
+          p.data.phase = "back";
+          p.hits = {};                                     // 回程可再次造成伤害
+          FX.ring(p.x, p.y, 40, "rgba(163,230,53,.9)", 4, 0.3);
+        }
+      } else {
+        p.dmg = p.data.backDmg != null ? p.data.backDmg : sk.backDmg;
+        const a = Math.atan2((f.y - 26) - p.y, f.x - p.x); // 始终追踪释放者
+        p.vx = Math.cos(a) * p.data.backSpeed;
+        p.vy = Math.sin(a) * p.data.backSpeed;
+        if (Math.hypot(f.x - p.x, (f.y - 26) - p.y) < 24 + f.r) {   // 回到手上 → 进 CD
+          B.projs.splice(B.projs.indexOf(p), 1);
+          FX.burst(f.x, f.y - 26, 10, ["#a3e635", "#fff"], { speed: 150 });
+          B.endSlot(f, slot, sk.cd);
+        }
+      }
+      if (s.t >= sk.proj.life + 0.5) {                    // 兜底超时
+        const i = B.projs.indexOf(p);
+        if (i >= 0) B.projs.splice(i, 1);
+        B.endSlot(f, slot, sk.cd);
+      }
+    }
+  };
+
+  /* ---- 火男：4 秒内周身燃焰，近身敌人持续掉血（zone 跟随，可同步到客机） ---- */
+  IMPL.fireAura = {
+    start(f, slot, sk) {
+      const s = f.slot[slot]; s.on = true; s.phase = "fire"; s.t = 0;
+      B.zones.push({ type: "fire", x: f.x, y: f.y, r: sk.auraR, life: 0, max: sk.dur,
+        owner: f, hits: {}, dmg: sk.tickDmg, tick: sk.tick });
+      FX.ring(f.x, f.y - 20, sk.auraR, "rgba(251,146,60,.95)", 6, 0.5);
+      FX.float(f.x, f.y - 60, "烈焰缠身！", "#fb923c", 15);
+    },
+    update(f, slot, sk, dt) {
+      const s = f.slot[slot];
+      if (s.phase !== "fire") return;
+      s.t += dt;
+      if (s.t >= sk.dur) B.endSlot(f, slot, sk.cd);
+    }
+  };
+
+  /* ---- 隐匿：4 秒隐身，第 2 秒闪现 0.4 秒原形，攻击提前现形 ---- */
+  IMPL.stealth = {
+    start(f, slot, sk) {
+      const s = f.slot[slot]; s.on = true; s.phase = "stealth"; s.t = 0;
+      f.stealthT = sk.dur; f.stealthSlot = slot;
+      FX.ring(f.x, f.y - 20, 70, "rgba(196,181,253,.9)", 5, 0.5);
+      FX.burst(f.x, f.y - 26, 18, ["#c4b5fd", "#fff"], { speed: 200 });
+      FX.float(f.x, f.y - 60, "隐匿！", "#c4b5fd", 15);
+    },
+    update(f, slot, sk, dt) {
+      const s = f.slot[slot];
+      if (s.phase !== "stealth") return;
+      s.t += dt;
+      f.stealthT = Math.max(0, sk.dur - s.t);
+      if (s.t >= sk.dur) { f.stealthT = 0; B.endSlot(f, slot, sk.cd); B.stealthShield(f, sk); }
+    }
+  };
+  /* 隐匿结束（自然到期或主动现形）→ 获得 14 点 / 2 秒护盾 */
+  B.stealthShield = function (f, sk) {
+    const amt = (sk && sk.shield) || 14, dur = (sk && sk.shieldT) || 2.0;
+    f.shield = Math.max(f.shield, amt);
+    f.shieldT = Math.max(f.shieldT, dur);
+    FX.ring(f.x, f.y - 26, 54, "rgba(147,197,253,.9)", 4, 0.5);
+    FX.float(f.x, f.y - 60, "护盾 " + amt, "#93c5fd", 13);
+  };
+  B.breakStealth = function (f, forced) {
+    if (f.stealthT <= 0) return;
+    const sk = f.loadout && LD.skill(f.loadout[f.stealthSlot || "skill1"]);
+    f.stealthT = 0;
+    B.endSlot(f, f.stealthSlot || "skill1", sk ? sk.cd : 8);
+    FX.burst(f.x, f.y - 26, 14, ["#c4b5fd", "#fff"], { speed: 180 });
+    FX.float(f.x, f.y - 58, "现形！", "#c4b5fd", 14);
+    B.stealthShield(f, sk);
+  };
+
+  /* ---- 高压炸弹：掏出 4 秒倒计时炸弹，再按扔出，归零爆炸（会炸到自己） ---- */
+  IMPL.hbomb = {
+    start(f, slot, sk) {
+      const s = f.slot[slot]; s.on = true; s.phase = "hbombHold"; s.t = 0;
+      s.d.timer = sk.fuse;
+      FX.float(f.x, f.y - 60, "倒计时 " + sk.fuse + "s", "#fbbf24", 14);
+    },
+    again(f, slot, sk) {
+      const s = f.slot[slot];
+      if (s.phase !== "hbombHold") return false;
+      const a0 = Math.atan2(f.facing.y, f.facing.x);
+      const spd = sk.throwSpd || 430;
+      const p = B.spawnProj({
+        x: f.x + Math.cos(a0) * 24, y: f.y - 26,
+        vx: Math.cos(a0) * spd, vy: Math.sin(a0) * spd,
+        r: 12, dmg: sk.dmg, life: sk.fuse, maxLife: sk.fuse + 2, owner: f,
+        color: "#fbbf24", core: "#fef3c7", type: "hbomb", kindTag: "skill",
+        data: { timer: s.d.timer, fuse: sk.fuse, boomR: sk.boomR, dmg: sk.dmg, selfDmg: sk.selfDmg || 20, throwDamp: sk.throwDamp || 1.05 }
+      });
+      s.d.p = p;
+      B.endSlot(f, slot, sk.cd);
+      FX.float(f.x, f.y - 56, "扔出！", "#fbbf24", 13);
+      return true;
+    },
+    update(f, slot, sk, dt) {
+      const s = f.slot[slot];
+      if (s.phase !== "hbombHold") return;
+      s.t += dt; s.d.timer -= dt;
+      if (s.d.timer <= 0) {                 // 留在手里 → 当场自爆
+        B.hbombBoom(f, f.x, f.y - 26, sk);
+        B.endSlot(f, slot, sk.cd);
+      }
+    }
+  };
+  /* 高压炸弹爆炸：敌人吃全额伤害，释放者自己只吃 selfDmg（20），不伤同阵营队友 */
+  B.hbombBoom = function (owner, x, y, sk) {
+    const R = sk.boomR, dmg = sk.dmg, selfDmg = sk.selfDmg != null ? sk.selfDmg : dmg;
+    FX.ring(x, y, R, "rgba(251,191,36,.95)", 8, 0.55);
+    FX.burst(x, y, 34, ["#fbbf24", "#fff", "#fb923c"], { speed: 340 });
+    FX.shake(14); FX.flash(0.2, "255,210,120");
+    for (const f of B.fighters) {
+      if (f.dead || f.kind !== "hero") continue;
+      if (f !== owner && B.sameTeam(owner, f)) continue;
+      if (Math.hypot(f.x - x, (f.y - 26) - y) <= R + f.r) {
+        B.damage(owner, f, f === owner ? selfDmg : dmg, { type: "skill", kb: 320, from: owner, hitDir: Math.atan2(f.y - 26 - y, f.x - x) });
+      }
+    }
+    B.ev.push(["x", x, y, R]);
+  };
+
+  /* ---- 穿云箭：一箭 15，命中前再按散成 6 箭（各 6 伤，飞 500） ---- */
+  IMPL.splitArrow = {
+    start(f, slot, sk) {
+      const s = f.slot[slot]; s.on = true; s.phase = "arrow"; s.t = 0;
+      f.facing = aimAt(f, this);
+      const a = Math.atan2(f.facing.y, f.facing.x);
+      const p = B.spawnProj({
+        x: f.x + Math.cos(a) * 26, y: f.y - 26 + Math.sin(a) * 14,
+        vx: Math.cos(a) * sk.proj.speed, vy: Math.sin(a) * sk.proj.speed,
+        r: sk.proj.r, dmg: sk.dmg, life: sk.proj.life, maxLife: sk.proj.life + 2, owner: f,
+        color: "#fde68a", core: "#fffbeb", type: "arrow", kindTag: "skill", trail: true,
+        data: { split: true, splitDmg: sk.splitDmg, splitN: sk.splitN, splitLife: sk.splitLife }
+      });
+      s.d.p = p;
+      f.atkAnim = 0.22; f.atkDur = 0.22;
+      FX.burst(f.x + Math.cos(a) * 28, f.y - 26, 8, ["#fde68a", "#fff"], { speed: 170, dir: a });
+    },
+    again(f, slot, sk) {
+      const s = f.slot[slot];
+      if (s.phase !== "arrow") return false;
+      const p = s.d.p;
+      const alive = p && B.projs.indexOf(p) >= 0;
+      if (!alive) return false;
+      const a0 = Math.atan2(p.vy, p.vx);
+      const sp = Math.hypot(p.vx, p.vy);
+      B.projs.splice(B.projs.indexOf(p), 1);
+      for (let i = 0; i < sk.splitN; i++) {
+        const a = a0 + (i - (sk.splitN - 1) / 2) * 0.16;
+        B.spawnProj({
+          x: p.x, y: p.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+          r: sk.proj.r * 0.8, dmg: sk.splitDmg, life: sk.splitLife / sp, maxLife: sk.splitLife / sp + 2,
+          owner: f, color: "#fef08a", core: "#fff", type: "sarrow", kindTag: "skill", trail: true, data: {}
+        });
+      }
+      FX.burst(p.x, p.y, 16, ["#fde68a", "#fff"], { speed: 220 });
+      FX.float(p.x, p.y - 30, "散箭！", "#fde68a", 14);
+      B.endSlot(f, slot, sk.cd);
+      return true;
+    },
+    update(f, slot, sk, dt) {
+      const s = f.slot[slot];
+      if (s.phase !== "arrow") return;
+      const p = s.d.p;
+      if (!p || B.projs.indexOf(p) < 0) B.endSlot(f, slot, sk.cd);   // 已命中 / 消失
+    }
+  };
+
+  /* ---- 钩索：钩中 22 伤 + 0.6s 眩晕，把对手拖回最多 700 距离 ---- */
+  IMPL.hook = {
+    start(f, slot, sk) {
+      const s = f.slot[slot]; s.on = true; s.phase = "hookFly"; s.t = 0;
+      f.facing = aimAt(f, this);
+      const a = Math.atan2(f.facing.y, f.facing.x);
+      const p = B.spawnProj({
+        x: f.x + Math.cos(a) * 24, y: f.y - 26 + Math.sin(a) * 14,
+        vx: Math.cos(a) * sk.proj.speed, vy: Math.sin(a) * sk.proj.speed,
+        r: sk.proj.r, dmg: sk.dmg, life: sk.proj.life, maxLife: sk.proj.life + 2, owner: f,
+        color: "#94a3b8", core: "#e2e8f0", type: "hook", kindTag: "skill",
+        data: { pull: sk.pullDist, stun: sk.stun, ox: f.x, oy: f.y }
+      });
+      s.d.p = p;
+      f.atkAnim = 0.24; f.atkDur = 0.24;
+    },
+    update(f, slot, sk, dt) {
+      const s = f.slot[slot];
+      if (s.phase !== "hookFly") return;
+      const p = s.d.p;
+      if (!p || B.projs.indexOf(p) < 0) B.endSlot(f, slot, sk.cd);   // 已命中 / 消失
+    }
+  };
+
   /* ---- 大招：虚空爆裂斩 ---- */
   IMPL.voidSlash = {
     start(f, slot, sk) {
@@ -948,6 +1314,118 @@
         FX.burst(f.x, f.y - 26, 4, "#a5f3fc", { speed: 120, dir: a });
       }
       if (s.t >= sk.dur) B.endSlot(f, slot, sk.cd);
+    }
+  };
+
+  /* ---- 大招：绝望囚牢（zone 承载：0.8s 后成形，沉默 + 圆形墙，不吸附） ---- */
+  IMPL.prison = {
+    start(f, slot, sk) {
+      const s = f.slot[slot]; s.on = true; s.phase = "prison"; s.t = 0;
+      LD.Cine.start(f, sk.name, "", "#a78bfa");
+      B.zones.push({ type: "prison", x: f.x, y: f.y, r: sk.zoneR, life: 0, max: sk.dur + (sk.formT || 0),
+        owner: f, hits: {}, formT: sk.formT || 0 });
+      FX.mark(f.x, f.y, sk.zoneR, "rgba(167,139,250,.9)", sk.formT || 0, "circle");
+      FX.ring(f.x, f.y - 26, sk.zoneR, "rgba(167,139,250,.75)", 6, sk.formT || 0.5);
+      FX.shake(10);
+    },
+    update(f, slot, sk, dt) {
+      const s = f.slot[slot];
+      if (s.phase !== "prison") return;
+      s.t += dt;
+      if (s.t >= sk.dur + (sk.formT || 0)) B.endSlot(f, slot, sk.cd);
+    }
+  };
+
+  /* ---- 大招：败者食尘（回溯 3 秒血量） ---- */
+  IMPL.eatDust = {
+    start(f, slot, sk) {
+      const s = f.slot[slot]; s.on = true; s.phase = "eatDust"; s.t = 0;
+      LD.Cine.start(f, sk.name, "", "#fbbf24");
+      const target = (B.t || 0) - sk.back;
+      let best = null, bestPos = null;
+      (f.hpHist || []).forEach(h => {
+        if (!best || Math.abs(h.t - target) < Math.abs(best.t - target)) best = h;
+      });
+      (f.posHist || []).forEach(h => {
+        if (!bestPos || Math.abs(h.t - target) < Math.abs(bestPos.t - target)) bestPos = h;
+      });
+      const old = best ? best.hp : f.hp;
+      const healed = Math.round(old - f.hp);
+      f.hp = Math.min(f.maxHp, Math.max(f.hp, old));
+      // 连同 3 秒前的位置一起回溯
+      if (bestPos) {
+        FX.burst(f.x, f.y - 26, 12, ["#fbbf24", "#fff7d6"], { speed: 200 });
+        f.x = bestPos.x; f.y = bestPos.y;
+        FX.burst(f.x, f.y - 26, 14, ["#fde68a", "#fff"], { speed: 240 });
+        FX.ring(f.x, f.y - 26, 70, "rgba(251,191,36,.9)", 5, 0.45);
+      }
+      FX.ring(f.x, f.y - 26, 110, "rgba(251,191,36,.95)", 7, 0.6);
+      FX.burst(f.x, f.y - 26, 26, ["#fbbf24", "#fff7d6"], { speed: 260 });
+      FX.float(f.x, f.y - 62, (healed > 0 ? "+" : "") + healed, "#fbbf24", 20);
+      B.endSlot(f, slot, sk.cd);
+    }
+  };
+
+  /* ---- 大招：水之呼吸（三颗水球环绕；zone 承载，可同步客机） ---- */
+  IMPL.waterOrbs = {
+    start(f, slot, sk) {
+      const s = f.slot[slot]; s.on = true; s.phase = "water"; s.t = 0;
+      LD.Cine.start(f, sk.name, "", "#67e8f9");
+      for (let i = 0; i < 3; i++) {
+        B.zones.push({ type: "water", x: f.x, y: f.y - 26, r: sk.orbR, life: 0, max: sk.dur,
+          owner: f, hits: {}, ang0: i * (Math.PI * 2 / 3), orbitR: sk.orbitR, spd: sk.spd,
+          dmg: sk.dmg, tick: sk.tick, abs: 0, absorbMax: sk.absorbMax || 12 });
+      }
+      FX.ring(f.x, f.y - 26, sk.orbitR + 30, "rgba(103,232,249,.9)", 6, 0.5);
+    },
+    update(f, slot, sk, dt) {
+      const s = f.slot[slot];
+      if (s.phase !== "water") return;
+      s.t += dt;
+      if (s.t >= sk.dur) B.endSlot(f, slot, sk.cd);
+    }
+  };
+
+  /* ---- 大招：王从天降（一段标记 → 二段飞天落地） ---- */
+  IMPL.kingDrop = {
+    start(f, slot, sk) {
+      const s = f.slot[slot]; s.on = true; s.phase = "kingMark"; s.t = 0;
+      s.d.mx = f.x; s.d.my = f.y;
+      f.kingMark = { x: f.x, y: f.y, global: false };   // 只有自己看得见
+      FX.float(f.x, f.y - 60, "已标记落点", "#fbbf24", 14);
+    },
+    again(f, slot, sk) {
+      const s = f.slot[slot];
+      if (s.phase !== "kingMark") return false;
+      s.phase = "kingRise"; s.t = 0;
+      f.kingMark = { x: s.d.mx, y: s.d.my, global: true };   // 全员可见
+      f.invuln = Math.max(f.invuln, sk.rise + 0.3);
+      LD.Cine.start(f, sk.name, "", "#fbbf24");
+      FX.ring(f.x, f.y - 26, 90, "rgba(251,191,36,.9)", 6, 0.5);
+      FX.burst(f.x, f.y - 26, 24, ["#fbbf24", "#fff"], { speed: 280 });
+      return true;
+    },
+    update(f, slot, sk, dt) {
+      const s = f.slot[slot];
+      if (s.phase !== "kingRise") return;
+      s.t += dt;
+      f.kingRise = Math.min(1, s.t / sk.rise);   // 供绘制层抬升人物
+      if (s.t >= sk.rise) {
+        const x = s.d.mx, y = s.d.my;
+        f.x = x; f.y = y; f.kingRise = 0;
+        FX.ring(x, y, sk.boomR, "rgba(251,191,36,.95)", 9, 0.6);
+        FX.burst(x, y, 40, ["#fbbf24", "#fff", "#fb923c"], { speed: 360 });
+        FX.shake(18); FX.flash(0.24, "255,220,150");
+        B.fighters.forEach(o => {
+          if (o === f || o.dead || o.kind !== "hero" || B.sameTeam(f, o)) return;
+          if (Math.hypot(o.x - x, (o.y - 26) - y) <= sk.boomR + o.r) {
+            B.damage(f, o, sk.dmg, { type: "ult", kb: 260, stun: sk.stun, from: f,
+              hitDir: Math.atan2(o.y - f.y, o.x - f.x) });
+          }
+        });
+        f.kingMark = null;
+        B.endSlot(f, slot, sk.cd);
+      }
     }
   };
 
@@ -1057,8 +1535,8 @@
       const px = clamp(bx + rand(-90, 90), 60, C.W - 60);
       const py = clamp(by + rand(-60, 60), C.H * 0.34, C.H - 56);
       B.zones.push({ type: "pillar", x: px, y: py, r: sk.pillarR, life: 0, max: sk.dur, dmg: sk.dmg,
-        owner: f, hit: false, color: "#fb923c", warn: 0.28 });
-      FX.mark(px, py, sk.pillarR, "rgba(251,146,60,.95)", sk.dur + 0.3, "circle");
+        owner: f, hit: false, color: "#fb923c", warn: sk.warn || 0.28 });
+      FX.mark(px, py, sk.pillarR, "rgba(251,146,60,.95)", (sk.warn || 0.28) + sk.dur + 0.3, "circle");
       FX.shake(8);
     }
     if (s.d.n >= sk.pillars && s.t > sk.gap * sk.pillars + sk.dur) {
@@ -1101,14 +1579,22 @@
     const id = f.loadout[slot];
     const sk = LD.skill(id);
     if (!sk) { if (slot === "basic") flashNoSkill(f, slot); return; }
+    // 绝望囚牢：圈内对手禁用技能与大招（普攻不受影响）
+    if (sk.kind !== "basic" && f.silenceT > 0) {
+      FX.float(f.x, f.y - 56, "被禁言了！", "#c4b5fd", 14);
+      return;
+    }
+    // 隐匿期间使用普攻或技能 → 提前现形（隐匿进入冷却），本次攻击正常生效
+    if (f.stealthT > 0 && slot !== f.stealthSlot) B.breakStealth(f);
+    // 二段类技能（位移斩 / 飞雷神 / 王从天降等）：槽位进行中时再按一次触发第二段
+    // 注意要在大招能量检查之前——二段不需要再消耗能量（一段已扣过）
+    const cur = f.slot[slot];
+    if (cur.on && IMPL[id] && IMPL[id].again && IMPL[id].again(f, slot, sk)) return;
+    if (cur.on) return;
     // 大招能量
     if (sk.kind === "ult") {
       if (f.energy < f.maxEnergy) { FX.float(f.x, f.y - 56, "能量不足", "#9fb3dd", 13); return; }
     }
-    const cur = f.slot[slot];
-    // 二段类技能（位移斩 / 飞雷神）：槽位进行中时再按一次触发第二段
-    if (cur.on && IMPL[id] && IMPL[id].again && IMPL[id].again(f, slot, sk)) return;
-    if (cur.on) return;
     if (f.cd[slot] > 0) return;
     if (f.meditate > 0) return;
     // 能量消耗
@@ -1196,7 +1682,11 @@
 
     this.updateProjs(dt);
     this.updateZones(dt);
-    if (this.rule === "overlord") this.updateStone(dt);
+    if (this.rule === "overlord") {
+      this.updateStone(dt);
+      const dg = this.fighters.find(f => f.kind === "dragon");
+      if (dg && dg.dead) this.dragonCorpseT = (this.dragonCorpseT || 0) + dt;   // 尸体 3 秒后消失
+    }
     this.regen(dt);
 
     // 决斗模式倒计时
@@ -1210,11 +1700,26 @@
         this.endRound(w.side);
       }
     }
-    // 越界修正
+    // 越界修正 + 墙体（场地边界与绝望囚牢圈壁都视作墙体）
     this.fighters.forEach(f => {
       if (f.kind === "dragon") { f.x = clamp(f.x, 90, C.W - 90); f.y = clamp(f.y, C.H * 0.34, C.H - 70); return; }
+      const px = f.x, py = f.y;
       f.x = clamp(f.x, 34, C.W - 34);
       f.y = clamp(f.y, C.H * 0.32, C.H - 40);
+      if (f.x !== px || f.y !== py) this.wallHit(f);   // 被击飞撞到边界
+      // 绝望囚牢圈壁：成形后是一堵圆形的墙——除释放者外无法进出，但不会被吸附到圈壁上
+      const pz = this.zones.find(z => z.type === "prison" && z.owner !== f && !z.owner.dead && z.life >= (z.formT || 0));
+      if (pz) {
+        const prevX = f._px != null ? f._px : px, prevY = f._py != null ? f._py : py;
+        const wasIn = Math.hypot(prevX - pz.x, prevY - pz.y) <= pz.r;
+        const nowIn = Math.hypot(f.x - pz.x, f.y - pz.y) <= pz.r;
+        if (wasIn !== nowIn) {   // 只在本帧试图穿越圈壁时挡回，平时不干预站位
+          const a = Math.atan2(f.y - pz.y, f.x - pz.x) || 0;
+          const rr = wasIn ? pz.r - f.r - 1 : pz.r + f.r + 1;
+          f.x = pz.x + Math.cos(a) * rr;
+          f.y = pz.y + Math.sin(a) * rr;
+        }
+      }
     });
   };
 
@@ -1235,6 +1740,15 @@
       f.energy = Math.min(f.maxEnergy, f.energy + C.energy.regen * dt);
       if (f.shieldT > 0) { f.shieldT -= dt; if (f.shieldT <= 0 && f.shield > 0) { f.shield = 0; FX.float(f.x, f.y - 52, "护盾消失", "#9fb3dd", 12); } }
       if (f.blind > 0) f.blind = Math.max(0, f.blind - dt);
+      if (f.slowT > 0) f.slowT = Math.max(0, f.slowT - dt);
+      if (f.silenceT > 0) f.silenceT = Math.max(0, f.silenceT - dt);
+      // 血量 / 位置历史（败者食尘：回溯约 3 秒的血量与位置）
+      if (f.kind === "hero") {
+        (f.hpHist = f.hpHist || []).push({ t: this.t, hp: f.hp });
+        (f.posHist = f.posHist || []).push({ t: this.t, x: f.x, y: f.y });
+        while (f.hpHist.length && f.hpHist[0].t < this.t - 3.6) f.hpHist.shift();
+        while (f.posHist.length && f.posHist[0].t < this.t - 3.6) f.posHist.shift();
+      }
       if (f.buff.rage > 0) f.buff.rage = Math.max(0, f.buff.rage - dt);
       if (f.buff.thousand > 0) f.buff.thousand = Math.max(0, f.buff.thousand - dt);
       if (f.buff.rush > 0 && f.slot.skill1.phase !== "rush" && f.slot.skill2.phase !== "rush") f.buff.rush = Math.max(0, f.buff.rush - dt);
@@ -1242,6 +1756,8 @@
   };
 
   B.updateHero = function (f, dt) {
+    // 记录本帧移动前的位置（绝望囚牢圈壁的穿越判定要用上一帧位置）
+    f._px = f.x; f._py = f.y;
     // 眩晕 / 定身
     f.stun = Math.max(0, f.stun - dt);
     f.root = Math.max(0, f.root - dt);
@@ -1255,6 +1771,8 @@
     // 击退速度衰减
     f.x += f.vx * dt; f.y += f.vy * dt;
     const damp = Math.exp(-7.5 * dt); f.vx *= damp; f.vy *= damp;
+    // 赫的定向击飞（固定距离推进，撞墙由越界修正区判定）
+    this.knockStep(f, dt);
 
     const ctrl = f.ctrl || { mx: 0, my: 0, hold: {}, press: {} };
     if (this.state === "fight") this.ctrlFire(f, ctrl, dt);
@@ -1299,6 +1817,10 @@
     if (f.slot.skill1.phase === "dash" || f.slot.skill2.phase === "dash" ||
         f.slot.skill1.phase === "bdash" || f.slot.skill2.phase === "bdash") canMove = false;
     if (f.buff.rush > 0) sp *= LD.skill("meatRush").mul;
+    if (f.slowT > 0) sp *= 0.55;   // 被冰痕 / 苍减速
+    // 火男开启期间自身移速略微降低（可被其他减速叠加）
+    const faOn = f.slot.skill1.phase === "fire" || f.slot.skill2.phase === "fire";
+    if (faOn) sp *= (LD.skill("fireAura") && LD.skill("fireAura").moveMul) || 0.85;
 
     const mx = ctrl.mx || 0, my = ctrl.my || 0;
     const n = Math.hypot(mx, my);
@@ -1334,6 +1856,25 @@
       p.life += dt;
       if (p.type === "bomb") {
         if (p.life >= p.data.fuse) { this.boom(p); this.projs.splice(i, 1); }
+        continue;
+      }
+      // 高压炸弹：倒计时归零 → 当场爆炸（碰人不提前引爆）；被扔出时朝前方中速飞行
+      if (p.type === "hbomb") {
+        p.data.timer -= dt;
+        if (p.data.timer <= 0) {
+          this.hbombBoom(p.owner, p.x, p.y, { boomR: p.data.boomR, dmg: p.data.dmg, selfDmg: p.data.selfDmg });
+          this.projs.splice(i, 1);
+          continue;
+        }
+        if (p.vx || p.vy) {                    // 扔出状态：直线飞行 + 轻微减速，撞到场地边界就停住
+          p.x += p.vx * dt; p.y += p.vy * dt;
+          const damp = Math.exp(-(p.data.throwDamp || 1.05) * dt);
+          p.vx *= damp; p.vy *= damp;
+          const L = 26, T = C.H * 0.2 + 26;
+          if (p.x < L || p.x > C.W - L) { p.x = Math.max(L, Math.min(C.W - L, p.x)); p.vx = 0; }
+          if (p.y < T || p.y > C.H - 10) { p.y = Math.max(T, Math.min(C.H - 10, p.y)); p.vy = 0; }
+          pushTrail(p);
+        }
         continue;
       }
       p.x += p.vx * dt; p.y += p.vy * dt;
@@ -1389,6 +1930,7 @@
       // 命中判定
       for (const f of this.fighters) {
         if (f.side === p.side || f.dead || this.sameTeam(p.owner, f)) continue;
+        if (p.type === "hbomb") continue;   // 高压炸弹只按倒计时引爆
         if (Math.hypot(f.x - p.x, (f.y - 26) - p.y) > p.r + f.r) continue;
 
         // 弹反反射
@@ -1408,6 +1950,41 @@
           FX.ring(f.x, f.y - 26, 72, "rgba(150,230,255,.95)", 5, 0.4);
           FX.float(f.x, f.y - 60, "弹反！", "#7fe6f7", 20);
           this.ev.push(["p", f.x, f.y - 56, "弹反！", "#7fe6f7"]);
+          continue;
+        }
+
+        // 零伤弹道（飞雷神飞镖等）只作标记，不结算伤害
+        if (p.dmg <= 0 && !p.tick) continue;
+
+        // 钩索：命中伤害 + 眩晕 + 把对手朝释放者当前位置拖回
+        if (p.type === "hook") {
+          const own = p.owner;
+          this.damage(own, f, p.dmg, { type: "skill", stun: p.data.stun || 0.6, kb: 0, from: own });
+          const dx = own.x - f.x, dy = own.y - f.y;
+          const d = Math.hypot(dx, dy) || 1;
+          const stop = own.r + f.r + 10;
+          const move = Math.min(p.data.pull || 700, Math.max(0, d - stop));
+          if (move > 4) {
+            const ux = dx / d, uy = dy / d;
+            for (let s2 = 1; s2 <= 6; s2++)
+              FX.trail(f.x + ux * move * s2 / 6, (f.y - 26) + uy * move * s2 / 6, "#94a3b8", 5, 0.4);
+            f.x += ux * move; f.y += uy * move;
+          }
+          FX.ring(f.x, f.y - 26, 52, "rgba(148,163,184,.9)", 5, 0.35);
+          FX.float(f.x, f.y - 60, "被钩中！", "#cbd5e1", 14);
+          this.projs.splice(i, 1);
+          break;
+        }
+
+        // 回旋镖：去/回各对同一敌人只结算一次，穿透不消失
+        if (p.boomerang) {
+          const key = (p.data.phase === "back" ? "b" : "o") + f.side;
+          if (!p.hits[key]) {
+            p.hits[key] = 1;
+            this.damage(p.owner, f, p.dmg, { type: "skill", kb: 140, from: p.owner,
+              hitDir: Math.atan2(p.vy, p.vx) });
+            FX.burst(p.x, p.y, 10, [p.color, p.core], { speed: 170, dir: Math.atan2(-p.vy, -p.vx) });
+          }
           continue;
         }
 
@@ -1468,6 +2045,91 @@
         }
         if (z.life % 0.06 < dt) FX.trail(z.x + rand(-z.r, z.r), z.y + rand(-10, 10), "#fb923c", 5, 0.3);
       }
+      if (z.type === "frost") {
+        if (z.life % 0.09 < dt) FX.trail(z.x + rand(-z.r * 0.7, z.r * 0.7), z.y + rand(-6, 8), "#bfdbfe", 3, 0.3);
+        for (const f of this.fighters) {
+          if (f.side === z.owner.side || f.dead || f.kind !== "hero" || this.sameTeam(z.owner, f)) continue;
+          if (Math.hypot(f.x - z.x, f.y - z.y) > z.r + f.r) { z.hits["s" + f.side] = 0; continue; }
+          const key = "t" + f.side;
+          z.hits[key] = (z.hits[key] || 0) + dt;
+          if (z.hits[key] >= 0.3) {         // 冰痕冻伤：每 0.3 秒 6 点 + 减速
+            z.hits[key] = 0;
+            f.slowT = Math.max(f.slowT || 0, 0.5);
+            this.damage(z.owner, f, 6, { type: "dot", kb: 0, from: z.owner });
+            FX.burst(f.x, f.y - 20, 6, ["#bfdbfe", "#fff"], { speed: 110 });
+          }
+        }
+      }
+      if (z.type === "fire") {
+        // 火男光环：跟随释放者，范围内敌人每 tick 掉血
+        if (z.owner && !z.owner.dead) { z.x = z.owner.x; z.y = z.owner.y; }
+        if (z.life % 0.07 < dt) FX.trail(z.x + rand(-z.r * 0.8, z.r * 0.8), z.y - 26 + rand(-z.r * 0.4, z.r * 0.4), "#fb923c", 5, 0.35);
+        for (const f of this.fighters) {
+          if (f.side === z.owner.side || f.dead || f.kind !== "hero" || this.sameTeam(z.owner, f)) continue;
+          if (Math.hypot(f.x - z.x, (f.y - 26) - z.y) > z.r + f.r) continue;
+          const key = "t" + f.side;
+          z.hits[key] = (z.hits[key] || 0) + dt;
+          if (z.hits[key] >= z.tick) {
+            z.hits[key] = 0;
+            this.damage(z.owner, f, z.dmg, { type: "dot", kb: 0, from: z.owner });
+            FX.burst(f.x, f.y - 22, 6, ["#fb923c", "#fde68a"], { speed: 120 });
+          }
+        }
+      }
+      if (z.type === "water") {
+        // 水之呼吸：水球环绕主人旋转，碰人掉血+减速；敌方飞行物可被吸收（每球上限 12 伤害）
+        const o = z.owner;
+        if (!o || o.dead) { z.life = z.max; }
+        else {
+          const ang = z.ang0 + z.life * z.spd;
+          z.x = o.x + Math.cos(ang) * z.orbitR;
+          z.y = (o.y - 26) + Math.sin(ang) * z.orbitR * 0.72;
+          // 判定与水球模型一致：水球圆（r=17）+ 人物身体核心，不再用整段碰撞半径放大
+          for (const f of this.fighters) {
+            if (f.side === o.side || f.dead || f.kind !== "hero" || this.sameTeam(o, f)) continue;
+            if (Math.hypot(f.x - z.x, (f.y - 20) - z.y) > z.r + 20) continue;
+            const key = "t" + f.side;
+            z.hits[key] = (z.hits[key] || 0) + dt;
+            if (z.hits[key] >= z.tick) {
+              z.hits[key] = 0;
+              f.slowT = Math.max(f.slowT || 0, 1.0);
+              this.damage(o, f, z.dmg, { type: "skill", kb: 0, from: o });
+              FX.burst(f.x, f.y - 24, 8, ["#67e8f9", "#fff"], { speed: 140 });
+            }
+          }
+          // 吸收敌方飞行物（单球最多吸收 12 点，吸满即碎）
+          for (let j = this.projs.length - 1; j >= 0; j--) {
+            const q = this.projs[j];
+            if (q.side === o.side || q.type === "hbomb" || q.type === "palm" || q.type === "hook") continue;
+            if (Math.hypot(q.x - z.x, q.y - z.y) > z.r + q.r) continue;
+            const take = Math.max(1, Math.round(q.dmg || 5));
+            this.projs.splice(j, 1);
+            z.abs += take;
+            FX.burst(q.x, q.y, 8, ["#67e8f9", "#fff"], { speed: 150 });
+            if (z.abs >= z.absorbMax) {           // 水球吸满 → 碎掉（提前结束）
+              FX.ring(z.x, z.y, z.r * 2, "rgba(103,232,249,.9)", 5, 0.4);
+              FX.float(z.x, z.y - 24, "水球碎了", "#67e8f9", 12);
+              z.life = z.max;
+              break;
+            }
+          }
+        }
+      }
+      if (z.type === "prison") {
+        // 绝望囚牢：0.8s 成形后才生效；圈内对手被禁言（禁技能与大招，普攻不受影响）
+        const formed = z.life >= (z.formT || 0);
+        if (formed && z.owner && !z.owner.dead) {
+          for (const f of this.fighters) {
+            if (f.dead || f.kind !== "hero" || f.side === z.owner.side || this.sameTeam(z.owner, f)) continue;
+            if (Math.hypot(f.x - z.x, f.y - z.y) <= z.r) f.silenceT = Math.max(f.silenceT || 0, 0.2);
+          }
+        }
+        if (z.life % 0.12 < dt) {
+          const a = z.life * 1.8;
+          FX.trail(z.x + Math.cos(a) * z.r, z.y + Math.sin(a) * z.r, "#c4b5fd", 4, 0.4);
+          FX.trail(z.x - Math.cos(a) * z.r, z.y - Math.sin(a) * z.r, "#a78bfa", 4, 0.4);
+        }
+      }
       if (z.life >= z.max + (z.warn || 0)) this.zones.splice(i, 1);
     }
   };
@@ -1482,7 +2144,13 @@
     this.state = "roundEnd"; this.roundT = 2.4;
     FX.shake(14);
     const w = this.fighters.find(f => f.side === winner);
-    if (w) FX.float(w.x, w.y - 70, "赢下这一局！", winner === 0 ? "#7fe6f7" : "#fb7185", 24);
+    if (w) {
+      FX.float(w.x, w.y - 70, "赢下这一局！", winner === 0 ? "#7fe6f7" : "#fb7185", 24);
+      // 胜者特写：类似大招演出的逐字展示「胜者：xxx」
+      if (w.kind === "hero")
+        LD.Cine.start(w, "胜者：" + (w.name || ("玩家" + (w.side + 1))), "",
+          w.team != null && w.team >= 0 ? (LD.TEAM_COLORS[w.team] || "#fcd34d") : "#fcd34d", "赢得了本局胜利");
+    }
   };
 
   B.nextRound = function () {
@@ -1546,6 +2214,58 @@
           ctx.beginPath(); ctx.moveTo(z.x0, z.y0); ctx.lineTo(z.x1, z.y1); ctx.stroke();
           ctx.strokeStyle = z.color; ctx.lineWidth = w; ctx.globalAlpha = alpha * 0.5;
           ctx.beginPath(); ctx.moveTo(z.x0, z.y0); ctx.lineTo(z.x1, z.y1); ctx.stroke();
+        } else if (z.type === "frost") {
+          ctx.globalCompositeOperation = "source-over";
+          const a = Math.min(1, z.life * 6) * Math.min(1, (z.max - z.life) * 1.4);
+          ctx.globalAlpha = 0.5 * a;
+          ctx.fillStyle = "#7cb8ff";
+          ctx.beginPath(); ctx.ellipse(z.x, z.y, z.r, z.r * 0.5, 0, 0, TAU); ctx.fill();
+          ctx.globalAlpha = 0.85 * a;
+          ctx.strokeStyle = "#e0f2fe"; ctx.lineWidth = 1.6;
+          ctx.beginPath(); ctx.ellipse(z.x, z.y, z.r * 0.8, z.r * 0.4, 0, 0, TAU); ctx.stroke();
+          ctx.globalAlpha = 0.9 * a;
+          ctx.strokeStyle = "rgba(191,219,254,.8)"; ctx.lineWidth = 1.2;
+          for (let k = 0; k < 3; k++) {
+            const ang = z.x * 0.7 + k * 2.1;
+            ctx.beginPath();
+            ctx.moveTo(z.x + Math.cos(ang) * z.r * 0.55, z.y + Math.sin(ang) * z.r * 0.28);
+            ctx.lineTo(z.x - Math.cos(ang) * z.r * 0.55, z.y - Math.sin(ang) * z.r * 0.28);
+            ctx.stroke();
+          }
+        } else if (z.type === "fire") {
+          ctx.globalCompositeOperation = "source-over";
+          const a = Math.min(1, z.life * 5) * Math.min(1, (z.max - z.life) * 2);
+          const g = ctx.createRadialGradient(z.x, z.y - 20, 10, z.x, z.y - 20, z.r);
+          g.addColorStop(0, "rgba(254,215,120," + 0.5 * a + ")");
+          g.addColorStop(0.55, "rgba(251,146,60," + 0.34 * a + ")");
+          g.addColorStop(1, "rgba(239,68,68,0)");
+          ctx.fillStyle = g;
+          ctx.beginPath(); ctx.arc(z.x, z.y - 20, z.r, 0, TAU); ctx.fill();
+          ctx.globalAlpha = 0.75 * a; ctx.strokeStyle = "#fb923c"; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.ellipse(z.x, z.y, z.r, z.r * 0.45, 0, 0, TAU); ctx.stroke();
+        } else if (z.type === "water") {
+          ctx.globalCompositeOperation = "lighter";
+          const a = Math.min(1, z.life * 6) * Math.min(1, (z.max - z.life) * 2.5);
+          V.glow(ctx, z.x, z.y, z.r * 2.1, "rgba(103,232,249," + 0.55 * a + ")", 1);
+          ctx.globalAlpha = a;
+          ctx.fillStyle = "#7dd3fc"; ctx.strokeStyle = "#e0f2fe"; ctx.lineWidth = 1.6;
+          ctx.beginPath(); ctx.arc(z.x, z.y, z.r, 0, TAU); ctx.fill(); ctx.stroke();
+          ctx.fillStyle = "rgba(255,255,255,.75)";
+          ctx.beginPath(); ctx.arc(z.x - z.r * 0.3, z.y - z.r * 0.3, z.r * 0.28, 0, TAU); ctx.fill();
+        } else if (z.type === "prison") {
+          ctx.globalCompositeOperation = "source-over";
+          const a = Math.min(1, z.life * 4) * Math.min(1, (z.max - z.life) * 1.6);
+          ctx.globalAlpha = 0.14 * a; ctx.fillStyle = "#7c3aed";
+          ctx.beginPath(); ctx.arc(z.x, z.y, z.r, 0, TAU); ctx.fill();
+          ctx.globalAlpha = 0.95 * a; ctx.strokeStyle = "#a78bfa"; ctx.lineWidth = 5;
+          ctx.setLineDash([18, 10]); ctx.lineDashOffset = -z.life * 60;
+          ctx.beginPath(); ctx.arc(z.x, z.y, z.r, 0, TAU); ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.globalAlpha = 0.5 * a; ctx.strokeStyle = "#ede9fe"; ctx.lineWidth = 1.6;
+          ctx.beginPath(); ctx.arc(z.x, z.y, z.r - 7, 0, TAU); ctx.stroke();
+          ctx.globalAlpha = 0.8 * a;
+          ctx.font = "700 13px system-ui"; ctx.textAlign = "center"; ctx.fillStyle = "#c4b5fd";
+          ctx.fillText("绝望囚牢 " + Math.max(0, z.max - z.life).toFixed(1) + "s", z.x, z.y - z.r - 12);
         } else if (z.type === "pillar") {
           if (z.life < z.warn) {
             ctx.globalAlpha = 0.32 + Math.sin(z.life * 40) * 0.18;
@@ -1583,10 +2303,38 @@
         ctx.fillStyle = "#fcd34d"; ctx.fillText(s.landed ? "能量石" : "飞散中…", s.x, s.y + 18); ctx.restore();
       }
 
+      // 王从天降：红圈落点标记（未触发二段时只有释放者自己看得见）
+      const meHero = this.hero(this.mySide == null ? 0 : this.mySide);
+      this.fighters.forEach(f => {
+        const m = f.kingMark;
+        if (!m || f.dead) return;
+        if (!m.global && f !== meHero) return;
+        const pulse = 0.55 + Math.sin(this.t * 7) * 0.3;
+        ctx.save();
+        ctx.globalAlpha = m.global ? 0.85 : 0.4;
+        ctx.strokeStyle = "#ef4444"; ctx.lineWidth = m.global ? 5 : 3;
+        ctx.setLineDash([14, 9]);
+        ctx.beginPath(); ctx.arc(m.x, m.y, 170 * pulse, 0, TAU); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.globalAlpha = m.global ? 0.16 : 0.08; ctx.fillStyle = "#ef4444";
+        ctx.beginPath(); ctx.arc(m.x, m.y, 170, 0, TAU); ctx.fill();
+        ctx.restore();
+      });
+
       // 角色（按 y 排序）
       const order = this.fighters.slice().sort((a, b) => (a.y + (a.kind === "dragon" ? 20 : 0)) - (b.y + (b.kind === "dragon" ? 20 : 0)));
       order.forEach(f => {
-        if (f.kind === "dragon") { V.dragon(ctx, f, this.t); return; }
+        if (f.kind === "dragon") {
+          /* 尸体 3 秒后消失（最后 1 秒渐隐） */
+          if (!(f.dead && (this.dragonCorpseT || 0) > 3)) {
+            const corpse = f.dead ? Math.max(0, (this.dragonCorpseT || 0)) : 0;
+            ctx.save();
+            if (f.dead) ctx.globalAlpha = corpse > 2 ? Math.max(0, 1 - (corpse - 2)) : 1;
+            V.dragon(ctx, f, this.t);
+            ctx.restore();
+          }
+          return;
+        }
         // 蓄力光环
         if (f.slot.skill1.phase === "blinkCharge" || f.slot.skill2.phase === "blinkCharge") {
           ctx.save(); ctx.globalCompositeOperation = "lighter";
@@ -1609,6 +2357,27 @@
           ctx.strokeStyle = "#fbbf24"; ctx.lineWidth = 2;
           ctx.beginPath(); ctx.ellipse(f.x, f.y, 22, 8, 0, 0, TAU); ctx.stroke(); ctx.restore();
         }
+        // 隐匿自视角：蓝色灵光环绕（只有自己看得见，别人眼里依然完全隐形）
+        if (f === meHero && f.stealthT > 0 && !f.dead) {
+          ctx.save(); ctx.globalCompositeOperation = "lighter";
+          const sa = 0.38 + Math.sin(this.t * 6) * 0.16;
+          V.glow(ctx, f.x, f.y - 26, 54, "rgba(147,197,253," + sa + ")", 1);
+          ctx.globalCompositeOperation = "source-over";
+          ctx.strokeStyle = "rgba(147,197,253,.75)"; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.ellipse(f.x, f.y, 27, 12, 0, 0, TAU); ctx.stroke();
+          ctx.restore();
+        }
+        // 隐匿：自己的视角半透明（闪烁期全显），敌人视角完全消失（闪烁期显形）
+        if (f.stealthT > 0 && !f.dead) {
+          const flash = f.stealthT > 1.6 && f.stealthT <= 2.0;
+          if (f !== meHero && !flash) return;        // 别人视角：完全看不见
+          ctx.save(); ctx.globalAlpha = flash ? 1 : 0.45;
+        }
+        // 王从天降：飞天阶段整体上移
+        if (f.kingRise > 0) {
+          ctx.save();
+          ctx.translate(0, -80 * f.kingRise);
+        }
         V.chibi(ctx, f.x, f.y, f.facing, f.look, {
           t: this.t, moving: f.moving, walkPhase: f.walkPhase,
           atk: f.atkAnim > 0 ? Math.min(1, 1 - f.atkAnim / Math.max(0.01, f.atkDur)) : 0,
@@ -1616,6 +2385,14 @@
           flash: f.hitFlash, dead: f.dead, blinkAmt: f.blinkAmt,
           shield: f.shield > 0 ? 1 : 0
         });
+        if (f.stealthT > 0 && !f.dead) ctx.restore();
+        if (f.kingRise > 0) {
+          ctx.restore();
+          ctx.save(); ctx.globalAlpha = 0.3 * (1 - f.kingRise * 0.5);
+          ctx.fillStyle = "#000"; ctx.beginPath();
+          ctx.ellipse(f.x, f.y, 16 * (1 - f.kingRise * 0.4), 6 * (1 - f.kingRise * 0.4), 0, 0, TAU); ctx.fill();
+          ctx.restore();
+        }
         if (f.stun > 0) {
           ctx.save(); ctx.font = "700 13px system-ui"; ctx.textAlign = "center";
           ctx.fillStyle = "#fcd34d"; ctx.fillText("✦", f.x, f.y - 76); ctx.restore();
@@ -1624,10 +2401,12 @@
           ctx.save(); ctx.globalAlpha = 0.8; ctx.strokeStyle = "#6ee7b7"; ctx.lineWidth = 2;
           ctx.beginPath(); ctx.ellipse(f.x, f.y, 24, 9, 0, 0, TAU); ctx.stroke(); ctx.restore();
         }
-        // 名字（阵营模式在名字前加彩色圆点，霸主加皇冠）
+        // 名字（阵营模式在名字前加彩色圆点，霸主加皇冠；自己标「你」，不再一律显示「勇者」）
         const TM = LD.TEAM_COLORS || ["#f87171", "#fbbf24", "#60a5fa", "#34d399"];
+        const meF2 = this.hero(this.mySide == null ? 0 : this.mySide);
         ctx.save(); ctx.font = "600 11px system-ui"; ctx.textAlign = "center";
-        const nm = (f.side === 0 ? "勇者" : f.name) || "勇者";
+        const baseNm = f.name || (f.side === 0 ? "房主" : "玩家" + (f.side + 1));
+        const nm = (meF2 && meF2 === f) ? "你 · " + baseNm : baseNm;
         const dot = (f.team != null && f.team >= 0) ? TM[f.team] : null;
         const label = (f.overlord ? "👑 " : "") + nm;
         ctx.fillStyle = dot || (f.side === 0 ? "rgba(159,230,247,.9)" : "rgba(255,170,180,.9)");
@@ -1675,22 +2454,39 @@
     ctx.restore();
     FX.drawFlash(ctx, W, H);
 
-    // 致盲（粪击命中）：本地玩家视野被棕色糊住，行动不受限
+    // 致盲（粪击命中）：屏幕中央出现巨大的不透明棕色波浪圆，背后完全看不见
     const meF = this.hero(this.mySide == null ? 0 : this.mySide);
     if (meF && meF.blind > 0 && !meF.dead) {
-      const a = Math.min(0.86, meF.blind * 1.6);
+      const cx = W / 2, cy = H / 2;
+      const R = Math.min(W, H) * 0.44;
       ctx.save();
-      ctx.globalAlpha = a;
-      ctx.fillStyle = "rgba(74,44,14,.94)";
-      ctx.fillRect(0, 0, W, H);
-      // 中间留一小圈勉强能看见的视野
-      const g = ctx.createRadialGradient(W / 2, H / 2, 30, W / 2, H / 2, 190);
-      g.addColorStop(0, "rgba(74,44,14,0)");
-      g.addColorStop(1, "rgba(74,44,14,1)");
-      ctx.globalAlpha = 0.55;
-      ctx.globalCompositeOperation = "destination-out";
-      ctx.fillStyle = g;
-      ctx.beginPath(); ctx.arc(W / 2, H / 2, 190, 0, TAU); ctx.fill();
+      // 波浪圆主体（完全不透明，遮死背后画面）
+      ctx.beginPath();
+      const wob = 6, wobA = 0.055, t = this.t || 0;
+      for (let i = 0; i <= 72; i++) {
+        const ang = (i / 72) * TAU;
+        const rr = R * (1 + Math.sin(ang * wob + t * 2.2) * wobA);
+        const x = cx + Math.cos(ang) * rr, y = cy + Math.sin(ang) * rr;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.fillStyle = "#5b3a17";
+      ctx.fill();
+      ctx.lineWidth = 10; ctx.strokeStyle = "#3f2710"; ctx.stroke();
+      // 内部旋涡纹路（只是装饰，不透出画面）
+      ctx.clip();
+      ctx.globalAlpha = 0.22;
+      for (let k = 0; k < 4; k++) {
+        ctx.beginPath();
+        for (let i = 0; i <= 60; i++) {
+          const ang = (i / 60) * TAU * 1.6 + k * 1.57 + t * 0.6;
+          const rr = R * 0.16 + i * R * 0.013;
+          const x = cx + Math.cos(ang) * rr, y = cy + Math.sin(ang) * rr;
+          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.strokeStyle = "#7a5222"; ctx.lineWidth = 9;
+        ctx.stroke();
+      }
       ctx.restore();
       ctx.save();
       ctx.font = "700 15px system-ui"; ctx.textAlign = "center";
@@ -1749,6 +2545,64 @@
       V.glow(ctx, 0, 0, p.r * 2.4, "rgba(165,243,252,.7)", 1);
       ctx.fillStyle = "#f0feff";
       ctx.beginPath(); ctx.moveTo(-16, 0); ctx.lineTo(0, -3.4); ctx.lineTo(14, 0); ctx.lineTo(0, 3.4); ctx.closePath(); ctx.fill();
+      ctx.restore(); return;
+    }
+    if (p.type === "dung") {
+      ctx.globalCompositeOperation = "source-over";
+      const a = Math.atan2(p.vy, p.vx);
+      ctx.translate(p.x, p.y); ctx.rotate(a);
+      const s = p.r / 26;
+      ctx.font = Math.round(44 * s) + "px system-ui";
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText("💩", 0, 0);
+      ctx.restore(); return;
+    }
+    if (p.type === "hbomb") {
+      ctx.globalCompositeOperation = "source-over";
+      const a = Math.atan2(p.vy, p.vx);
+      ctx.translate(p.x, p.y); ctx.rotate(a);
+      const wob = Math.sin(p.life * 26) * 0.12;
+      ctx.rotate(wob);
+      ctx.font = "26px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText("🧨", 0, 0);
+      ctx.rotate(-wob);
+      // 倒计时文字
+      const tv = Math.max(0, p.data.timer || 0);
+      ctx.font = "800 14px system-ui";
+      ctx.fillStyle = tv < 1.2 ? "#ef4444" : "#fbbf24";
+      ctx.strokeStyle = "rgba(0,0,0,.6)"; ctx.lineWidth = 3;
+      const txt = tv.toFixed(1);
+      ctx.strokeText(txt, 0, -24); ctx.fillText(txt, 0, -24);
+      // 爆炸范围预警圈
+      ctx.globalAlpha = 0.3 + Math.sin(p.life * 18) * 0.12;
+      ctx.strokeStyle = tv < 1.2 ? "#ef4444" : "#fbbf24"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(0, 0, p.data.boomR || 150, 0, TAU); ctx.stroke();
+      ctx.restore(); return;
+    }
+    if (p.type === "arrow" || p.type === "sarrow") {
+      ctx.translate(p.x, p.y); ctx.rotate(Math.atan2(p.vy, p.vx));
+      V.glow(ctx, 0, 0, p.r * 2.6, "rgba(253,230,138,.7)", 1);
+      ctx.fillStyle = "#fef9c3";
+      ctx.beginPath(); ctx.moveTo(14, 0); ctx.lineTo(-10, -p.r * 0.7); ctx.lineTo(-6, 0); ctx.lineTo(-10, p.r * 0.7); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = "rgba(253,224,71,.8)"; ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.moveTo(-18, 0); ctx.lineTo(-8, 0); ctx.stroke();
+      ctx.restore(); return;
+    }
+    if (p.type === "hook") {
+      // 钩索：钩头 + 回到主人的绳索
+      const own = p.owner;
+      if (own) {
+        ctx.globalCompositeOperation = "source-over";
+        ctx.strokeStyle = "rgba(148,163,184,.85)"; ctx.lineWidth = 2.4;
+        ctx.beginPath(); ctx.moveTo(own.x, own.y - 26); ctx.lineTo(p.x, p.y); ctx.stroke();
+      }
+      ctx.translate(p.x, p.y); ctx.rotate(p.life * 14);
+      ctx.globalCompositeOperation = "lighter";
+      V.glow(ctx, 0, 0, p.r * 2.4, "rgba(203,213,225,.7)", 1);
+      ctx.fillStyle = "#e2e8f0";
+      ctx.beginPath(); ctx.arc(0, 0, p.r * 0.55, 0, TAU); ctx.fill();
+      ctx.strokeStyle = "#cbd5e1"; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(0, 0, p.r, 0.6, 4.2); ctx.stroke();
       ctx.restore(); return;
     }
     // 默认（火球）

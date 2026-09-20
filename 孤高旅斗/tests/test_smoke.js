@@ -107,9 +107,11 @@ check("点击一次 +10 金币", P.d.coins === c0 + 10, c0 + " → " + P.d.coins
 console.log("\n=== 3. 皮肤商店（部件购买 / 穿戴） ===");
 LD.Profile.d.coins = 200;
 const headItems = LD.partsBy("head"), upperItems = LD.partsBy("upper"), lowerItems = LD.partsBy("lower");
-check("头部 5 款模型", new Set(headItems.map(h => h.model)).size === 5, [...new Set(headItems.map(h => h.model))].join("/"));
+check("头部 14 款模型", new Set(headItems.map(h => h.model)).size === 14, [...new Set(headItems.map(h => h.model))].join("/"));
 check("头部含机器人/年轻男子/粉发少女/江湖斗篷侠/高帽企业家",
   ["robot", "boy", "girl", "jianghu", "tophat"].every(m => headItems.some(h => h.model === m)));
+check("v2.3 新头部：熊猫/忍者/皇帝/猫/狗/龙/石头人/黄金/白发老者",
+  ["panda", "ninja", "emperor", "cat", "dog", "dragon", "golem", "gold", "elder"].every(m => headItems.some(h => h.model === m)));
 check("上身多配色", upperItems.length >= 5, upperItems.length + " 件");
 check("下身多配色", lowerItems.length >= 5, lowerItems.length + " 件");
 const before = P.d.coins;
@@ -121,8 +123,9 @@ check("金币不足时拒绝", (P.d.coins = 1, P.buyPart("l_5").ok === false));
 
 console.log("\n=== 4. 技能商店（购买 / 装配上限） ===");
 LD.Profile.d.coins = 500;
-const r1 = P.buySkill("fireball");
-check("买远程普攻（6 金币）", r1.ok);
+/* v2.1 起新档默认解锁：斩击 + 火球 */
+check("新档已解锁斩击与火球", P.ownsSkill("slash") && P.ownsSkill("fireball"));
+check("新档未解锁其他技能", !P.ownsSkill("windBlade") && !P.ownsSkill("dashSlash") && !P.ownsSkill("parry"));
 check("买中CD技能 windBlade", P.buySkill("windBlade").ok);
 check("买位移斩 dashSlash", P.buySkill("dashSlash").ok);
 check("买冥思 meditate", P.buySkill("meditate").ok);
@@ -301,7 +304,7 @@ B.state = "fight"; B.countdown = 0;
 B.damage(B.fighters[0], B.hero(1), 99999, { type: "ult" });
 check("一方阵亡即结束本回合", B.state === "roundEnd", B.state);
 check("比分记为 1:0", B.score[0] === 1 && B.score[1] === 0, B.score.join(":"));
-step(S, 200);
+step(S, 300);   // v2.3 起回合结束先播约 1 秒「胜者：xxx」特写，再进入 2.4 秒回合间歇
 check("自动进入下一回合", B.state === "countdown" || B.state === "fight", B.state);
 check("回合数递增", B.round === 2, "round=" + B.round);
 

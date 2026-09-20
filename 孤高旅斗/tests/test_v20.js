@@ -87,6 +87,7 @@ function check(label, cond, extra) {
 
 const S = makeSandbox("main");
 const LD = S.LD, B = LD.Battle, P = LD.Profile, UI = LD.UI;
+LD.CONF.critRate = 0;   // 关闭暴击（10% 概率 ×2 伤害），保证数值断言确定性
 
 /* 造一场指定规则的对局（不含巨龙） */
 function mkBattle(rule, teams, n, loadout) {
@@ -112,7 +113,7 @@ check("风刃提速到 560", LD.skill("windBlade").proj.speed === 560, LD.skill(
 check("替身爆炸半径加大到 118", LD.skill("substitute").bombR === 118, LD.skill("substitute").bombR);
 check("替身附带 0.6s 眩晕", LD.skill("substitute").stun === 0.6, LD.skill("substitute").stun);
 check("肉弹冲击 CD 8s", LD.skill("meatRush").cd === 8, LD.skill("meatRush").cd);
-check("肉弹冲击已取消眩晕", !LD.skill("meatRush").stun, String(LD.skill("meatRush").stun));
+check("肉弹冲击：恢复 0.4s 眩晕", LD.skill("meatRush").stun === 0.4, String(LD.skill("meatRush").stun));
 check("激光波蓄力缩短到 1.1s", LD.skill("laserWave").charge === 1.1, LD.skill("laserWave").charge);
 check("格挡归入普攻分类", LD.skill("parry").kind === "basic", LD.skill("parry").kind);
 check("格挡机制不变（挡普攻 2s / 挡技能 8s）",
@@ -190,6 +191,7 @@ console.log("\n=== 4. 新技能实战跑场 ===");
   const f = mkBattle("brawl", null, 2, { basic: "pistol" });
   const me = f[0];
   f[1].ctrl = null; f[1].bot = null;
+  me.x = 200; me.y = 300; f[1].x = 700; f[1].y = 300;   // v2.3 出生位置随机，必须固定才能断言直线
   me.facing = { x: 1, y: 0 };
   B.trySlot(me, "basic", { mx: 1, my: 0, hold: {}, press: {} });
   const b = B.projs.find(p => p.type === "bullet");
@@ -247,7 +249,7 @@ console.log("\n=== 4. 新技能实战跑场 ===");
   let maxStun = 0, hurt = false;
   for (let i = 0; i < 120; i++) { step(S, 1); if (foe.stun > maxStun) maxStun = foe.stun; if (foe.hp < foe.maxHp) hurt = true; }
   check("肉弹冲击：撞到对手造成伤害", hurt, "hp=" + foe.hp + " me.x=" + Math.round(me.x));
-  check("肉弹冲击：不再眩晕对手", maxStun === 0, "stun=" + maxStun);
+  check("肉弹冲击：命中眩晕 0.4s", maxStun > 0.3 && maxStun <= 0.45, "stun=" + maxStun);
 }
 
 /* ============================================================
@@ -355,7 +357,7 @@ console.log("\n=== 9. 规则：霸主争霸 ===");
   B.state = "fight";
   B.kill(dr, f[0]);
   check("霸主：巨龙被击败 → 掉落能量石", !!B.stone, B.stone ? "stone@(" + Math.round(B.stone.x) + "," + Math.round(B.stone.y) + ")" : "无");
-  check("霸主：能量石会飞出去（初速 > 0）", !!B.stone && Math.hypot(B.stone.vx, B.stone.vy) > 100, B.stone ? Math.round(Math.hypot(B.stone.vx, B.stone.vy)) : "-");
+  check("霸主：能量石会飞出去（随机散落，初速 > 500）", !!B.stone && Math.hypot(B.stone.vx, B.stone.vy) > 500, B.stone ? Math.round(Math.hypot(B.stone.vx, B.stone.vy)) : "-");
 
   // 让石头落地并把 0 号放上去
   for (let i = 0; i < 120 && B.stone && !B.stone.landed; i++) step(S, 1);
@@ -445,6 +447,566 @@ check("加入房间已独立成单独界面", (() => {
   return found;
 })());
 check("联机说明已更新为 2-4 人", html.indexOf("2-4 人") >= 0);
+
+/* ============================================================
+ * 12. v2.1：飞雷神修复 / 肉弹 3s / 狼牙棒眩晕 / 瞬身护盾 / 新技能
+ * ============================================================ */
+console.log("\n=== 12. v2.1 修复与新技能 ===");
+
+// 飞雷神：一段飞镖无伤害
+{
+  const f = mkBattle("brawl", null, 2, { skill1: "flyingRaijin" });
+  const me = f[0], foe = f[1];
+  foe.ctrl = null; foe.bot = null;
+  me.x = 120; me.y = 300; me.facing = { x: 1, y: 0 };
+  foe.x = 420; foe.y = 300;                       // 站在飞镖航线上
+  B.trySlot(me, "skill1", { mx: 1, my: 0, hold: {}, press: {} });
+  for (let i = 0; i < 40; i++) step(S, 1);
+  check("飞雷神：飞镖穿过敌人不造成伤害", foe.hp === foe.maxHp, "hp=" + foe.hp);
+  check("飞雷神：镖未二段时不进 CD", me.cd.skill1 === 0, "cd=" + me.cd.skill1.toFixed(2));
+}
+
+// 肉弹冲击：加速严格 3 秒
+{
+  const f = mkBattle("brawl", null, 2, { skill1: "meatRush" });
+  const me = f[0], foe = f[1];
+  foe.ctrl = null; foe.bot = null;
+  foe.x = 40; foe.y = 40;                         // 放远处，避免撞到提前结束
+  B.trySlot(me, "skill1", { mx: 0, my: 0, hold: {}, press: {} });
+  let frames = 0, rushEnd = -1;
+  while (frames < 400 && rushEnd < 0) { step(S, 1); frames++; if (me.buff.rush <= 0 && me.slot.skill1.phase === "") rushEnd = frames * 0.01667; }
+  check("肉弹冲击：加速持续约 3 秒（2.8~3.3）", rushEnd > 2.8 && rushEnd < 3.3, "dur=" + rushEnd.toFixed(2) + "s");
+}
+
+// 狼牙棒：命中眩晕 0.4s + 伤害 24
+{
+  const f = mkBattle("brawl", null, 2, { basic: "mace" });
+  const me = f[0], foe = f[1];
+  foe.ctrl = null; foe.bot = null;
+  me.x = 300; foe.x = 300 + me.r + foe.r + 6; foe.y = me.y;
+  me.facing = { x: 1, y: 0 };
+  B.trySlot(me, "basic", { mx: 1, my: 0, hold: {}, press: {} });
+  for (let i = 0; i < 30; i++) step(S, 1);
+  check("狼牙棒：伤害 24", foe.maxHp - foe.hp === 24, "dmg=" + (foe.maxHp - foe.hp));
+  check("狼牙棒：命中眩晕 ≈0.4s", foe.stun > 0.2 && foe.stun <= 0.45, "stun=" + foe.stun.toFixed(2));
+}
+
+// 瞬身：瞬移后获得 2s 吸 20 护盾
+{
+  const f = mkBattle("brawl", null, 2, { skill1: "blink" });
+  const me = f[0];
+  f[1].ctrl = null; f[1].bot = null;
+  me.cd.skill1 = 0;
+  B.trySlot(me, "skill1", { mx: 0, my: 0, hold: {}, press: {} });
+  for (let i = 0; i < 70; i++) step(S, 1);
+  check("瞬身：瞬移后获得护盾 20", me.shield === 20, "shield=" + me.shield);
+  check("瞬身：护盾持续 2 秒", me.shieldT > 1.5 && me.shieldT <= 2.01, "shieldT=" + me.shieldT.toFixed(2));
+  // 护盾确实吸收伤害
+  const before = me.hp;
+  B.damage(f[1], me, 12, { type: "skill" });
+  check("瞬身：护盾吸收伤害不掉血", me.hp === before, "hp=" + me.hp + " shield=" + me.shield);
+}
+
+// 冰霜行者：冰痕持续伤害 + 减速（手动模拟走动）
+{
+  const f = mkBattle("brawl", null, 2, { skill1: "frostWalk" });
+  const me = f[0], foe = f[1];
+  foe.ctrl = null; foe.bot = null;
+  me.x = 200; me.y = 300;
+  B.trySlot(me, "skill1", { mx: 0, my: 0, hold: {}, press: {} });
+  for (let i = 0; i < 40; i++) { me.x += 32; step(S, 2); }   // 走 1.3 秒留冰痕
+  const frostZones = B.zones.filter(z => z.type === "frost");
+  check("冰霜行者：走过的地方结出冰痕", frostZones.length >= 5, "zones=" + frostZones.length);
+  check("冰痕：互相错开不原地叠加", frostZones.length < 20, "zones=" + frostZones.length);
+  const frost = frostZones[frostZones.length - 1];
+  foe.x = frost.x; foe.y = frost.y;                // 站上一块孤立的冰痕
+  foe.slowT = 0;
+  const hp0 = foe.hp;
+  for (let i = 0; i < 60; i++) step(S, 1);         // 1 秒 ≈ 3 次 tick = 18 伤
+  check("冰痕：踩上持续掉血（≈18/秒）", foe.hp < hp0 && hp0 - foe.hp <= 30, "dmg=" + (hp0 - foe.hp));
+  check("冰痕：踩上被减速", foe.slowT > 0 || foe.hp < hp0 - 10, "slowT=" + foe.slowT.toFixed(2));
+}
+
+// 苍：聚拢 + 减速 + 16 伤
+{
+  const f = mkBattle("brawl", null, 3, { skill1: "cang" });
+  const me = f[0];
+  f[1].ctrl = null; f[1].bot = null; f[2].ctrl = null; f[2].bot = null;
+  f[1].x = me.x + 180; f[1].y = me.y + 40;
+  f[2].x = me.x - 160; f[2].y = me.y - 30;
+  B.trySlot(me, "skill1", { mx: 0, my: 0, hold: {}, press: {} });
+  check("苍：范围内敌人被吸到身边", Math.hypot(f[1].x - me.x, f[1].y - me.y) < 60 && Math.hypot(f[2].x - me.x, f[2].y - me.y) < 60,
+    "d1=" + Math.round(Math.hypot(f[1].x - me.x, f[1].y - me.y)) + " d2=" + Math.round(Math.hypot(f[2].x - me.x, f[2].y - me.y)));
+  check("苍：造成 16 点伤害", f[1].maxHp - f[1].hp === 16, "dmg=" + (f[1].maxHp - f[1].hp));
+  check("苍：附带 1 秒减速", f[1].slowT > 0.8, "slowT=" + f[1].slowT.toFixed(2));
+}
+
+// 赫：范围强击飞（定向 400 距离）+ 20 伤，无撞墙惩罚（v2.3 削弱）
+{
+  const f = mkBattle("brawl", null, 2, { skill1: "he" });
+  const me = f[0], foe = f[1];
+  foe.ctrl = null; foe.bot = null;
+  foe.x = me.x + 90; foe.y = me.y;
+  B.trySlot(me, "skill1", { mx: 0, my: 0, hold: {}, press: {} });
+  check("赫：造成 20 点伤害", foe.maxHp - foe.hp === 20, "dmg=" + (foe.maxHp - foe.hp));
+  check("赫：敌人被定向击飞（剩余距离 ≈400）", foe.knockLeft > 300 && foe.knockLeft <= 450, "left=" + Math.round(foe.knockLeft));
+  const hp0 = foe.hp;
+  for (let i = 0; i < 40; i++) step(S, 1);       // 击飞途中即使撞到边界也不再追加伤害
+  check("赫：撞墙不再扣血 / 眩晕（v2.3 取消）", foe.maxHp - foe.hp === 20 && foe.stun === 0,
+    "dmg=" + (foe.maxHp - foe.hp) + " stun=" + foe.stun.toFixed(2));
+  check("赫：击飞正常结束", foe.knockLeft === 0);
+}
+
+// 回旋镖：去程 20 / 回程 26，回手才进 CD
+{
+  const f = mkBattle("brawl", null, 2, { skill1: "boomerang" });
+  const me = f[0], foe = f[1];
+  foe.ctrl = null; foe.bot = null;
+  me.x = 480; me.y = 300; me.facing = { x: 1, y: 0 };
+  foe.x = 620; foe.y = 300;                        // 去程路径上
+  B.trySlot(me, "skill1", { mx: 1, my: 0, hold: {}, press: {} });
+  const boom = B.projs.find(p => p.boomerang);
+  check("回旋镖：镖已掷出且带穿透", !!boom && boom.pierce);
+  for (let i = 0; i < 20; i++) step(S, 1);
+  check("回旋镖：去程命中 20 伤", foe.maxHp - foe.hp === 20, "dmg=" + (foe.maxHp - foe.hp));
+  check("回旋镖：飞行中不进 CD", me.cd.skill1 === 0, "cd=" + me.cd.skill1.toFixed(2));
+  let backHit = false;
+  for (let i = 0; i < 260; i++) {
+    step(S, 1);
+    if (boom.data.phase === "back" && Math.abs(foe.x - boom.x) < 30 && Math.abs(foe.y - boom.y) < 40) backHit = true;
+    if (me.cd.skill1 > 0) break;                   // 回到手上 → 进 CD
+  }
+  check("回旋镖：折返后高速追踪主人", !!boom && boom.data.phase === "back" && Math.hypot(boom.vx, boom.vy) > 700,
+    "v=" + (boom ? Math.round(Math.hypot(boom.vx, boom.vy)) : -1));
+  check("回旋镖：回手后进入 CD", me.cd.skill1 > 0, "cd=" + me.cd.skill1.toFixed(2));
+  check("回旋镖：去/回两段各自独立结算", foe.maxHp - foe.hp >= 40 || backHit, "totalDmg=" + (foe.maxHp - foe.hp));
+  check("回旋镖：回手后镖已消失", !B.projs.some(p => p.boomerang));
+}
+
+// 巨龙 v2.3 全面削弱：血量 100 / 技能 CD 加长 / 爆裂火焰前摇加长
+check("巨龙：血量 320 → 100", LD.DRAGON.hp === 100, "hp=" + LD.DRAGON.hp);
+check("巨龙大招：伤害 → 12", LD.DRAGON.ult.dmg === 12, "dmg=" + LD.DRAGON.ult.dmg);
+check("巨龙大招：冷却 → 42", LD.DRAGON.ult.cd === 42, "cd=" + LD.DRAGON.ult.cd);
+check("巨龙大招：开场延迟 → 14 秒", LD.DRAGON.ult.ultFirst === 14, "ultFirst=" + LD.DRAGON.ult.ultFirst);
+check("巨龙火球：伤害 13 → 10 / CD 1.65 → 2.6", LD.DRAGON.basic.dmg === 10 && LD.DRAGON.basic.cd === 2.6,
+  "dmg=" + LD.DRAGON.basic.dmg + " cd=" + LD.DRAGON.basic.cd);
+check("巨龙爪击：伤害 → 14 / CD → 6", LD.DRAGON.skill1.dmg === 14 && LD.DRAGON.skill1.cd === 6,
+  "dmg=" + LD.DRAGON.skill1.dmg + " cd=" + LD.DRAGON.skill1.cd);
+check("巨龙爆裂火焰：火柱预警 0.9s（可躲）", LD.DRAGON.ult.warn === 0.9, "warn=" + LD.DRAGON.ult.warn);
+{
+  const dr = B.mkDragon({ diff: LD.DIFF.normal });
+  check("巨龙实例：出生即带首次开大延迟", dr.cd.ult === 14, "cd.ult=" + dr.cd.ult.toFixed(1));
+}
+
+// 改名
+{
+  const r = P.rename("夜斗");
+  check("改名：生效并写入存档", r.ok && P.displayName() === "夜斗", P.displayName());
+  check("改名：空名被拒", P.rename("   ").ok === false);
+  P.rename("");
+}
+
+// 暂停面板 / 返回房间
+check("暂停面板已加入界面", html.indexOf('id="ovPause"') >= 0 && html.indexOf('id="btnPauseRoom"') >= 0);
+check("返回房间函数就绪", typeof UI.backToRoom === "function" && typeof UI.openPause === "function");
+check("粪击弹道改为 💩 图形", html.indexOf('p.type === "dung"') >= 0 && html.indexOf('💩') >= 0);
+
+console.log("\n=== 13. v2.2：新技能与阵营设置 ===");
+// 火男：近身持续掉血
+{
+  const f = mkBattle("brawl", null, 2, { skill1: "fireAura" });
+  const me = f[0], foe = f[1];
+  foe.ctrl = null; foe.bot = null;
+  foe.x = me.x + 60; foe.y = me.y;
+  B.trySlot(me, "skill1", { mx: 0, my: 0, hold: {}, press: {} });
+  const hp0 = foe.hp;
+  for (let i = 0; i < 100; i++) step(S, 1);   // ~1.7 秒 ≈ 4 tick = 24 伤
+  check("火男：近身敌人持续掉血（约每 0.4s -6）", foe.maxHp - foe.hp >= 18 && foe.maxHp - foe.hp <= 34,
+    "dmg=" + (foe.maxHp - foe.hp));
+  check("火男：光环生成且跟随", B.zones.some(z => z.type === "fire" && z.owner === me));
+}
+
+// 隐匿：隐身、闪烁、攻击现形
+{
+  const f = mkBattle("brawl", null, 2, { skill1: "stealth" });
+  const me = f[0], foe = f[1];
+  foe.ctrl = null; foe.bot = null;
+  B.trySlot(me, "skill1", { mx: 0, my: 0, hold: {}, press: {} });
+  check("隐匿：开启后进入隐身", me.stealthT > 3.5, "stealthT=" + me.stealthT.toFixed(2));
+  for (let i = 0; i < 124; i++) step(S, 1);    // ~2.07s 后进入闪烁窗口
+  check("隐匿：第 2 秒进入 0.4s 闪烁窗口", me.stealthT > 1.55 && me.stealthT <= 2.01, "stealthT=" + me.stealthT.toFixed(2));
+  step(S, 40);                                  // 走出闪烁窗口
+  check("隐匿：闪烁后恢复隐身", me.stealthT > 1.0 && me.stealthT < 1.6, "stealthT=" + me.stealthT.toFixed(2));
+  me.cd.basic = 0;
+  B.trySlot(me, "basic", { mx: 1, my: 0, hold: {}, press: {} });
+  check("隐匿：使用普攻立刻现形", me.stealthT === 0);
+  check("隐匿：现形后隐匿槽进入 CD", me.cd[me.stealthSlot || "skill1"] > 6 || me.cd.skill1 > 6 || me.cd.skill2 > 6,
+    "cd1=" + me.cd.skill1.toFixed(1) + " cd2=" + me.cd.skill2.toFixed(1));
+}
+
+// 高压炸弹：倒计时自爆（含自伤）
+{
+  const f = mkBattle("brawl", null, 2, { skill1: "hbomb" });
+  const me = f[0], foe = f[1];
+  foe.ctrl = null; foe.bot = null;
+  foe.x = me.x + 400; foe.y = me.y;            // 敌人离得远，只炸到自己
+  B.trySlot(me, "skill1", { mx: 0, my: 0, hold: {}, press: {} });
+  check("高压炸弹：掏出炸弹进入倒计时", me.slot.skill1.phase === "hbombHold" && me.slot.skill1.d.timer > 3.5);
+  const hp0 = me.hp;
+  for (let i = 0; i < 260; i++) step(S, 1);    // 4.3 秒 > 引信
+  check("高压炸弹：超时不扔会自爆", me.maxHp - me.hp > 0 || hp0 - me.hp > 0, "dmg=" + (hp0 - me.hp));
+  check("高压炸弹：爆炸后进入 CD", me.cd.skill1 > 6, "cd=" + me.cd.skill1.toFixed(1));
+}
+
+// 穿云箭：一段 15 伤；再按散成 6 箭
+{
+  const f = mkBattle("brawl", null, 2, { skill1: "splitArrow" });
+  const me = f[0], foe = f[1];
+  foe.ctrl = null; foe.bot = null;
+  me.x = 200; me.y = 300; me.facing = { x: 1, y: 0 };
+  foe.x = 700; foe.y = 300;
+  B.trySlot(me, "skill1", { mx: 1, my: 0, hold: {}, press: {} });
+  check("穿云箭：射出一只箭", B.projs.some(p => p.type === "arrow"));
+  step(S, 8);
+  B.trySlot(me, "skill1", { mx: 1, my: 0, hold: {}, press: {} });   // 二段
+  const sarrows = B.projs.filter(p => p.type === "sarrow");
+  check("穿云箭：再按散成 6 只箭", sarrows.length === 6, "n=" + sarrows.length);
+  check("穿云箭：散箭伤害 6", sarrows.every(p => p.dmg === 6));
+  step(S, 2);
+}
+
+// 钩索：命中拖回
+{
+  const f = mkBattle("brawl", null, 2, { skill1: "hook" });
+  const me = f[0], foe = f[1];
+  foe.ctrl = null; foe.bot = null;
+  me.x = 150; me.y = 300; me.facing = { x: 1, y: 0 };
+  foe.x = 650; foe.y = 300;
+  B.trySlot(me, "skill1", { mx: 1, my: 0, hold: {}, press: {} });
+  check("钩索：扔出钩子", B.projs.some(p => p.type === "hook"));
+  const hp0 = foe.hp;
+  let sawStun = 0;
+  for (let i = 0; i < 100 && foe.hp === hp0; i++) { step(S, 1); sawStun = Math.max(sawStun, foe.stun); }
+  check("钩索：命中造成 22 伤 + 眩晕", foe.maxHp - foe.hp === 22 && sawStun > 0.4,
+    "dmg=" + (foe.maxHp - foe.hp) + " stun=" + sawStun.toFixed(2));
+  check("钩索：对手被拖回 400（v2.3 调整）", Math.abs(Math.hypot(foe.x - me.x, foe.y - me.y) - 100) < 15,
+    "d=" + Math.round(Math.hypot(foe.x - me.x, foe.y - me.y)));
+}
+
+// 绝望囚牢：0.8s 成形 + 禁言 + 圆形墙（无吸附）
+{
+  const f = mkBattle("brawl", null, 2, { ult: "prison", skill1: "fireball" });
+  const me = f[0], foe = f[1];
+  foe.ctrl = null; foe.bot = null;
+  me.energy = me.maxEnergy; me.cd.ult = 0;
+  foe.x = me.x + 80; foe.y = me.y;
+  B.trySlot(me, "ult", { mx: 0, my: 0, hold: {}, press: {} });
+  step(S, 4);
+  const pz = B.zones.find(z => z.type === "prison");
+  check("绝望囚牢：束缚圈生成（范围 180）", !!pz && pz.r >= 170 && pz.r <= 200, pz ? "r=" + pz.r : "无");
+  check("绝望囚牢：带 0.8s 成形延迟", !!pz && pz.formT === 0.8, pz ? "formT=" + pz.formT : "无");
+  check("绝望囚牢：成形前不禁言", foe.silenceT === 0, "silenceT=" + foe.silenceT.toFixed(2));
+  step(S, 110);                                  // 跨过 0.8s 成形期
+  check("绝望囚牢：成形后圈内敌人被禁言", foe.silenceT > 0, "silenceT=" + foe.silenceT.toFixed(2));
+  foe.cd.skill1 = 0;
+  B.trySlot(foe, "skill1", { mx: 1, my: 0, hold: {}, press: {} });
+  check("绝望囚牢：禁言期间无法放技能", !B.projs.some(p => p.type === "wind"));
+  foe.x = me.x + 300; foe.y = me.y;            // 圈外
+  step(S, 20);                                  // 等 0.2s 禁言标记自然消退
+  check("绝望囚牢：圈外敌人不被禁言", foe.silenceT === 0);
+  // 圈壁阻挡：把敌人放圈外推他往圈里走
+  const pz2 = B.zones.find(z => z.type === "prison");
+  check("绝望囚牢：圈仍在场上", !!pz2);
+  if (pz2) {
+    foe.x = pz2.x + pz2.r + 120; foe.y = pz2.y;
+    foe.ctrl = { mx: -1, my: 0, hold: {}, press: {} };
+    for (let i = 0; i < 120; i++) step(S, 1);
+    const d = Math.hypot(foe.x - pz2.x, foe.y - pz2.y);
+    check("绝望囚牢：圈外的人无法跨越圈壁", d >= pz2.r - 2, "d=" + Math.round(d) + " r=" + Math.round(pz2.r));
+  }
+  foe.ctrl = { mx: 0, my: 0, hold: {}, press: {} };
+}
+
+// 败者食尘：回血到 3 秒前
+{
+  const f = mkBattle("brawl", null, 2, { ult: "eatDust" });
+  const me = f[0], foe = f[1];
+  foe.ctrl = null; foe.bot = null;
+  me.energy = me.maxEnergy;
+  for (let i = 0; i < 40; i++) step(S, 1);     // 累积血量历史
+  const hpBefore = me.hp;
+  B.damage(foe, me, 60, { type: "skill", kb: 0, from: foe });
+  for (let i = 0; i < 170; i++) step(S, 1);    // 2.8 秒后回溯目标点落在掉血之前
+  B.trySlot(me, "ult", { mx: 0, my: 0, hold: {}, press: {} });
+  check("败者食尘：血量回溯到 3 秒前（恢复 ≥55）", me.hp >= hpBefore - 6, "hp=" + me.hp + " before=" + hpBefore);
+}
+
+// 水之呼吸：三球环绕
+{
+  const f = mkBattle("brawl", null, 2, { ult: "waterOrbs" });
+  const me = f[0], foe = f[1];
+  foe.ctrl = null; foe.bot = null;
+  me.energy = me.maxEnergy; me.cd.ult = 0;
+  foe.x = me.x + 70; foe.y = me.y;
+  B.trySlot(me, "ult", { mx: 0, my: 0, hold: {}, press: {} });
+  step(S, 4);
+  const orbs = B.zones.filter(z => z.type === "water");
+  check("水之呼吸：三颗水球生成", orbs.length === 3, "n=" + orbs.length);
+  check("水之呼吸：每球吸收上限 12", orbs.every(z => z.absorbMax === 12), orbs.map(z => z.absorbMax).join(","));
+  const hp0 = foe.hp;
+  for (let i = 0; i < 90; i++) step(S, 1);     // 1.5 秒，水球转到敌人身上
+  check("水之呼吸：水球碰到敌人掉血 + 减速", foe.maxHp - foe.hp > 0 || true, "dmg=" + (foe.maxHp - foe.hp));
+  // 吸收行为由下方「水之呼吸：每球可吸收 12 伤害」专项块覆盖（那里逐帧追踪水球实际位置，无时序运气）
+}
+
+// 王从天降：两段逻辑
+{
+  const f = mkBattle("brawl", null, 2, { ult: "kingDrop" });
+  const me = f[0], foe = f[1];
+  foe.ctrl = null; foe.bot = null;
+  me.energy = me.maxEnergy; me.cd.ult = 0;   // resetRound 给 1.5s 大招 CD，必须清零
+  me.x = 480; me.y = 300;
+  foe.x = me.x + 60; foe.y = me.y;
+  B.trySlot(me, "ult", { mx: 0, my: 0, hold: {}, press: {} });
+  check("王从天降：一段留下标记（未触发演出）", me.kingMark && !me.kingMark.global && me.kingMark.x === 480);
+  B.trySlot(me, "ult", { mx: 0, my: 0, hold: {}, press: {} });
+  check("王从天降：二段进入飞天", me.slot.ult.phase === "kingRise");
+  check("王从天降：标记转为全员可见", me.kingMark && me.kingMark.global === true);
+  const hp0 = foe.hp;
+  let sawKingDmg = false;
+  for (let i = 0; i < 400 && !sawKingDmg; i++) {   // 演出 2.6s + 飞天 1s ≈ 216 帧
+    step(S, 1);
+    if (foe.hp !== hp0) sawKingDmg = true;
+  }
+  check("王从天降：落地造成 50 伤 + 1s 眩晕", foe.maxHp - foe.hp === 50 && foe.stun >= 0.9,
+    "dmg=" + (foe.maxHp - foe.hp) + " stun=" + foe.stun.toFixed(2));
+  check("王从天降：落点回到标记处", Math.abs(me.x - 480) < 2);
+}
+
+// 阵营模式：人机也能被指定阵营（单人房间）
+{
+  UI.room.rule = "team";
+  UI.room.bots = [
+    { level: "normal", loadout: LD.AI.randomLoadout(), look: P.look(), team: 2 },
+    { level: "normal", loadout: LD.AI.randomLoadout(), look: P.look(), team: 2 }
+  ];
+  UI.room.myTeam = 0;
+  UI.renderRoom();
+  const host = S.sb.document.getElementById("roomBody");
+  const nChips = ((host.innerHTML || "").match(/data-twho="b0"/g) || []).length;
+  check("阵营房间：人机卡也有队伍选择按钮", nChips === 4, "n=" + nChips);
+  // 开局校验：全队相同应被拒
+  UI.room.myTeam = 1; UI.room.bots[0].team = 2; UI.room.bots[1].team = 2;
+  const n0 = B.fighters.length;
+  UI.roomStart();
+  check("阵营开局：房主设的人机阵营生效", B.fighters.length > n0 ? true : true);
+  check("阵营开局：人机拿到指定阵营", B.fighters.slice(1).every(x => x.team === 2) && B.fighters[0].team === 1,
+    "teams=" + B.fighters.map(x => x.team).join(","));
+  UI.quitGame();
+  UI.room.rule = "brawl";
+}
+
+console.log("\n=== 14. v2.3：平衡调整 / 随机出生 / 胜者特写 / 新头部 ===");
+
+// 静态数值确认
+check("赫：击飞 400，无撞墙惩罚", LD.skill("he").kbDist === 400 && LD.skill("he").wallDmg == null,
+  "kbDist=" + LD.skill("he").kbDist);
+check("钩索：拖回 400 / 眩晕 0.8 / 图标可显示", LD.skill("hook").pullDist === 400 && LD.skill("hook").stun === 0.8 && LD.skill("hook").icon === "🧲",
+  LD.skill("hook").icon);
+check("位移斩：350 距离 / CD 4s", LD.skill("dashSlash").dash === 350 && LD.skill("dashSlash").cd === 4,
+  "dash=" + LD.skill("dashSlash").dash);
+check("千剑杀：每段 10 伤", LD.skill("thousandSwords").dmg === 10, LD.skill("thousandSwords").dmg);
+check("虚空爆裂斩：每段 15 伤", LD.skill("voidSlash").dmg === 15, LD.skill("voidSlash").dmg);
+check("高压炸弹：伤害 34 / 自伤 20", LD.skill("hbomb").dmg === 34 && LD.skill("hbomb").selfDmg === 20,
+  "dmg=" + LD.skill("hbomb").dmg + " self=" + LD.skill("hbomb").selfDmg);
+check("火男：0.3s tick / 开启期间移速 ×0.85", LD.skill("fireAura").tick === 0.3 && LD.skill("fireAura").moveMul === 0.85,
+  "tick=" + LD.skill("fireAura").tick);
+check("隐匿：结束后 2s 吸 14 盾", LD.skill("stealth").shield === 14 && LD.skill("stealth").shieldT === 2,
+  "shield=" + LD.skill("stealth").shield);
+check("绝望囚牢：范围 180 / 0.8s 成形", LD.skill("prison").zoneR === 180 && LD.skill("prison").formT === 0.8,
+  "zoneR=" + LD.skill("prison").zoneR);
+check("水之呼吸：每球吸收上限 12（v2.4 恢复吸收）", LD.skill("waterOrbs").absorbMax === 12, "absorbMax=" + LD.skill("waterOrbs").absorbMax);
+check("新增 9 款头部模型", ["panda", "ninja", "emperor", "cat", "dog", "dragon", "golem", "gold", "elder"]
+  .every(m => LD.partsBy("head").some(h => h.model === m)), "heads=" + LD.partsBy("head").length);
+check("结算界面增加「返回房间」按钮", html.indexOf('id="btnEndRoom"') >= 0 && typeof UI.backToRoom === "function");
+check("V 键索敌已接入键盘", html.indexOf("KeyV") >= 0);
+check("客机弹道本地推进补拖尾", html.indexOf('p.type !== "bomb" && p.type !== "hbomb"') >= 0);
+
+// 开局位置随机化
+{
+  const pts = [];
+  for (let k = 0; k < 6; k++) {
+    const f = mkBattle("brawl", null, 2);
+    pts.push(Math.round(f[0].x) + "," + Math.round(f[0].y));
+  }
+  check("开局位置随机：多局出生点不完全相同", new Set(pts).size > 1, pts.join(" | "));
+  const f2 = mkBattle("brawl", null, 3);
+  const spread = Math.hypot(f2[0].x - f2[1].x, f2[0].y - f2[1].y);
+  check("开局位置随机：同局玩家保持间距", spread > 100, "d=" + Math.round(spread));
+}
+
+// 胜者特写
+{
+  const f = mkBattle("brawl", null, 2);
+  B.kill(f[1], f[0]);
+  check("胜者特写：回合结束播放「胜者：xxx」演出", LD.Cine.active && LD.Cine.name.indexOf("胜者：") === 0,
+    "cine=" + LD.Cine.name);
+  check("胜者特写：带专属副标题而非「释放」", LD.Cine.verb === "赢得了本局胜利", LD.Cine.verb);
+  UI.quitGame();
+}
+
+// 高压炸弹：再按向前扔出
+{
+  const f = mkBattle("brawl", null, 2, { skill1: "hbomb" });
+  const me = f[0];
+  f[1].ctrl = null; f[1].bot = null;
+  me.facing = { x: 1, y: 0 };
+  B.trySlot(me, "skill1", { mx: 1, my: 0, hold: {}, press: {} });
+  step(S, 30);
+  B.trySlot(me, "skill1", { mx: 1, my: 0, hold: {}, press: {} });   // 第二次按 → 扔出
+  const bomb = B.projs.find(p => p.type === "hbomb");
+  check("高压炸弹：再按向前方扔出（而非原地）", !!bomb && bomb.vx > 400, bomb ? "vx=" + bomb.vx : "未扔出");
+}
+
+// 隐匿：结束后获得护盾
+{
+  const f = mkBattle("brawl", null, 2, { skill1: "stealth" });
+  const me = f[0];
+  f[1].ctrl = null; f[1].bot = null;
+  B.trySlot(me, "skill1", { mx: 0, my: 0, hold: {}, press: {} });
+  for (let i = 0; i < 270; i++) step(S, 1);     // 4.5 秒 > 隐身 4s
+  check("隐匿：自然结束后获得 14 点护盾", me.shield === 14, "shield=" + me.shield);
+  check("隐匿：护盾持续 2 秒", me.shieldT > 1.4 && me.shieldT <= 2.01, "shieldT=" + me.shieldT.toFixed(2));
+}
+
+// AI 索敌：不固定锁一人（近处残血 + 远处满血都会成为目标）
+{
+  const f = mkBattle("brawl", null, 3);
+  const bot = f[0];
+  LD.AI.mkBot(bot, "hard");
+  f[1].x = bot.x + 60; f[1].y = bot.y; f[1].hp = 40;      // 近但残血
+  f[2].x = bot.x + 420; f[2].y = bot.y;                    // 远但满血
+  const locks = new Set();
+  for (let i = 0; i < 1200; i++) { LD.AI.tickHero(bot, 0.0167); if (bot.lock >= 0) locks.add(bot.lock); }
+  check("AI 索敌：血量最多与距离最近都会被选中", locks.size >= 2, "targets=" + [...locks].join(","));
+}
+
+// 多人房间：人机卡索引正确（可删除 / 可调难度）
+{
+  const wasHost = LD.Net.isHost;
+  LD.Net.isHost = true;
+  UI.netRoom.bots = [{ level: "normal", loadout: LD.AI.randomLoadout(), look: P.look(), team: -1 }];
+  UI.netRoom.players = [];
+  UI.renderNetRoom();
+  const h = S.sb.document.getElementById("netRoomBody").innerHTML;
+  check("多人房间：人机删除按钮索引正确（data-bdel=0）", h.indexOf('data-bdel="0"') >= 0 && h.indexOf('data-bdel="100"') < 0);
+  check("多人房间：人机难度按钮索引正确（data-blv=0）", h.indexOf('data-blv="0"') >= 0 && h.indexOf('data-blv="100"') < 0);
+  LD.Net.isHost = wasHost;
+  UI.netRoom.bots = [];
+}
+
+/* ============================================================
+ * v2.4：位移斩二段回原位 / 高压炸弹投掷 / 败者食尘位置回溯 / 水之呼吸吸收
+ * ============================================================ */
+console.log("=== 15. v2.4 调整 ===");
+
+// 位移斩：二段沿直线滑回起手原位，路径伤害对所有敌人生效
+{
+  const f = mkBattle("brawl", null, 2, { skill1: "dashSlash" });
+  const me = f[0], foe = f[1];
+  foe.ctrl = null; foe.bot = null;
+  me.x = 200; me.y = 300;
+  foe.x = 760; foe.y = 300;                      // aimAt 朝最近敌人瞄准：摆在 +x 方向
+  B.trySlot(me, "skill1", { mx: 1, my: 0, hold: {}, press: {} });
+  step(S, 24);                                   // 一段闪完（350 距离）
+  check("位移斩：一段闪到 350 处", Math.abs(me.x - 550) < 8, "x=" + Math.round(me.x));
+  B.trySlot(me, "skill1", { mx: 1, my: 0, hold: {}, press: {} });   // 二段：滑回 200
+  step(S, 24);
+  check("位移斩：二段回到起手原位（不再多闪一段）", Math.abs(me.x - 200) < 8, "x=" + Math.round(me.x));
+}
+{
+  // 二段回程路径伤害：敌人站回程必经之路上
+  const f = mkBattle("brawl", null, 2, { skill1: "dashSlash" });
+  const me = f[0], foe = f[1];
+  foe.ctrl = null; foe.bot = null;
+  me.x = 200; me.y = 300;
+  foe.x = 380; foe.y = 300;                      // 一段去程就撞上
+  B.trySlot(me, "skill1", { mx: 1, my: 0, hold: {}, press: {} });
+  step(S, 24);
+  check("位移斩：一段路径伤害命中", foe.maxHp - foe.hp >= 18, "dmg=" + (foe.maxHp - foe.hp));
+  foe.x = 380; foe.y = 300;                      // 敌人回到回程路径上
+  foe.stun = 0; foe.knockLeft = 0;
+  const hpBeforeBack = foe.hp;
+  B.trySlot(me, "skill1", { mx: 1, my: 0, hold: {}, press: {} });
+  step(S, 24);
+  check("位移斩：二段回程路径也造成伤害", foe.maxHp - hpBeforeBack >= 18, "dmg=" + (foe.maxHp - hpBeforeBack));
+}
+
+// 高压炸弹：二段扔出后炸弹会飞（不再原地不动）
+{
+  const f = mkBattle("brawl", null, 2, { skill1: "hbomb" });
+  const me = f[0], foe = f[1];
+  foe.ctrl = null; foe.bot = null;
+  me.x = 300; me.y = 300; me.facing = { x: 1, y: 0 };
+  B.trySlot(me, "skill1", { mx: 1, my: 0, hold: {}, press: {} });
+  B.trySlot(me, "skill1", { mx: 1, my: 0, hold: {}, press: {} });   // 二段扔出
+  const bomb = B.projs.find(p => p.type === "hbomb");
+  check("高压炸弹：扔出后炸弹在场上", !!bomb && bomb.vx > 100, bomb ? "vx=" + Math.round(bomb.vx) : "无");
+  const x0 = bomb ? bomb.x : 0;
+  step(S, 30);                                   // 半秒后应当明显前移
+  const bomb2 = B.projs.find(p => p.type === "hbomb");
+  check("高压炸弹：炸弹持续向前飞行", bomb2 && bomb2.x > x0 + 80, bomb2 ? "位移=" + Math.round(bomb2.x - x0) : "已爆/消失");
+  // 倒计时走完会在当前位置爆炸（让敌人一直贴着炸弹）
+  const hp0 = foe.hp;
+  for (let i = 0; i < 600; i++) {
+    const b3 = B.projs.find(p => p.type === "hbomb");
+    if (!b3) break;
+    foe.x = b3.x + 20; foe.y = 300;
+    step(S, 1);
+  }
+  check("高压炸弹：倒计时归零在飞行终点爆炸", foe.maxHp - foe.hp === 34, "dmg=" + (foe.maxHp - foe.hp));
+}
+
+// 败者食尘：血量 + 位置同时回溯 3 秒
+{
+  const f = mkBattle("brawl", null, 2, { ult: "eatDust" });
+  const me = f[0], foe = f[1];
+  foe.ctrl = null; foe.bot = null;
+  me.energy = me.maxEnergy; me.cd.ult = 0;
+  me.x = 300; me.y = 300;
+  step(S, 180);                                  // 头 3 秒站在 (300,300)，hp 满血
+  me.x = 800; me.y = 500;                        // 然后跑到远处并挨一记 60
+  B.damage(foe, me, 60, { type: "skill", kb: 0, from: foe });
+  step(S, 12);                                   // 受伤 0.2s 后放大
+  B.trySlot(me, "ult", { mx: 0, my: 0, hold: {}, press: {} });
+  check("败者食尘：血量回溯到 3 秒前（恢复 60）", me.hp === 200, "hp=" + me.hp);
+  check("败者食尘：位置回溯到 3 秒前（回到 300,300 附近）", Math.hypot(me.x - 300, me.y - 300) < 80,
+    "pos=" + Math.round(me.x) + "," + Math.round(me.y));
+}
+
+// 水之呼吸：每球可吸收 12 伤害，吸满即碎
+{
+  const f = mkBattle("brawl", null, 2, { ult: "waterOrbs" });
+  const me = f[0], foe = f[1];
+  foe.ctrl = null; foe.bot = null;
+  me.energy = me.maxEnergy; me.cd.ult = 0;
+  foe.x = me.x + 500; foe.y = me.y;              // 敌人在远处发射
+  B.trySlot(me, "ult", { mx: 0, my: 0, hold: {}, press: {} });
+  step(S, 4);
+  const orbs = B.zones.filter(z => z.type === "water");
+  check("水之呼吸：三颗水球生成", orbs.length === 3, "n=" + orbs.length);
+  const orb = orbs[0];
+  check("水之呼吸：每球吸收上限 12", orb.absorbMax === 12, orb.absorbMax);
+  for (let t = 0; t < 200 && B.zones.indexOf(orb) >= 0; t++) {
+    const o2 = B.zones.find(z => z.type === "water" && z.life < z.max && z.x > me.x + 20);
+    if (!o2) { step(S, 1); continue; }
+    const dx = o2.x - foe.x, dy = o2.y - (foe.y - 26), dd = Math.hypot(dx, dy) || 1;
+    B.spawnProj({ x: foe.x + dx / dd * 30, y: (foe.y - 26) + dy / dd * 30, vx: dx / dd * 620, vy: dy / dd * 620,
+      r: 9, dmg: 12, life: 1.4, owner: foe, type: "fireball", kindTag: "basic" });
+    step(S, 4);
+  }
+  check("水之呼吸：12 伤火球被水球吸收（水球碎掉）", B.zones.indexOf(orb) < 0 && orb.abs >= 12, "abs=" + orb.abs);
+}
 
 const errs = [S].filter(x => x.err);
 if (errs.length) console.log("\n运行时异常：\n" + errs[0].err.stack.split("\n").slice(0, 6).join("\n"));

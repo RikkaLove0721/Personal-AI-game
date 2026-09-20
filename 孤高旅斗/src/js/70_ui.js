@@ -36,7 +36,7 @@
   /* ==========================================================
    *  界面控制
    * ========================================================== */
-  const OVS = ["ovMenu", "ovSolo", "ovLevels", "ovDuelSetup", "ovMulti", "ovJoin", "ovWait", "ovSkin", "ovSkill", "ovLoad", "ovHelp", "ovEnd"];
+  const OVS = ["ovMenu", "ovSolo", "ovLevels", "ovDuelSetup", "ovMulti", "ovJoin", "ovWait", "ovSkin", "ovSkill", "ovLoad", "ovHelp", "ovEnd", "ovPause"];
   const UI = LD.UI = { screen: "ovMenu" };
 
   UI.show = function (id) {
@@ -49,6 +49,8 @@
     if (id === "ovLevels") UI.renderLevels();
     if (id === "ovLoad") UI.renderLoad();
     if (id === "ovHelp") UI.renderHelp();
+    /* 回到多人房间（含从装扮/技能页返回）→ 同步一次自己的配装给房主 */
+    if (id === "ovWait" && LD.Net.ws) LD.Net.sendProfile();
   };
 
   UI.coins = function () {
@@ -140,7 +142,7 @@
       d.className = "lslot" + (sk ? "" : " sel");
       d.innerHTML = '<div class="lb">' + SLOT_LAB[slot] + ' · ' + (slot === "basic" ? "普攻" : slot === "ult" ? "大招" : "技能" + (slot === "skill1" ? "1" : "2")) + '</div>' +
         '<div class="ls">' + (sk ? sk.icon + " " + sk.name : "（空）") + '</div>' +
-        '<div class="lk">' + (sk ? (sk.kind === "ult" ? "需满能量" : "CD " + sk.cd + "s") : "未装配") + '</div>';
+        '<div class="lk">' + (sk ? (sk.kind === "ult" ? "需满能量" : "CD " + (sk.cdText || sk.cd + "s")) : "未装配") + '</div>';
       lb.appendChild(d);
     });
 
@@ -166,7 +168,7 @@
         '<div class="nm">' + s.name + '</div>' +
         '<div style="font-size:10px;color:#8fa0c8;margin-top:3px;line-height:1.5">' + s.tags.join(" · ") + '</div>' +
         '<div class="pr">' + (owned ? (slot ? "已装配 " + SLOT_LAB[slot] : "点击装配") : "🪙 " + s.price) + '</div>' +
-        (s.dmg ? '<div style="font-size:10px;color:#fb923c">伤害 ' + s.dmg + (s.cd ? ' · CD ' + s.cd + 's' : '') + '</div>' : (s.cd ? '<div style="font-size:10px;color:#8fa0c8">CD ' + s.cd + 's</div>' : '')) +
+        (s.dmg ? '<div style="font-size:10px;color:#fb923c">伤害 ' + s.dmg + (s.cd ? ' · CD ' + (s.cdText || s.cd + "s") : '') + '</div>' : (s.cd ? '<div style="font-size:10px;color:#8fa0c8">CD ' + (s.cdText || s.cd + "s") + '</div>' : '')) +
         '<div style="display:flex;gap:4px;justify-content:center;margin-top:6px;flex-wrap:wrap">' + acts + '</div>' +
         (owned ? '<div class="st' + (slot ? ' eq' : '') + '">' + (slot ? "★" : "✓") + '</div>' : '');
       d.title = s.desc;
@@ -216,9 +218,21 @@
       '<div style="margin:5px 0">' + l.icon + ' ' + l.name + '：普通 ' + (P.cleared(l.id, "normal") ? "✅" : "⬜") +
       ' / 困难 ' + (P.cleared(l.id, "hard") ? "✅" : "⬜") + '</div>').join("");
     $("loadInfo").innerHTML =
+      '<div style="font-size:13px;color:#7fe6f7;letter-spacing:1px;margin-bottom:6px">名字</div>' +
+      '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">' +
+      '<input id="nameInput" maxlength="8" placeholder="勇者" value="' + (P.d.name || "") + '" ' +
+      'style="width:150px;background:#0b1220;color:#e8eeff;border:1px solid rgba(120,160,255,.3);border-radius:8px;padding:7px 11px;font-size:13px;outline:none">' +
+      '<button class="btn sm" id="btnRename">改名</button>' +
+      '<span style="font-size:11px;color:#8fa0c8">最多 8 个字，战斗与联机中都会显示</span></div>' +
       '<div style="font-size:13px;color:#7fe6f7;letter-spacing:1px">外观</div>' + rows +
       '<div style="font-size:13px;color:#7fe6f7;letter-spacing:1px;margin-top:12px">技能</div>' + sk +
       '<div style="font-size:13px;color:#7fe6f7;letter-spacing:1px;margin-top:12px">关卡进度</div>' + prog;
+    const nameBtn = $("btnRename");
+    if (nameBtn) nameBtn.onclick = () => {
+      const r = P.rename($("nameInput").value);
+      if (r.ok) { Audio2.ui(); UI.toast("已改名为「" + r.name + "」"); UI.renderLoad(); if (LD.Net.ws) LD.Net.sendProfile(); }
+      else UI.toast(r.why);
+    };
   };
 
   /* ==========================================================
@@ -253,7 +267,7 @@
       '<ul>',
       '<li><span class="k">W</span><span class="k">A</span><span class="k">S</span><span class="k">D</span> 或方向键：四向移动；<b>快速双击同一方向键</b>可短距离闪避（无无敌帧，冷却 2.5 秒，与普攻共享冷却——闪避后普攻同样要等 2.5 秒）</li>',
       '<li><span class="k">J</span> 普攻　<span class="k">K</span> 技能 1　<span class="k">L</span> 技能 2　<span class="k">O</span> 大招　<span class="k">V</span> 切换索敌目标</li>',
-      '<li><span class="k">M</span> 静音　<span class="k">Esc</span> 返回主菜单</li>',
+      '<li><span class="k">M</span> 静音　<span class="k">Esc</span> 暂停菜单（可继续战斗 / 返回房间 / 回主菜单）</li>',
       '<li>技能槽位可以在「技能商店」里自由更换，最多 1 个普攻 + 2 个技能 + 1 个大招。<b>格挡</b>属于普攻分类，装在 J 槽。</li>',
       '</ul>',
       '<h3>索敌机制</h3>',
@@ -329,7 +343,13 @@
     const me = B.hero(B.mySide == null ? 0 : B.mySide) || B.hero(0);
     if (!me) return;
     const pb = $("pBars"), eb = $("eBars");
-    pb.innerHTML = bar("HP", me.hp, me.maxHp, "hp") + bar("能量", me.energy, me.maxEnergy, "en" + (me.energy >= me.maxEnergy ? " full" : ""));
+    /* 左上角 = 自己的血量与能量（带名字与队伍标识，避免混淆） */
+    const myTags = [];
+    if (me.name) myTags.push(me.name);
+    if (B.rule === "team" && me.team >= 0) myTags.push(LD.TEAM_NAMES[me.team]);
+    if (me.overlord) myTags.push("👑 霸主");
+    pb.innerHTML = (myTags.length ? '<div class="tag">你 · ' + myTags.join(" · ") + '</div>' : "") +
+      bar("HP", me.hp, me.maxHp, "hp") + bar("能量", me.energy, me.maxEnergy, "en" + (me.energy >= me.maxEnergy ? " full" : ""));
     /* 敌方：除自己以外的所有参战者（联机最多 3 个对手） */
     const foes = B.fighters.filter(x => x.side !== me.side);
     eb.innerHTML = foes.map(foe => {
@@ -340,7 +360,7 @@
         if (B.rule === "team" && foe.team >= 0) tags.push(LD.TEAM_NAMES[foe.team]);
         if (foe.overlord) tags.push("👑 霸主");
         if (B.rule === "overlord" && B.stone && !B.stone.holder) tags.push("石头已掉落");
-        if (foe.name && (B.mode === "net" || B.rule !== "brawl")) tags.push(foe.name);
+        if (foe.name) tags.push(foe.name);
         if (foe.dead) tags.push("已倒下");
       }
       const extra = tags.length ? '<div class="tag">' + tags.join(" · ") + '</div>' : "";
@@ -400,8 +420,9 @@
       if (keys[c]) return;
       keys[c] = true;
       if (c === "KeyM") { Audio2.muted = !Audio2.muted; $("btnMute").textContent = Audio2.muted ? "🔇 静音" : "🔊 音效"; return; }
-      if (c === "Escape") { UI.quitGame(); return; }
+      if (c === "Escape") { if (UI.screen === "ovPause") UI.show("game"); else UI.openPause(); return; }
       if (c === "KeyR" && B.state === "over") { UI.restart(); return; }
+      if (c === "KeyV") { ctrl.lockNext = e.shiftKey ? -1 : 1; return; }   // V 键：切换索敌目标（Shift+V 反向）
       const slot = KEYMAP[c];
       if (slot) { ctrl.press[slot] = true; ctrl.hold[slot] = true; }
       const dk = DIRKEYS[c];
@@ -455,7 +476,7 @@
   };
 
   UI.startDragon = function (level, diff) {
-    const hero = B.mkHero(0, { x: C.W * 0.26, y: C.H * 0.56, look: P.look(), loadout: P.d.loadout, name: "勇者", energy: 0 });
+    const hero = B.mkHero(0, { x: C.W * 0.26, y: C.H * 0.56, look: P.look(), loadout: P.d.loadout, name: P.displayName(), energy: 0 });
     hero.ctrl = ctrl;
     const dragon = B.mkDragon({ diff });
     B.setup({ mode: "dragon", diff, level, fighters: [hero, dragon], theme: { top: "#1a1226", bottom: "#08060f", grid: "rgba(251,113,133,.35)", moon: "rgba(251,146,60,.22)" } });
@@ -465,7 +486,7 @@
 
   UI.startDuel = function () {
     const lo = ensureAiLoadout();
-    const hero = B.mkHero(0, { x: C.W * 0.26, y: C.H * 0.56, look: P.look(), loadout: P.d.loadout, name: "勇者" });
+    const hero = B.mkHero(0, { x: C.W * 0.26, y: C.H * 0.56, look: P.look(), loadout: P.d.loadout, name: P.displayName() });
     hero.ctrl = ctrl;
     const bot = B.mkHero(1, { x: C.W * 0.74, y: C.H * 0.56, look: botLook(), loadout: { basic: lo.basic, skill1: lo.skill1, skill2: lo.skill2, ult: lo.ult }, name: "电脑" });
     LD.AI.mkBot(bot, DuelSetup.level);
@@ -476,6 +497,7 @@
   };
 
   UI.endDragon = function (win, level, diff) {
+    $("btnEndRoom").style.display = "none";   // 巨龙关卡没有房间概念
     if (win) {
       const reward = diff.reward;
       const first = P.clear(level.id, diff.key, reward);
@@ -494,6 +516,7 @@
 
   UI.endDuel = function (win) {
     /* 人机对战奖励：普通胜利 +6，困难胜利 +12（三局两胜整局结算一次） */
+    $("btnEndRoom").style.display = "";       // 对局结束也可以回房间调整配装再打
     const reward = win ? (DuelSetup.level === "hard" ? 12 : 6) : 0;
     if (win) {
       P.addCoins(reward);
@@ -512,6 +535,7 @@
   };
 
   UI.endNet = function (win) {
+    $("btnEndRoom").style.display = "";
     const champ = B.fighters[B.matchWinner];
     const champName = champ ? (champ.name || "玩家" + (B.matchWinner + 1)) : "未知";
     if (win) { Audio2.win(); $("endTitle").textContent = "你赢了！"; }
@@ -540,6 +564,22 @@
     B.fighters = []; B.projs = []; B.zones = [];
     LD.FX.clear(); LD.Cine.active = false;
     UI.show("ovMenu");
+  };
+
+  /* 战斗中 Esc / 主菜单按钮 → 暂停面板（不退房、不退联机） */
+  UI.openPause = function () {
+    if (UI.screen !== "game" || B.state === "idle") return;
+    $("btnPauseRoom").style.display = B.mode === "dragon" ? "none" : "";
+    UI.show("ovPause");
+  };
+
+  /* 返回房间：结束当前对局，但回到准备界面（联机保持房间与连接） */
+  UI.backToRoom = function () {
+    if (B.state !== "idle" && B.state !== "over") B.state = "over";
+    B.fighters = []; B.projs = []; B.zones = [];
+    LD.FX.clear(); LD.Cine.active = false;
+    if (B.mode === "net") { UI.show("ovWait"); UI.renderNetRoom(); UI.toast("已返回房间，等房主重新开始"); }
+    else { UI.show("ovDuelSetup"); UI.renderRoom(); }
   };
 
   /* ==========================================================
@@ -577,10 +617,14 @@
       UI.renderNetRoom();
     });
     N.on("err", msg => { Audio2.beep(200, 0.15, "square", 0.05); UI.toast(msg); });
-    N.on("profile", () => { UI.renderNetRoom(); });
+    N.on("profile", () => { if (N.isHost) UI.netPushRoom(); else UI.renderNetRoom(); });
+    N.on("roomTeam", d => {           // 客机选了队伍 → 房主记账并广播
+      if (N.isHost) { UI.netRoom.teams[d.side] = d.team; UI.netPushRoom(); }
+    });
     N.on("room", d => { UI.applyNetRoom(d); });
     N.on("peerJoined", seat => {
-      UI.renderNetRoom();
+      if (N.isHost) UI.netPushRoom();          // 立刻把完整房间状态推给所有人（否则新客机看不到角色卡）
+      else UI.renderNetRoom();
       UI.toast(N.isHost ? ("玩家 " + (seat + 1) + " 已加入，当前 " + (1 + N.peersIn.length) + "/4 人") : "对手已加入");
       LD.Net.sendProfile();
     });
@@ -640,8 +684,12 @@
     });
 
     go("btnAgain", () => UI.restart());
+    go("btnEndRoom", () => UI.backToRoom());
     go("btnEndMenu", () => UI.quitGame());
-    go("btnQuit", () => UI.quitGame());
+    go("btnQuit", () => UI.openPause());
+    go("btnPauseResume", () => UI.show("game"));
+    go("btnPauseRoom", () => UI.backToRoom());
+    go("btnPauseMenu", () => UI.quitGame());
     go("btnMute", () => { Audio2.muted = !Audio2.muted; $("btnMute").textContent = Audio2.muted ? "🔇 静音" : "🔊 音效"; });
 
     $("codeInput").addEventListener("input", e => { e.target.value = e.target.value.replace(/\D/g, "").slice(0, 4); });
