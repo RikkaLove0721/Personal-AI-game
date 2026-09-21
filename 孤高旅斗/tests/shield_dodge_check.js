@@ -108,6 +108,10 @@ check("闪避被普攻锁进CD", me.cd.dodge >= me.cd.basic - 0.1, me.cd.dodge.t
 console.log("=== 岩土盾 ===");
 check("购买岩土盾", P.buySkill("rockShield").ok);
 check("装配到技能2", P.equipSkill("skill2", "rockShield").ok);
+/* v2.5 起 mkHero 会复制一份配装（天外来物模式要在战斗中独立改写配装、不能污染存档），
+   所以测试必须显式把新配装同步到已在场的战士身上 */
+const meNow0 = B.fighters[B.mySide != null ? B.mySide : 0];
+if (meNow0) meNow0.loadout = Object.assign({}, meNow0.loadout, { skill2: "rockShield" });
 B.resetRound ? B.resetRound() : null;
 for (let i = 0; i < 400 && B.state !== "fight"; i++) { isolate(); step(S, 1); }   // 等进入战斗（回合时长有波动）
 check("已进入战斗", B.state === "fight", B.state);

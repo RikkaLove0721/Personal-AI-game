@@ -83,7 +83,7 @@
         tags: ["远程"], proj: { speed: 640, r: 9, life: 2.4 },
         desc: "射出追踪不佳但速度很快的火球。伤害比斩击略低，胜在安全，可以和对手拉锯。" });
 
-  add({ id: "pistol", kind: "basic", name: "手枪", icon: "🔫", price: 6, cd: 5.0, dmg: 13,
+  add({ id: "pistol", kind: "basic", name: "手枪", icon: "🔫", price: 6, cd: 3.0, dmg: 13,
         tags: ["远程", "直线"], proj: { speed: 820, r: 7, life: 1.6 },
         desc: "射出一发高速子弹，伤害与火球相当、飞行更快，但不带任何追踪，纯靠准头。" });
 
@@ -200,12 +200,16 @@
         desc: "时间倒流：把自己的血量和位置同时回溯到 3 秒前。刚被一套打残、被逼到死角？吃尘吧。" });
 
   add({ id: "waterOrbs", kind: "ult", name: "水之呼吸", icon: "💧", price: 10, cd: 1.0, dmg: 10,
-        tags: ["大招", "防御"], dur: 5.0, orbR: 17, orbitR: 78, spd: 2.6, tick: 0.45, absorbMax: 12,
+        tags: ["大招", "防御"], dur: 5.0, orbR: 24, orbitR: 78, spd: 2.6, tick: 0.45, absorbMax: 12, hitPad: 32,
         desc: "开启后 5 秒内三颗水球环绕自身中速旋转：碰到敌人造成 10 点伤害并减速，敌方飞行物碰到水球会被吸收——每颗水球最多吸收 12 点伤害，吸满就碎。" });
 
   add({ id: "kingDrop", kind: "ult", name: "王从天降", icon: "👑", price: 10, cd: 1.0, dmg: 50,
         tags: ["大招", "二段"], rise: 1.0, boomR: 170, stun: 1.0, noAI: true,
-        desc: "第一次按下在脚下画一个大范围红圈记号（只有你自己看得见，此时不放演出）。再按一次触发：你原地飞起，1 秒后（此刻红圈才会出现在所有人视野里）瞬移到红圈处轰然落地，圈内敌人受 50 点伤害并眩晕 1 秒。飞起过程无敌。" });
+        desc: "第一次按下在脚下画一个大范围红圈记号（只有你自己看得见，此时不放演出）。再按一次触发：你原地飞起，1 秒后（此刻红圈才会出现在所有人视野里）瞬移到红圈处轰然落地，圈内敌人受 50 点伤害并眩晕 1 秒。飞起过程无敌，但期间你被定在原地不能移动、也不能使用其他技能，是纯粹的蓄力赌注。" });
+
+  add({ id: "shuriken", kind: "ult", name: "螺旋手里剑", icon: "🌀", price: 10, cd: 1.0, dmg: 12,
+        tags: ["大招", "控场"], tick: 0.35, speed: 250, r: 54, life: 4.5, pull: 130, pullR: 175,
+        desc: "朝锁定方向掷出一颗中速飞行的巨大蓝色能量球，飞行 4.5 秒。球体把附近的敌人朝自己拽过来（中度吸引），并每 0.35 秒造成 12 点持续伤害——吸住就出不去，是最强的控场大招之一。" });
 
   LD.SKILLS = S;
   LD.skill = (id) => S.find(s => s.id === id) || null;
@@ -234,6 +238,13 @@
       if (B.crit.mul != null) LD.CONF.critMul = B.crit.mul;
     }
     if (B.dragon) deep(LD.DRAGON, B.dragon);
+    if (B.BOSS && B.BOSS.ninja && LD.BOSS) deep(LD.BOSS.ninja, B.BOSS.ninja);
+    if (B.BOSS && B.BOSS.gun && LD.BOSS) deep(LD.BOSS.gun, B.BOSS.gun);
+    if (B.diff) {
+      if (B.diff.normal && LD.DIFF) deep(LD.DIFF.normal, B.diff.normal);
+      if (B.diff.hard && LD.DIFF) deep(LD.DIFF.hard, B.diff.hard);
+    }
+    if (B.gifts && LD.GIFTS) deep(LD.GIFTS, B.gifts);
     const sk = B.skills || {};
     (LD.SKILLS || []).forEach(s => { if (sk[s.id]) deep(s, sk[s.id]); });
   };
@@ -243,21 +254,74 @@
   // 新档默认携带（v2.0 起格挡属于普攻分类，J 槽只能装一个，默认给斩击）
   LD.DEFAULT_LOADOUT = { basic: "slash", skill1: null, skill2: null, ult: null };
 
-  /* ---------------------------------------------------------- 难度 */
+  /* ---------------------------------------------------------- 难度
+   * v2.5：困难模式血量统一为普通的 2 倍，且技能释放频率更高 */
   LD.DIFF = {
     normal: { key: "normal", name: "普通", hpM: 1.00, dmgM: 1.00, rateM: 1.00, reward: 4,  color: "#34d399" },
-    hard:   { key: "hard",   name: "困难", hpM: 1.55, dmgM: 1.40, rateM: 1.38, reward: 10, color: "#fb7185" }
+    hard:   { key: "hard",   name: "困难", hpM: 2.00, dmgM: 1.40, rateM: 1.60, reward: 10, color: "#fb7185" }
   };
 
   /* ---------------------------------------------------------- 关卡
-   * 后续加关卡：往这个数组里继续 push 即可，框架会自动生成选择卡片。 */
+   * 后续加关卡：往这个数组里继续 push 即可，框架会自动生成选择卡片。
+   * v2.5 起怪物统一按「1 普攻 + 2 技能 + 1 大招」的规格设计。 */
   LD.LEVELS = [
     {
       id: 1, name: "熔核巨龙", icon: "🐉", boss: "dragon",
       desc: "沉睡在废弃熔炉里的机械巨龙。火球封锁走位，爪击专治站桩。",
       tip: "提示：它的火球可以弹反，爪击要看红圈预警提前闪避。"
+    },
+    {
+      id: 2, name: "神秘黑侠客", icon: "🥷", boss: "ninja",
+      desc: "暗影中的飞镖刺客。会召唤出与自己一模一样的分身共同进攻——打在分身上的伤害全部白费，认错人就是白给。",
+      tip: "提示：分身不会放暗影分身（不能召唤分身的分身）；被螺旋手里剑吸住要立刻垂直走位逃出吸力范围。"
+    },
+    {
+      id: 3, name: "西部快枪手", icon: "🤠", boss: "gun",
+      desc: "枪速快到看不清的荒野枪手。全程持续开枪，还会扔炸弹与连环十响；开大后隐身 8 秒，隐身期间照常开枪且不现形——听声辨位吧。",
+      tip: "提示：隐身中的枪手完全看不见，但子弹会暴露他的大致方位；贴脸时他也会慌着扔炸弹。"
     }
   ];
+
+  /* ---------------------------------------------------------- 新 BOSS 数值
+   * v2.5 新增两个人形 BOSS（沿用勇者骨架驱动，配装为 boss 专属技能）。
+   * look 是固定外观；speedMul 相对普通勇者移速的倍率。 */
+  LD.BOSS = {
+    dragon: null,     // 巨龙走独立的 LD.DRAGON / mkDragon 通道
+    ninja: {
+      name: "神秘黑侠客", hp: 150, speedMul: 1.08,
+      loadout: { basic: "n_shuriken", skill1: "n_clone", skill2: "n_raid", ult: "n_ult" },
+      look: { head: { model: "ninja", c1: "#111827", c2: "#22d3ee", c3: "#e8c9a0" },
+              upper: { c1: "#111827", c2: "#334155" }, lower: { c1: "#0b1220", c2: "#1f2937" } },
+      basic:  { name: "飞镖",     cd: 1.30, dmg: 9,  speed: 700, r: 9, life: 2.2 },
+      skill1: { name: "暗影分身", cd: 10.0, dmg: 0,  dur: 6.0 },
+      skill2: { name: "突袭",     cd: 7.0,  dmg: 12, windup: 0.4, hits: 3, gap: 0.17, reach: 96 },
+      ult:    { name: "螺旋手里剑", cd: 20.0, ultFirst: 10, dmg: 12, tick: 0.35,
+                speed: 250, r: 54, life: 4.5, pull: 130, pullR: 175 }
+    },
+    gun: {
+      name: "西部快枪手", hp: 190, speedMul: 1.05,
+      loadout: { basic: "g_shot", skill1: "g_bomb", skill2: "g_burst", ult: "g_ghost" },
+      look: { head: { model: "tophat", c1: "#7f1d1d", c2: "#fbbf24", c3: "#f2cfae" },
+              upper: { c1: "#b45309", c2: "#fde68a" }, lower: { c1: "#3f3222", c2: "#1c1917" } },
+      basic:  { name: "快枪",     cd: 1.00, dmg: 8, speed: 860, r: 7, life: 1.5 },
+      skill1: { name: "炸弹投掷", cd: 6.00, dmg: 22, fuse: 1.05, boomR: 112 },
+      skill2: { name: "连环十响", cd: 8.00, dmg: 7, n: 10, gap: 0.07, spread: 0.15, speed: 900, r: 6, life: 1.3 },
+      ult:    { name: "幻影隐身", cd: 26.0, ultFirst: 12, dur: 8.0 }
+    }
+  };
+
+  /* ---------------------------------------------------------- 天外来物（掉落模式）参数 */
+  LD.GIFTS = {
+    skillEvery: 10,      // 每 10 秒降落一个技能
+    ultEvery: 20,        // 每 20 秒降落一个大招
+    firstSkill: 3,       // 首个技能掉落延迟（别让开局太空）
+    firstUlt: 8,         // 首个大招掉落延迟
+    fallT: 2.0,          // 降落过程耗时：图标出现到落地可拾取共 2 秒
+    maxSkill: 3,         // 场上最多同时 3 个技能掉落物
+    maxUlt: 2,           // 场上最多同时 2 个大招掉落物
+    pickR: 30,           // 拾取判定半径（加在人物半径上）
+    swapDelay: 0.3       // 置换延迟：按键先照常出手，0.3 秒后完成置换
+  };
 
   /* ---------------------------------------------------------- 巨龙数值
    * v2.3 大幅削弱：血量 100、全技能 CD 加长 / 伤害下调、爆裂火焰前摇更长（可躲） */
@@ -274,7 +338,8 @@
   LD.RULES = [
     { id: "brawl", name: "乱斗模式", icon: "⚔", short: "乱斗", desc: "所有人互相为敌，最后站着的赢下回合。" },
     { id: "team", name: "阵营模式", icon: "🏳", short: "阵营", desc: "红黄蓝绿四队，同队之间互不造成伤害，最后只剩一个阵营时获胜。" },
-    { id: "overlord", name: "霸主争霸", icon: "👑", short: "霸主", desc: "所有人 + 巨龙同场混战。巨龙被击败会爆出能量石并飞向随机位置，第一个抢到的人成为霸主：血量上限与当前血量翻 1.5 倍，头顶加皇冠；人机仇恨会转向霸主。" }
+    { id: "overlord", name: "霸主争霸", icon: "👑", short: "霸主", desc: "所有人 + 巨龙同场混战。巨龙被击败会爆出能量石并飞向随机位置，第一个抢到的人成为霸主：血量上限与当前血量翻 1.5 倍，头顶加皇冠；人机仇恨会转向霸主。霸主阵亡后能量石直接消散，不再掉落。" },
+    { id: "gifts", name: "天外来物", icon: "☄️", short: "天外", desc: "开局只有普攻，技能与大招全靠天上降落：每 10 秒落一个技能、20 秒落一个大招，碰到即装备（K/L 两格，满了按键置换，被换下的留在原地）。最后活着的人获胜。" }
   ];
   LD.ruleInfo = (id) => LD.RULES.find(r => r.id === id) || LD.RULES[0];
 

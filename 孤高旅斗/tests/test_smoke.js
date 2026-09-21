@@ -141,7 +141,7 @@ check("类型不匹配被拒", P.equipSkill("basic", "windBlade").ok === false);
 // 复原默认配装
 P.equipSkill("basic", "slash"); P.equipSkill("skill1", null); P.equipSkill("skill2", null); P.equipSkill("ult", null);
 
-console.log("\n=== 5. 巨龙格斗 · 普通模式通关奖励 4 金币 ===");
+console.log("\n=== 5. 闯关模式 · 普通模式通关奖励 4 金币 ===");
 P.d.coins = 0;
 UI.startDragon(LD.LEVELS[0], LD.DIFF.normal);
 check("战斗开始", B.mode === "dragon" && B.state === "countdown", B.state);
@@ -166,9 +166,9 @@ check("触发通关结算", B.state === "over", B.state);
 check("普通通关 +4 金币", P.d.coins === 4, "金币=" + P.d.coins);
 check("进度记录了普通通关", P.cleared(1, "normal") === true);
 
-console.log("\n=== 6. 巨龙格斗 · 困难模式（数值提升 + 10 金币） ===");
+console.log("\n=== 6. 闯关模式 · 困难模式（数值提升 + 10 金币） ===");
 const hardDragon = LD.Battle.mkDragon({ diff: LD.DIFF.hard });
-check("困难血量 ×1.55", Math.abs(hardDragon.maxHp / LD.DRAGON.hp - 1.55) < 0.01, hardDragon.maxHp + " vs " + LD.DRAGON.hp);
+check("困难血量 ×2.0（v2.5：困难 = 普通 2 倍）", Math.abs(hardDragon.maxHp / LD.DRAGON.hp - 2.0) < 0.01, hardDragon.maxHp + " vs " + LD.DRAGON.hp);
 check("困难伤害 ×1.4", hardDragon.dmgM === 1.4);
 check("困难出手更频繁（CD 缩短）", hardDragon.rateM < 1, "rateM=" + hardDragon.rateM.toFixed(3));
 const dmgNormalSrc = { kind: "dragon", side: 1, dmgM: 1 };

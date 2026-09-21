@@ -290,17 +290,25 @@
       '</ul>',
       '<h3>关卡与金币</h3>',
       '<ul>',
-      '<li>单人「巨龙格斗」为关卡制，每关有普通 / 困难两档。困难模式怪物血更厚、更疼、出手更频繁。</li>',
-      '<li>单人「巨龙格斗」普通通关 <b>+4 金币</b>，困难通关 <b>+10 金币</b>；'
+      '<li>单人「闯关模式」为关卡制，每关有普通 / 困难两档。困难模式怪物血更厚、更疼、出手更频繁。</li>',
+      '<li>单人「闯关模式」普通通关 <b>+4 金币</b>，困难通关 <b>+10 金币</b>；'
       + '<b>人机对战</b>胜利普通 <b>+6 金币</b>、困难 <b>+12 金币</b>（三局两胜整局结算）。</li>',
       '<li>部件（头 / 上身 / 下身）与普攻 / 技能均 <b>6 金币</b>，大招 <b>10 金币</b>。</li>',
       '</ul>',
-      '<h3>三种对战模式（单人与联机都可选）</h3>',
+      '<h3>四种对战模式（单人与联机都可选）</h3>',
       '<ul>',
       '<li><b>乱斗模式</b>：所有人互相为敌，最后站着的赢下回合。</li>',
       '<li><b>阵营模式</b>：红黄蓝绿四队，同队之间互不造成伤害（名字前有队伍色点），最后只剩一个阵营时获胜；全同阵营不能开局。</li>',
-      '<li><b>霸主争霸</b>：巨龙同场混战。击败巨龙会爆出<b>能量石</b>并飞向随机位置，第一个抢到的人成为<b>霸主</b>：血量上限与当前血量 ×1.5、头顶加皇冠，其他人机的仇恨会转向霸主；霸主阵亡后石头掉回场上重新争夺。</li>',
+      '<li><b>霸主争霸</b>：巨龙同场混战。击败巨龙会爆出<b>能量石</b>并飞向随机位置，第一个抢到的人成为<b>霸主</b>：血量上限与当前血量 ×1.5、头顶加皇冠，其他人机的仇恨会转向霸主；霸主阵亡后能量石直接消散，不再掉落。</li>',
+      '<li><b>天外来物</b>：开局只有普攻，技能与大招全靠天上降落。每 10 秒落一个技能、每 20 秒落一个大招（降落 2 秒后可拾取），碰到即装备；K/L 两格满了就按键置换，被换下的技能留在原地（按键先照常出手，0.3 秒后完成置换）。最后活着的人获胜。AI 也会捡。</li>',
       '<li>单人「勇者格斗」就是角色卡房间：第一张卡是你（可直接换装扮 / 技能），后面的人机卡可增删（最多 3 个）、可选难度（木桩 / 普通 / 困难）与配装。</li>',
+      '</ul>',
+      '<h3>关卡（怪物规格：1 普攻 + 2 技能 + 1 大招）</h3>',
+      '<ul>',
+      '<li><b>第 1 关 熔核巨龙</b>：火球 / 突刺爪击 / 爆裂火焰。</li>',
+      '<li><b>第 2 关 神秘黑侠客</b>：飞镖 / 暗影分身（同血量同外形，打它白费）/ 突袭三连斩 / 螺旋手里剑（吸引 + 持续伤害）。</li>',
+      '<li><b>第 3 关 西部快枪手</b>：全程 1s 快枪 / 炸弹投掷 / 连环十响 / 8 秒隐身（隐身期间照常开枪且不现形）。</li>',
+      '<li>困难模式：怪物血量为普通的 <b>2 倍</b>，技能释放频率更高，伤害 ×1.4。</li>',
       '</ul>',
       '<h3>联机方法（2-4 人）</h3>',
       '<ul>',
@@ -478,8 +486,8 @@
   UI.startDragon = function (level, diff) {
     const hero = B.mkHero(0, { x: C.W * 0.26, y: C.H * 0.56, look: P.look(), loadout: P.d.loadout, name: P.displayName(), energy: 0 });
     hero.ctrl = ctrl;
-    const dragon = B.mkDragon({ diff });
-    B.setup({ mode: "dragon", diff, level, fighters: [hero, dragon], theme: { top: "#1a1226", bottom: "#08060f", grid: "rgba(251,113,133,.35)", moon: "rgba(251,146,60,.22)" } });
+    const boss = B.mkBoss(level.boss, { diff });
+    B.setup({ mode: "dragon", diff, level, fighters: [hero, boss], theme: { top: "#1a1226", bottom: "#08060f", grid: "rgba(251,113,133,.35)", moon: "rgba(251,146,60,.22)" } });
     B.onEnd = win => UI.endDragon(win, level, diff);
     UI.enterGame();
   };
@@ -691,6 +699,18 @@
     go("btnPauseRoom", () => UI.backToRoom());
     go("btnPauseMenu", () => UI.quitGame());
     go("btnMute", () => { Audio2.muted = !Audio2.muted; $("btnMute").textContent = Audio2.muted ? "🔇 静音" : "🔊 音效"; });
+
+    /* 主菜单右上角：背景音乐开关（状态写进存档，下次启动保持一致） */
+    const bgmBtn = $("btnBgm");
+    if (bgmBtn && LD.BGM) {
+      LD.BGM.applyProfile();                     // Profile 已在本函数之前的 boot 里 load 过
+      const paint = () => {
+        bgmBtn.textContent = LD.BGM.label();
+        bgmBtn.classList.toggle("off", !LD.BGM.isOn());
+      };
+      paint();
+      bgmBtn.onclick = () => { LD.BGM.toggle(); paint(); };
+    }
 
     $("codeInput").addEventListener("input", e => { e.target.value = e.target.value.replace(/\D/g, "").slice(0, 4); });
     $("codeInput").addEventListener("keydown", e => { if (e.key === "Enter") $("btnJoin").onclick(); });

@@ -40,6 +40,12 @@ window.LD_BALANCE = {
     cdSkill: 8        // 挡下技能或大招后的冷却（秒）
   },
 
+  /* ---- 难度（v2.5：困难 = 血量 2 倍 + 出手频率更高） ---- */
+  diff: {
+    normal: { hpM: 1.00, dmgM: 1.00, rateM: 1.00 },
+    hard:   { hpM: 2.00, dmgM: 1.40, rateM: 1.60 }
+  },
+
   /* ---- 巨龙（人机 boss，v2.3 全面削弱） ---- */
   dragon: {
     hp: 100,
@@ -52,12 +58,44 @@ window.LD_BALANCE = {
     //        爆裂火焰：warn 火柱落地前预警时长（加长让人能躲）
   },
 
+  /* ---- 神秘黑侠客（第 2 关，v2.5 新增） ---- */
+  BOSS: {
+    ninja: {
+      hp: 150, speedMul: 1.08,
+      basic:  { cd: 1.30, dmg: 9, speed: 700, r: 9, life: 2.2 },              // 飞镖（远程普攻）
+      skill1: { cd: 10.0, dur: 6.0 },                                         // 暗影分身：同血量同外形，6s 后消失
+      skill2: { cd: 7.0, dmg: 12, windup: 0.4, hits: 3, gap: 0.17, reach: 96 },  // 突袭：闪现 + 0.4s 蓄力 + 三连斩
+      ult:    { cd: 20.0, ultFirst: 10, dmg: 12, tick: 0.35,                  // 螺旋手里剑：中速巨大蓝球
+                speed: 250, r: 54, life: 4.5, pull: 130, pullR: 175 }         //   中度吸引 + 每段 12 伤
+    },
+    gun: {
+      hp: 190, speedMul: 1.05,
+      basic:  { cd: 1.00, dmg: 8, speed: 860, r: 7, life: 1.5 },              // 快枪：全程 1s 一枪
+      skill1: { cd: 6.00, dmg: 22, fuse: 1.05, boomR: 112 },                  // 炸弹投掷（朝玩家位置）
+      skill2: { cd: 8.00, dmg: 7, n: 10, gap: 0.07, spread: 0.15, speed: 900, r: 6, life: 1.3 },  // 连环十响
+      ult:    { cd: 26.0, ultFirst: 12, dur: 8.0 }                            // 幻影隐身：8s 隐身且攻击不现形
+    }
+  },
+
+  /* ---- 天外来物（掉落模式） ---- */
+  gifts: {
+    skillEvery: 10,    // 每 10s 降落一个技能
+    ultEvery: 20,      // 每 20s 降落一个大招
+    firstSkill: 3,     // 首个技能掉落延迟
+    firstUlt: 8,       // 首个大招掉落延迟
+    fallT: 2.0,        // 降落耗时 2 秒
+    maxSkill: 3,       // 场上最多 3 个技能掉落物
+    maxUlt: 2,         // 场上最多 2 个大招掉落物
+    pickR: 30,         // 拾取半径（额外加在人物半径上）
+    swapDelay: 0.3     // 置换延迟：先出手，0.3s 后完成置换
+  },
+
   /* ---- 技能表（只列常用项；想调其他项照同样格式加进去即可） ---- */
   skills: {
     slash:      { cd: 1.6, dmg: 14 },                                          // 斩击（近战普攻）
     parry:      { cd: 0.4, dmg: 8 },                                           // 格挡（v2.0 起属于普攻，装在 J 槽）
     fireball:   { cd: 2.10, dmg: 12, proj: { speed: 640, r: 9, life: 2.4 } },  // 远程普攻
-    pistol:     { cd: 5.0, dmg: 13, proj: { speed: 820, r: 7, life: 1.6 } },   // 手枪（远程直线普攻）
+    pistol:     { cd: 3.0, dmg: 13, proj: { speed: 820, r: 7, life: 1.6 } },   // 手枪（远程直线普攻）
     rock:       { cd: 4.0, dmg: 8, stun: 0.4, proj: { speed: 640, r: 12, life: 2.2 } },  // 石头（命中眩晕 0.4s）
     mace:       { cd: 5.0, dmg: 24, stun: 0.4, reach: 76, half: 1.15, windup: 0.3 },  // 狼牙棒（命中眩晕 0.4s）
     dashSlash:  { cd: 4.0, dmg: 18, dash: 350, invuln: 0.26 },                 // 位移斩（350 距离 / CD 4s）
@@ -89,7 +127,9 @@ window.LD_BALANCE = {
     prison:     { dur: 4.0, zoneR: 180, formT: 0.8 },                          // 绝望囚牢（范围缩小，0.8s 成形，无吸附）
     eatDust:    { back: 3.0 },                                                 // 败者食尘（大招：回血 + 回到 3s 前的位置）
     waterOrbs:  { dur: 5.0, dmg: 10, tick: 0.45, absorbMax: 12,                // 水之呼吸（每球可吸收 12 伤害，吸满即碎）
-                  orbR: 17, orbitR: 78, spd: 2.6 },
-    kingDrop:   { dmg: 50, rise: 1.0, boomR: 170, stun: 1.0 }                  // 王从天降（大招：二段落地 50 伤 + 1s 眩晕）
+                  orbR: 24, orbitR: 78, spd: 2.6, hitPad: 32 },                // 球半径 24、判定再补 32（判定放宽）
+    kingDrop:   { dmg: 50, rise: 1.0, boomR: 170, stun: 1.0 },                 // 王从天降（大招：二段落地 50 伤 + 1s 眩晕，飞起期间自身定身）
+    shuriken:   { cd: 1.0, dmg: 12, tick: 0.35, speed: 250, r: 54, life: 4.5,  // 螺旋手里剑（勇者大招：中速巨球 + 吸引 + 每段 12 伤）
+                  pull: 130, pullR: 175 }
   }
 };

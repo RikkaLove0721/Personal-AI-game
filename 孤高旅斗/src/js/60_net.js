@@ -155,7 +155,8 @@
       SLOTS.map(k => (f.slot && f.slot[k] && f.slot[k].on) ? (f.slot[k].phase || "1") : ""),
       f.kind === "dragon" ? [f.mode, r(f.charge, 2), r(f.chargeMax, 2), f.rageStage || 0] : null,
       r(f.blind || 0, 2), f.overlord ? 1 : 0, f.team == null ? -1 : f.team, f.lock == null ? -1 : f.lock,
-      r(f.stealthT || 0, 2)
+      r(f.stealthT || 0, 2),
+      f.kind === "hero" ? [f.loadout.skill1 || "", f.loadout.skill2 || "", f.loadout.ult || ""].join("|") : ""
     ];
     function r(v, n) { return n ? Math.round(v * Math.pow(10, n)) / Math.pow(10, n) : Math.round(v); }
   }
@@ -177,7 +178,9 @@
       z: B.zones.map(z => [z.type, Math.round(z.x || z.x0 || 0), Math.round(z.y || z.y0 || 0), Math.round(z.r || z.w || 0),
         Math.round(z.life * 100) / 100, Math.round((z.max || 0) * 100) / 100, z.warn || 0,
         Math.round(z.x0 || 0), Math.round(z.y0 || 0), Math.round(z.x1 || 0), Math.round(z.y1 || 0)]),
-      sc: B.score.slice(), rw: B.roundWinner, mw: B.matchWinner
+      sc: B.score.slice(), rw: B.roundWinner, mw: B.matchWinner,
+      g: (B.gifts || []).map(g => [Math.round(g.x), Math.round(g.y), g.kind === "ult" ? 1 : 0, g.id,
+        Math.round((g.t || 0) * 100) / 100, g.landed ? 1 : 0, Math.round((g.born || 0) * 100) / 100])
     };
   };
 
@@ -206,6 +209,12 @@
     f.team = a[30] == null ? -1 : a[30];
     f.lock = a[31] == null ? -1 : a[31];
     f.stealthT = a[32] || 0;
+    if (a[33] != null && a[33] !== "" && f.kind === "hero" && f.loadout) {
+      const parts = a[33].split("|");                 // 天外来物：房主权威换装后同步到客机
+      if (f.loadout.skill1 !== (parts[0] || null)) f.loadout.skill1 = parts[0] || null;
+      if (f.loadout.skill2 !== (parts[1] || null)) f.loadout.skill2 = parts[1] || null;
+      if (f.loadout.ult !== (parts[2] || null)) f.loadout.ult = parts[2] || null;
+    }
     if (!wasDead && f.dead) { LD.FX.shake(14); LD.FX.burst(f.x, f.y - 26, 34, ["#fff", "#fb7185"], { speed: 340, life: 0.9 }); }
   }
 
@@ -231,6 +240,10 @@
       this._lastRW = s.rw;
     }
     s.f.forEach((a, i) => { if (B.fighters[i]) unpackFighter(B.fighters[i], a); });
+    // 天外来物掉落物：直接重建（拾取与置换由房主权威结算，客机只管渲染）
+    B.gifts = (s.g || []).map(a => ({
+      x: a[0], y: a[1], kind: a[2] ? "ult" : "skill", id: a[3], t: a[4], landed: !!a[5], born: a[6]
+    }));
     // 弹道：直接重建
     B.projs = s.p.map(a => ({
       x: a[0], y: a[1], vx: a[2], vy: a[3], r: a[4], life: a[5], maxLife: a[10], side: a[6], reflect: !!a[7],
@@ -244,6 +257,10 @@
       if (a[0] === "beam") return { type: "beam", x0: a[7], y0: a[8], x1: a[9], y1: a[10], w: a[3], life: a[4], max: a[5], color: "#67e8f9", owner: B.fighters[0] };
       const z = { type: a[0], x: a[1], y: a[2], r: a[3], life: a[4], max: a[5], warn: a[6], color: "#fb923c", owner: B.fighters[1] || B.fighters[0] };
       if (z.type === "pillar") z.hit = a[4] > (a[6] || 0);
+      if (z.type === "water") {                      // 判定补偿走本地配置，保证与房主端一致
+        const sk = LD.skill && LD.skill("waterOrbs");
+        z.hitPad = sk && sk.hitPad != null ? sk.hitPad : 32;
+      }
       return z;
     });
   };

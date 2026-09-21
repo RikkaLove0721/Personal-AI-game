@@ -22,7 +22,8 @@
       loadout: Object.assign({}, LD.DEFAULT_LOADOUT),
       progress: {},                        // "1_normal": true
       cheat: 0,
-      aiLoadout: null                      // 自定义的电脑对手配装
+      aiLoadout: null,                     // 自定义的电脑对手配装
+      bgmOn: true                          // 背景音乐开关（主菜单右上角可切换）
     };
   }
 

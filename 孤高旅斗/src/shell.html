@@ -81,6 +81,12 @@ h1{font-size:34px;letter-spacing:8px;background:linear-gradient(90deg,#22d3ee,#a
 h2{font-size:22px;letter-spacing:3px;margin-bottom:4px}
 .sub{color:var(--dim);font-size:12.5px;margin-top:6px;line-height:1.7;text-align:center;max-width:660px}
 .hr{width:100%;max-width:720px;height:1px;background:var(--line);margin:14px 0}
+/* 主菜单右上角：背景音乐开关 */
+.bgmSwitch{position:absolute;top:14px;right:16px;z-index:2;cursor:pointer;user-select:none;
+  border:1px solid var(--line);background:rgba(20,28,52,.78);color:var(--txt);
+  border-radius:20px;padding:6px 14px;font-size:12px;letter-spacing:1px;transition:.15s}
+.bgmSwitch:hover{background:rgba(40,56,100,.92);border-color:rgba(120,160,255,.5)}
+.bgmSwitch.off{color:var(--dim);opacity:.75}
 
 .grid{display:grid;gap:12px;width:100%;max-width:760px}
 .g2{grid-template-columns:1fr 1fr}
@@ -253,11 +259,12 @@ canvas.pv{width:64px;height:80px;display:block}
 
   <!-- 主菜单 -->
   <div class="ov" id="ovMenu">
+    <div class="bgmSwitch" id="btnBgm" title="背景音乐开关（随机播放，低音量）">🎵 音乐开</div>
     <h1>孤高旅斗</h1>
     <div class="sub" id="menuVer">v__VERSION__ · 一人一剑，向死而生</div>
     <div class="hr"></div>
     <div class="grid g3" style="max-width:760px">
-      <div class="card" id="mSolo"><div class="t">🗺️ 单人游戏</div><div class="d">关卡征伐，巨龙格斗与勇者格斗</div></div>
+      <div class="card" id="mSolo"><div class="t">🗺️ 单人游戏</div><div class="d">关卡征伐，闯关模式与勇者格斗</div></div>
       <div class="card" id="mMulti"><div class="t">🌐 多人游戏</div><div class="d">局域网 2-4 人，房间内自由换装与编排人机</div></div>
       <div class="card" id="mHelp"><div class="t">📖 游戏帮助</div><div class="d">玩法、技能、联机方法全在这里</div></div>
       <div class="card" id="mSkin"><div class="t">🎨 皮肤商店</div><div class="d">头部 / 上身 / 下身，自由搭配</div></div>
@@ -274,7 +281,7 @@ canvas.pv{width:64px;height:80px;display:block}
     <div class="sub">两个模式，技能与皮肤通用</div>
     <div class="hr"></div>
     <div class="grid g2" style="max-width:640px">
-      <div class="card" id="sDrag"><div class="t">🐉 巨龙格斗</div><div class="d">关卡制讨伐战。普通 / 困难两档难度，通关得金币</div></div>
+      <div class="card" id="sDrag"><div class="t">🗺️ 闯关模式</div><div class="d">关卡制讨伐战。普通 / 困难两档难度，通关得金币</div></div>
       <div class="card" id="sDuel"><div class="t">🤖 勇者格斗</div><div class="d">角色卡房间：编排人机、选模式，乱斗 / 阵营 / 霸主</div></div>
     </div>
   </div>
@@ -283,8 +290,8 @@ canvas.pv{width:64px;height:80px;display:block}
   <div class="ov hide" id="ovLevels">
     <div class="back" data-back="ovSolo">‹ 返回</div>
     <div class="coinbar"><i class="coin"></i><span class="coinNum">0</span></div>
-    <h2>巨龙格斗 · 关卡</h2>
-    <div class="sub">困难模式的巨龙伤害、血量、攻击频率全面提升，奖励也更高</div>
+    <h2>闯关模式 · 关卡</h2>
+    <div class="sub">困难模式的怪物伤害、血量、攻击频率全面提升，奖励也更高</div>
     <div class="hr"></div>
     <div class="grid g2" id="levelGrid" style="max-width:700px"></div>
   </div>

@@ -306,7 +306,7 @@
 
 #### 版本号索引
 
-- 当前版本: v2.0
+- 当前版本: v2.5.1
 - 版本号出现位置:
   - src/VERSION(源)
   - src/js/00_version.js(构建时生成)
@@ -318,11 +318,13 @@
 #### 快捷命令
 
 ```
-python scripts/build.py --version 1.4.1      构建(显式版本号, 不自动迭代)
+python scripts/build.py --version 2.5.1      构建(显式版本号, 不自动迭代)
 python scripts/build.py --keep               调试构建(版本号不变)
 node tests/test_smoke.js                     集成自测
+node tests/test_v20.js                       v2.0 起新特性自测
 node tests/test_net.js                       联机自测
 node tests/dodge_check.js                    闪避与激光波回归
+node tests/shield_dodge_check.js             共享 CD 与岩土盾回归
 python src/server/孤高旅斗.py --server        开发态开服
 node tests/srv_check.js 8123                 服务器自测
 ```

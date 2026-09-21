@@ -34,7 +34,7 @@
    * ========================================================== */
   B.mkHero = function (side, opts) {
     opts = opts || {};
-    const lo = opts.loadout || LD.DEFAULT_LOADOUT;
+    const lo = Object.assign({}, opts.loadout || LD.DEFAULT_LOADOUT);   // 复制：模式内改配装（如天外来物清空技能）不污染存档
     return {
       kind: "hero", side, id: side,
       x: opts.x, y: opts.y, r: 16, vx: 0, vy: 0,
@@ -89,6 +89,34 @@
     };
   };
 
+  /* ----------------------------------------------------------
+   * v2.5 通用 BOSS 工厂：巨龙走旧通道；人形 BOSS（黑侠客 / 快枪手）
+   * 沿用勇者骨架（复用隐身 / 炸弹 / AI 全套机制），配装为 boss 专属技能。
+   * ---------------------------------------------------------- */
+  B.mkBoss = function (key, opts) {
+    opts = opts || {};
+    const cfg = LD.BOSS && LD.BOSS[key];
+    if (!cfg) return this.mkDragon(opts);          // 未知 key 兜底回巨龙
+    let diff = opts.diff || LD.DIFF.normal;
+    if (typeof diff === "string") diff = LD.DIFF[diff] || LD.DIFF.normal;
+    const hp = Math.round(cfg.hp * diff.hpM);
+    const f = this.mkHero(1, {
+      x: opts.x != null ? opts.x : C.W * 0.70, y: opts.y != null ? opts.y : C.H * 0.54,
+      look: cfg.look, loadout: cfg.loadout || { basic: "n_shuriken", skill1: "n_clone", skill2: "n_raid", ult: "n_ult" },
+      name: cfg.name
+    });
+    f.bossKind = key;
+    f.isBoss = true;
+    f.side = 1; f.id = 1;
+    f.r = 18;                                      // 比勇者略大一圈，有 BOSS 气场
+    f.hp = hp; f.maxHp = hp;
+    f.speedMul = cfg.speedMul || 1;
+    f.team = 1;                                    // 与自己召唤的分身同阵营（互不伤害、索敌跳过）
+    f.cd.ult = (cfg.ult && cfg.ult.ultFirst) || 10;
+    if (LD.AI && LD.AI.setupBoss) LD.AI.setupBoss(f, diff);
+    return f;
+  };
+
   /* ==========================================================
    *  初始化
    * ========================================================== */
@@ -104,6 +132,7 @@
     this.fighters.forEach(f => { f.id = f.side; if (f.team == null) f.team = -1; });
     if (cfg.teams) cfg.teams.forEach((t, i) => { if (this.fighters[i]) this.fighters[i].team = t; });
     this.projs = []; this.zones = []; this.ev = []; this.stone = null;
+    this.gifts = []; this.giftT = 0; this.giftUltT = 0;
     this.t = 0; this.score = this.fighters.map(() => 0); this.round = 1; this.matchWinner = -1; this.roundWinner = -1;
     this.countdown = this.mode === "dragon" ? 1.6 : 2.0;
     this.state = "countdown";
@@ -155,6 +184,8 @@
 
   B.resetRound = function (keepScore) {
     /* 开局位置随机：勇者出生点在场地中下部随机抽取，彼此保持最小间距（巨龙保留原出生点） */
+    for (let i = this.fighters.length - 1; i >= 0; i--)   // 上一局的分身不带入新一局
+      if (this.fighters[i].isClone) this.fighters.splice(i, 1);
     const placed = [];
     this.fighters.forEach(f => {
       if (f.kind === "hero") {
@@ -171,14 +202,18 @@
       f.vx = 0; f.vy = 0; f.moving = false;
       f.shield = 0; f.shieldT = 0; f.hitFlash = 0; f.blind = 0; f.slowT = 0;
       f.stealthT = 0; f.silenceT = 0; f.knockLeft = 0; f.knockWall = false;
+      f.stealthKeep = false; f._ghostNoFlash = false;
+      f.giftPending = { skill: null, ult: null }; f.giftSwap = null; f.giftTarget = null;
       f.kingMark = null; f.hpHist = [{ t: this.t || 0, hp: f.hp }];
       f.buff = { rage: 0, thousand: 0, rush: 0 };
       f.meditate = 0; f.parryT = 0; f.atkAnim = 0;
       if (f.kind === "hero") f.energy = 0;
       if (f.cd) {
         f.cd.basic = 0; f.cd.skill1 = 0; f.cd.skill2 = 0; f.cd.dodge = 0;
-        /* 勇者开局大招短延迟；巨龙用 ultFirst（大幅延后首次开大） */
-        f.cd.ult = f.kind === "dragon" ? ((LD.DRAGON.ult && LD.DRAGON.ult.ultFirst) || 12) : 1.5;
+        /* 勇者开局大招短延迟；巨龙 / BOSS 用 ultFirst（大幅延后首次开大） */
+        const bossCfg = f.isBoss && f.bossKind && LD.BOSS ? LD.BOSS[f.bossKind] : null;
+        f.cd.ult = f.kind === "dragon" ? ((LD.DRAGON.ult && LD.DRAGON.ult.ultFirst) || 12)
+          : bossCfg && bossCfg.ult ? (bossCfg.ult.ultFirst || 10) : 1.5;
       }
       Object.keys(f.slot || {}).forEach(k => { f.slot[k] = { on: false, phase: "", t: 0, d: {} }; });
       f.lock = -1;                                        // 索敌锁定每回合重置
@@ -187,6 +222,19 @@
     });
     this.projs = []; this.zones = [];
     this.stone = null;                                  // 能量石（霸主争霸）
+    this.gifts = [];                                    // 天外来物掉落物
+    // 天外来物：开局清空技能与大招，只留普攻；重置掉落计时
+    if (this.rule === "gifts") {
+      const G = LD.GIFTS || {};
+      this.giftT = G.firstSkill != null ? G.firstSkill : 3;
+      this.giftUltT = G.firstUlt != null ? G.firstUlt : 8;
+      this.fighters.forEach(f => {
+        if (f.kind !== "hero") return;
+        f.loadout = { basic: f.loadout.basic, skill1: null, skill2: null, ult: null };
+        f.giftPending = { skill: null, ult: null }; f.giftSwap = null;
+        ["skill1", "skill2", "ult"].forEach(k => { if (f.slot) f.slot[k] = { on: false, phase: "", t: 0, d: {} }; });
+      });
+    }
     this.dragonCorpseT = 0;
     this.roundT = (this.mode === "dragon" || this.rule === "overlord") ? 0 : 75;   // 每回合重置限时
     this.countdown = 2.0; this.state = "countdown"; this.roundWinner = -1;
@@ -254,6 +302,12 @@
     o = o || {};
     if (!tgt || tgt.dead || !(amt > 0)) return 0;   // !(amt>0) 同时挡住 NaN / 负数 / 0
     if (this.sameTeam(src, tgt)) return 0;          // 阵营模式：同阵营之间不造成伤害
+    // 黑侠客分身：打在分身上的伤害全部白费（无敌但有时限）
+    if (tgt.isClone) {
+      FX.float(tgt.x + rand(-8, 8), tgt.y - 46, "无效", "#9fb3dd", 13);
+      this.ev.push(["t", tgt.x, tgt.y - 46, "无效", "#9fb3dd"]);
+      return 0;
+    }
     if (tgt.invuln > 0) { this.ev.push(["t", tgt.x, tgt.y - 40, "闪", "#9fb3dd"]); return 0; }
 
     // ---- 格挡判定（挡普攻 2 秒 CD；挡技能 / 大招 8 秒 CD） ----
@@ -421,6 +475,8 @@
     FX.shake(16);
     if (by && by.kind === "hero") by.kills++;
     this.ev.push(["k", f.x, f.y - 26]);
+    // 分身：被打散只是消失，不参与任何结算（不会触发回合胜负）
+    if (f.isClone) { f.cloneT = Math.min(f.cloneT != null ? f.cloneT : 0, 0.9); return; }
     if (this.mode === "dragon") {
       if (f.side === 0) this.finish(false);
       else this.finish(true);
@@ -428,8 +484,13 @@
     }
     // 霸主争霸：巨龙被击败 → 爆出能量石（尸体 3 秒后消失）
     if (this.rule === "overlord" && f.kind === "dragon") { this.spawnStone(f.x, f.y); this.dragonCorpseT = 0; return; }
-    // 霸主争霸：霸主阵亡 → 能量石掉回场上，重新争夺
-    if (this.rule === "overlord" && f.overlord) { f.overlord = false; this.spawnStone(f.x, f.y); }
+    // 霸主争霸：霸主阵亡 → 能量石直接消散（v2.5：不再掉回场上，避免强者恒强）
+    if (this.rule === "overlord" && f.overlord) {
+      f.overlord = false;
+      FX.ring(f.x, f.y - 26, 110, "rgba(252,211,77,.9)", 6, 0.6);
+      FX.float(f.x, f.y - 72, "能量石消散", "#fcd34d", 17);
+      this.ev.push(["h", f.x, f.y - 72, "能量石消散", "#fcd34d"]);
+    }
     // 霸主争霸：场上只剩一名存活勇者（巨龙不算）时回合结束
     if (this.rule === "overlord") {
       const alive = this.fighters.filter(x => !x.dead && x.kind === "hero");
@@ -508,6 +569,132 @@
     FX.flash(0.22, "252,211,77"); FX.shake(14);
     FX.float(f.x, f.y - 74, "霸主诞生！", "#fcd34d", 20);
     this.ev.push(["h", f.x, f.y - 74, "霸主诞生！", "#fcd34d"]);
+  };
+
+  /* ==========================================================
+   *  天外来物：随机降落技能 / 大招掉落物（v2.5）
+   *  - 每 10s 掉一个技能、每 20s 掉一个大招，降落 2s 后可拾取
+   *  - 拾取：先装 skill1（K）再 skill2（L），大招装 ult（O）
+   *  - 槽位满 → 碰到时挂 pending，玩家按对应键后先照常出手，0.3s 后置换，
+   *    被换下的技能以掉落物形式留在原地
+   *  - 场上最多 maxSkill 个技能 / maxUlt 个大招，超限最旧的消失
+   * ========================================================== */
+  B.spawnGift = function (kind, id, x, y, landed) {
+    const G = LD.GIFTS || {};
+    const g = {
+      kind, id: id || this.randGiftId(kind),
+      x: x != null ? x : rand(70, C.W - 70),
+      y: y != null ? y : rand(C.H * 0.40, C.H - 60),
+      t: landed ? (G.fallT || 2) : 0, landed: !!landed, born: this.t
+    };
+    this.gifts.push(g);
+    if (landed) FX.ring(g.x, g.y, 44, kind === "ult" ? "rgba(251,191,36,.9)" : "rgba(103,232,249,.9)", 4, 0.5);
+    return g;
+  };
+
+  B.randGiftId = function (kind) {
+    const pool = LD.skillsBy(kind === "ult" ? "ult" : "skill") || [];
+    return pool.length ? pool[(Math.random() * pool.length) | 0].id : null;
+  };
+
+  B.trimGifts = function (kind, except) {
+    const G = LD.GIFTS || {};
+    const cap = kind === "ult" ? (G.maxUlt != null ? G.maxUlt : 2) : (G.maxSkill != null ? G.maxSkill : 3);
+    const same = this.gifts.filter(g => g.kind === kind && g !== except);
+    if (same.length <= cap) return;
+    same.sort((a, b) => a.born - b.born);
+    const overflow = same.slice(0, same.length - cap);
+    for (const g of overflow) {
+      const i = this.gifts.indexOf(g);
+      if (i >= 0) { FX.burst(g.x, g.y - 12, 10, ["#9fb3dd", "#fff"], { speed: 130 }); this.gifts.splice(i, 1); }
+    }
+  };
+
+  B.updateGifts = function (dt) {
+    const G = LD.GIFTS || {};
+    // 计时刷落
+    this.giftT = (this.giftT == null ? 3 : this.giftT) - dt;
+    this.giftUltT = (this.giftUltT == null ? 8 : this.giftUltT) - dt;
+    if (this.giftT <= 0) { this.spawnGift("skill"); this.trimGifts("skill"); this.giftT = G.skillEvery != null ? G.skillEvery : 10; }
+    if (this.giftUltT <= 0) { this.spawnGift("ult"); this.trimGifts("ult"); this.giftUltT = G.ultEvery != null ? G.ultEvery : 20; }
+    // 1) 先清理失效 / 离开范围的待置换（技能与大招分别判定）
+    //    必须在拾取之前跑：否则站在新掉落物上时，同类型还挂着的那颗「已消失的旧掉落物」会
+    //    挡住新掉落物的挂起，而旧的在同一帧才被清掉 —— 表现为拾取失灵，要走出再走回来才恢复。
+    this.fighters.forEach(f => {
+      const pend = f.giftPending;
+      if (!pend) return;
+      ["skill", "ult"].forEach(pk => {
+        const p = pend[pk];
+        if (!p) return;
+        const g = p.g;
+        if (!g || this.gifts.indexOf(g) < 0) { pend[pk] = null; return; }
+        if (Math.hypot(f.x - g.x, f.y - g.y) > f.r + (G.pickR != null ? G.pickR : 30) + 26) pend[pk] = null;
+      });
+    });
+    // 2) 推进每颗掉落物：降落 + 拾取 / 挂待置换
+    //    （技能与大招各挂一个：两者用不同的按键，站在两个掉落物中间时不该互相顶掉）
+    for (let i = this.gifts.length - 1; i >= 0; i--) {
+      const g = this.gifts[i];
+      if (!g.landed) {
+        g.t += dt;
+        if (g.t % 0.08 < dt) FX.trail(g.x + rand(-6, 6), g.y - 18 - (1 - g.t / (G.fallT || 2)) * 130, g.kind === "ult" ? "#fcd34d" : "#67e8f9", 4, 0.35);
+        if (g.t >= (G.fallT || 2)) { g.landed = true; FX.ring(g.x, g.y, 40, g.kind === "ult" ? "rgba(252,211,77,.95)" : "rgba(103,232,249,.95)", 4, 0.45); }
+        continue;                            // 没落地不能拾取
+      }
+      for (const f of this.fighters) {
+        if (f.dead || f.kind !== "hero" || f.isClone) continue;
+        if (Math.hypot(f.x - g.x, f.y - g.y) > f.r + (G.pickR != null ? G.pickR : 30)) continue;
+        const pk = g.kind === "ult" ? "ult" : "skill";
+        const pend = f.giftPending || (f.giftPending = { skill: null, ult: null });
+        if (pend[pk] && pend[pk].g === g) continue;             // 已经在等按键置换
+        if (pk === "ult") {
+          if (!f.loadout.ult) this.equipGift(f, "ult", g);
+          else if (!pend.ult) pend.ult = { g, kind: "ult" };
+        } else {
+          if (!f.loadout.skill1) this.equipGift(f, "skill1", g);
+          else if (!f.loadout.skill2) this.equipGift(f, "skill2", g);
+          else if (!pend.skill) pend.skill = { g, kind: "skill" };
+        }
+        break;
+      }
+    }
+    // 置换倒计时（0.3s 延迟：按键瞬间先照常出手，这里只负责到点换装）
+    this.fighters.forEach(f => {
+      if (!f.giftSwap) return;
+      f.giftSwap.t -= dt;
+      if (f.giftSwap.t > 0) return;
+      const { slot, drop } = f.giftSwap;
+      f.giftSwap = null;
+      if (!drop || this.gifts.indexOf(drop) < 0) return;       // 掉落物已消失（超限被挤掉等）
+      const oldId = f.loadout[slot] || null;
+      const sk = LD.skill(drop.id);
+      f.loadout[slot] = drop.id;
+      f.cd[slot] = 0.5;                                        // 换上的技能给半秒保护 CD，防误触
+      f.slot[slot] = { on: false, phase: "", t: 0, d: {} };
+      const di = this.gifts.indexOf(drop);
+      if (di >= 0) this.gifts.splice(di, 1);
+      FX.ring(f.x, f.y - 26, 60, "#7fe6f7", 4, 0.4);
+      FX.float(f.x, f.y - 64, "装入 " + (sk ? sk.name : "?"), "#7fe6f7", 15);
+      // 被换下的技能留在原地（掉落物位置）
+      if (oldId) {
+        const oldSk = LD.skill(oldId);
+        this.spawnGift(oldSk && oldSk.kind === "ult" ? "ult" : "skill", oldId, drop.x, drop.y, true);
+        this.trimGifts(oldSk && oldSk.kind === "ult" ? "ult" : "skill");
+      }
+    });
+  };
+
+  B.equipGift = function (f, slot, g) {
+    const sk = LD.skill(g.id);
+    const gi = this.gifts.indexOf(g);
+    if (gi >= 0) this.gifts.splice(gi, 1);
+    f.loadout[slot] = g.id;
+    f.cd[slot] = 0.5;
+    f.slot[slot] = { on: false, phase: "", t: 0, d: {} };
+    FX.ring(f.x, f.y - 26, 54, "#7fe6f7", 4, 0.4);
+    FX.burst(g.x, g.y - 14, 14, ["#7fe6f7", "#fff"], { speed: 180 });
+    const slotLab = { skill1: "K", skill2: "L", ult: "O" }[slot];
+    FX.float(f.x, f.y - 64, "获得 " + (sk ? sk.name : "?") + " → " + slotLab, "#7fe6f7", 15);
   };
 
   /* ==========================================================
@@ -1374,7 +1561,8 @@
       for (let i = 0; i < 3; i++) {
         B.zones.push({ type: "water", x: f.x, y: f.y - 26, r: sk.orbR, life: 0, max: sk.dur,
           owner: f, hits: {}, ang0: i * (Math.PI * 2 / 3), orbitR: sk.orbitR, spd: sk.spd,
-          dmg: sk.dmg, tick: sk.tick, abs: 0, absorbMax: sk.absorbMax || 12 });
+          dmg: sk.dmg, tick: sk.tick, abs: 0, absorbMax: sk.absorbMax || 12,
+          hitPad: sk.hitPad != null ? sk.hitPad : 32 });   // v2.4.2 判定放宽：球半径之外再补 hitPad
       }
       FX.ring(f.x, f.y - 26, sk.orbitR + 30, "rgba(103,232,249,.9)", 6, 0.5);
     },
@@ -1425,6 +1613,209 @@
         });
         f.kingMark = null;
         B.endSlot(f, slot, sk.cd);
+      }
+    }
+  };
+
+  /* ==========================================================
+   *  v2.5 BOSS 专属技能（kind:"boss"，不进商店；CD 吃难度 rateM）
+   * ========================================================== */
+  /* ---- 黑侠客：飞镖（远程普攻） ---- */
+  IMPL.n_shuriken = {
+    start(f, slot, sk) {
+      f.atkAnim = 0.22; f.atkDur = 0.22;
+      f.facing = aimAt(f, this);
+      const a = Math.atan2(f.facing.y, f.facing.x);
+      B.spawnProj({
+        x: f.x + Math.cos(a) * 22, y: f.y - 26 + Math.sin(a) * 12,
+        vx: Math.cos(a) * sk.speed, vy: Math.sin(a) * sk.speed,
+        r: sk.r, dmg: sk.dmg, life: sk.life, owner: f,
+        color: "#67e8f9", core: "#e0faff", type: "shuriken", kindTag: "basic", basic: true, trail: true
+      });
+      FX.shake(2);
+      B.endSlot(f, slot, sk.cd * (f.rateM || 1));
+    }
+  };
+
+  /* ---- 黑侠客：暗影分身（同血量同外形，6s 后消散；打在分身上的伤害全部白费） ---- */
+  IMPL.n_clone = {
+    start(f, slot, sk) {
+      const s = f.slot[slot]; s.on = true; s.phase = "cloneCast"; s.t = 0;
+      FX.burst(f.x, f.y - 26, 32, ["#a78bfa", "#334155", "#fff"], { speed: 300 });
+      FX.shake(8);
+      const c = B.mkHero(2, {
+        x: clamp(f.x + rand(-70, 70), 60, C.W - 60),
+        y: clamp(f.y + rand(-50, 50), C.H * 0.36, C.H - 50),
+        look: f.look, name: f.name
+      });
+      c.isClone = true;
+      c.cloneT = sk.dur;
+      c.maxHp = f.maxHp; c.hp = c.maxHp;          // 同血量
+      c.team = f.team;                            // 与本体同阵营：互不伤害、本体索敌跳过分身
+      c.loadout = { basic: f.loadout.basic, skill1: null, skill2: f.loadout.skill2, ult: null };
+      LD.AI.mkBot(c, f.botLevel || "normal");     // 分身也会打人
+      B.fighters.push(c);
+      FX.float(f.x, f.y - 60, "暗影分身！", "#a78bfa", 16);
+      B.endSlot(f, slot, sk.cd * (f.rateM || 1));
+    }
+  };
+
+  /* ---- 黑侠客：突袭（闪现到玩家身旁，0.4s 蓄力后三连斩） ---- */
+  IMPL.n_raid = {
+    start(f, slot, sk) {
+      const s = f.slot[slot]; s.on = true; s.phase = "raidWind"; s.t = 0;
+      s.d.n = 0; s.d.acc = 0;
+      const foe = B.foeOf(f);
+      if (foe) {
+        const ox = f.x, oy = f.y;
+        const a = Math.atan2(f.y - foe.y, f.x - foe.x) || 0;
+        f.x = clamp(foe.x + Math.cos(a) * (foe.r + f.r + 14), 40, C.W - 40);
+        f.y = clamp(foe.y + Math.sin(a) * (foe.r + f.r + 14), C.H * 0.32 + 10, C.H - 44);
+        const dx = foe.x - f.x, dy = foe.y - f.y, dd = Math.hypot(dx, dy) || 1;
+        f.facing = { x: dx / dd, y: dy / dd };
+        FX.burst(ox, oy - 26, 18, ["#a78bfa", "#334155"], { speed: 240 });
+        FX.burst(f.x, f.y - 26, 18, ["#a78bfa", "#fff"], { speed: 240 });
+        FX.ring(f.x, f.y - 26, 70, "rgba(167,139,250,.9)", 4, 0.4);
+        f.invuln = Math.max(f.invuln, sk.windup + 0.1);   // 突袭过程无敌，防止落地即被反杀
+        // 突袭是一次「交出去」的攻击：蓄力 + 三连斩期间自身定身，否则（远程 BOSS 会本能地拉开距离）
+        // 会一边后撤一边挥刀，贴脸的三连斩直接打空。
+        f.root = Math.max(f.root, (sk.windup || 0.4) + (sk.hits || 3) * (sk.gap || 0.17) + 0.15);
+      }
+    },
+    update(f, slot, sk, dt) {
+      const s = f.slot[slot];
+      if (s.phase === "raidWind") {
+        s.t += dt;
+        // 蓄力红光预警：玩家有 0.4s 反应窗口
+        FX.trail(f.x + rand(-18, 18), f.y - 26 + rand(-24, 12), "#f87171", 7, 0.3);
+        if (s.t >= (sk.windup || 0.4)) { s.phase = "raidSlash"; s.t = 0; s.d.acc = 0; s.d.n = 0; FX.shake(8); }
+      } else if (s.phase === "raidSlash") {
+        s.d.acc += dt;
+        if (s.d.n < sk.hits && s.d.acc >= (sk.gap || 0.17)) {
+          s.d.acc = 0; s.d.n++;
+          f.atkAnim = 0.2; f.atkDur = 0.2;
+          f.facing = aimAt(f, this);
+          B.melee(f, { reach: sk.reach || 96, half: 1.25, dmg: sk.dmg, type: "skill", kb: 200 });
+          arcFX(f, "#a78bfa", 92);
+          FX.shake(6);
+          if (s.d.n >= sk.hits) B.endSlot(f, slot, sk.cd * (f.rateM || 1));
+        }
+      }
+    }
+  };
+
+  /* ---- 黑侠客：螺旋手里剑（中速巨大蓝球，中度吸引 + 持续伤害） ---- */
+  IMPL.n_ult = {
+    start(f, slot, sk) {
+      const s = f.slot[slot]; s.on = true; s.phase = "shurikenCast"; s.t = 0;
+      LD.Cine.start(f, sk.name, "", "#38bdf8");
+      const foe = B.foeOf(f);
+      const a = foe ? Math.atan2((foe.y - 26) - (f.y - 26), foe.x - f.x) : 0;
+      B.zones.push({
+        type: "shuriken", x: f.x, y: f.y - 26,
+        vx: Math.cos(a) * sk.speed, vy: Math.sin(a) * sk.speed,
+        r: sk.r, life: 0, max: sk.life, dmg: sk.dmg, tick: sk.tick,
+        pull: sk.pull, pullR: sk.pullR, owner: f, hits: {}, color: "#38bdf8"
+      });
+      FX.shake(10);
+      B.endSlot(f, slot, sk.cd * (f.rateM || 1));
+    }
+  };
+
+  /* ---- 勇者版螺旋手里剑（大招商店）：与大招 IMPL 共用实现，数值走 skills.shuriken ---- */
+  IMPL.shuriken = IMPL.n_ult;
+
+  /* ---- 快枪手：快枪（1s CD 手枪普攻，全程持续） ----
+   * 不能直接复用 IMPL.pistol：手枪读的是 sk.proj.*，而 BOSS 的普攻配置是扁平的
+   * speed/r/life，直接复用会因 sk.proj 为 undefined 抛错，BOSS 一枪都打不出来。 */
+  IMPL.g_shot = {
+    start(f, slot, sk) {
+      const pj = sk.proj || sk;                      // 两种写法都兼容
+      f.atkAnim = 0.22; f.atkDur = 0.22;
+      f.facing = aimAt(f, this);
+      const a = Math.atan2(f.facing.y, f.facing.x);
+      const v = pj.speed || 860;
+      B.spawnProj({
+        x: f.x + Math.cos(a) * 24, y: f.y - 26 + Math.sin(a) * 12,
+        vx: Math.cos(a) * v, vy: Math.sin(a) * v,
+        r: pj.r || 7, dmg: sk.dmg, life: pj.life || 1.5, owner: f,
+        color: "#fde68a", core: "#fffbeb", type: "bullet", kindTag: "basic", basic: true, trail: true
+      });
+      FX.burst(f.x + Math.cos(a) * 26, f.y - 26, 7, "#fef3c7", { speed: 190, dir: a, spread: 0.4 });
+      FX.shake(2.5);
+      B.endSlot(f, slot, sk.cd * (f.rateM || 1));
+    }
+  };
+
+  /* ---- 快枪手：炸弹投掷（朝玩家位置扔出中范围炸弹） ---- */
+  IMPL.g_bomb = {
+    start(f, slot, sk) {
+      f.atkAnim = 0.3; f.atkDur = 0.3;
+      const foe = B.foeOf(f);
+      const tx = foe ? foe.x : f.x - 220, ty = foe ? foe.y : f.y;
+      const fuse = sk.fuse || 1.05;
+      const t = fuse * 0.92;                      // 打一点提前量，正好落在玩家脚下
+      B.spawnProj({
+        x: f.x, y: f.y - 40,
+        vx: (tx - f.x) / t * 0.88, vy: (ty - (f.y - 40)) / t * 0.88,
+        r: 10, dmg: 0, life: fuse + 1.2, owner: f, type: "bomb",
+        data: { fuse, R: sk.boomR || 112, boom: sk.dmg, stun: 0 }
+      });
+      FX.burst(f.x, f.y - 40, 8, ["#a78bfa", "#fff"], { speed: 140 });
+      B.endSlot(f, slot, sk.cd * (f.rateM || 1));
+    }
+  };
+
+  /* ---- 快枪手：连环十响（朝前方快速打出 10 发子弹） ---- */
+  IMPL.g_burst = {
+    start(f, slot, sk) {
+      const s = f.slot[slot]; s.on = true; s.phase = "burst"; s.t = 0;
+      const foe = B.foeOf(f);
+      if (foe) {
+        const dx = foe.x - f.x, dy = foe.y - f.y, dd = Math.hypot(dx, dy) || 1;
+        f.facing = { x: dx / dd, y: dy / dd };
+      }
+      s.d.a = Math.atan2(f.facing.y, f.facing.x);
+      s.d.n = 0; s.d.acc = 0;
+    },
+    update(f, slot, sk, dt) {
+      const s = f.slot[slot];
+      if (s.phase !== "burst") return;
+      s.d.acc += dt;
+      if (s.d.n >= sk.n || s.d.acc < (sk.gap || 0.07)) return;
+      s.d.acc = 0; s.d.n++;
+      const a = s.d.a + rand(-(sk.spread || 0.15), sk.spread || 0.15) * 0.6;
+      B.spawnProj({
+        x: f.x + Math.cos(a) * 24, y: f.y - 26 + Math.sin(a) * 12,
+        vx: Math.cos(a) * sk.speed, vy: Math.sin(a) * sk.speed,
+        r: sk.r, dmg: sk.dmg, life: sk.life || 1.3, owner: f,
+        color: "#fde68a", core: "#fffbeb", type: "bullet", kindTag: "skill", trail: true
+      });
+      f.atkAnim = 0.16; f.atkDur = 0.16;
+      FX.burst(f.x + Math.cos(a) * 26, f.y - 26, 5, "#fde68a", { speed: 150, dir: a });
+      if (s.d.n >= sk.n) B.endSlot(f, slot, sk.cd * (f.rateM || 1));
+    }
+  };
+
+  /* ---- 快枪手：幻影隐身（8s 隐身，期间攻击照常且不现形） ---- */
+  IMPL.g_ghost = {
+    start(f, slot, sk) {
+      const s = f.slot[slot]; s.on = true; s.phase = "ghost"; s.t = 0;
+      f.stealthT = sk.dur; f.stealthSlot = slot;
+      f.stealthKeep = true; f._ghostNoFlash = true;
+      LD.Cine.start(f, sk.name, "", "#94a3b8");
+      FX.ring(f.x, f.y - 26, 70, "rgba(148,163,184,.9)", 5, 0.5);
+      FX.burst(f.x, f.y - 26, 20, ["#94a3b8", "#fff"], { speed: 240 });
+    },
+    update(f, slot, sk, dt) {
+      const s = f.slot[slot];
+      if (s.phase !== "ghost") return;
+      s.t += dt;
+      f.stealthT = Math.max(0, sk.dur - s.t);
+      if (s.t >= sk.dur) {
+        f.stealthT = 0; f.stealthKeep = false; f._ghostNoFlash = false;
+        FX.ring(f.x, f.y - 26, 60, "rgba(148,163,184,.9)", 4, 0.4);
+        B.endSlot(f, slot, sk.cd * (f.rateM || 1));
       }
     }
   };
@@ -1576,6 +1967,8 @@
 
   B.trySlot = function (f, slot, ctrl) {
     if (f.dead || f.stun > 0 || Cine_paused()) return;
+    // 王从天降飞起期间：与眩晕同级的自锁，任何技能（含位移类）都无法使用
+    if (f.slot && f.slot.ult.on && f.slot.ult.phase === "kingRise") return;
     const id = f.loadout[slot];
     const sk = LD.skill(id);
     if (!sk) { if (slot === "basic") flashNoSkill(f, slot); return; }
@@ -1585,7 +1978,8 @@
       return;
     }
     // 隐匿期间使用普攻或技能 → 提前现形（隐匿进入冷却），本次攻击正常生效
-    if (f.stealthT > 0 && slot !== f.stealthSlot) B.breakStealth(f);
+    // （g_ghost：快枪手大招隐身期间攻击不破除隐身，靠 stealthKeep 旁路）
+    if (f.stealthT > 0 && !f.stealthKeep && slot !== f.stealthSlot) B.breakStealth(f);
     // 二段类技能（位移斩 / 飞雷神 / 王从天降等）：槽位进行中时再按一次触发第二段
     // 注意要在大招能量检查之前——二段不需要再消耗能量（一段已扣过）
     const cur = f.slot[slot];
@@ -1627,6 +2021,19 @@
       }
       if (ctrl.press[slot]) this.trySlot(f, slot, ctrl);
     });
+    // 天外来物：槽位已满时碰到掉落物 → 按对应键置换（按键已照常出手，这里只挂 0.3s 延迟换装）
+    // 技能与大招各挂一个待置换物，K/L 对应技能、O 对应大招，互不干扰
+    if (this.rule === "gifts" && f.giftPending) {
+      const pend = f.giftPending;
+      const key = (ctrl.press.ult && pend.ult) ? "ult"
+        : (ctrl.press.skill1 && pend.skill) ? "skill1"
+        : (ctrl.press.skill2 && pend.skill) ? "skill2" : null;
+      if (key) {
+        const p = key === "ult" ? pend.ult : pend.skill;
+        f.giftSwap = { slot: key, drop: p.g, t: (LD.GIFTS && LD.GIFTS.swapDelay) || 0.3 };
+        if (key === "ult") pend.ult = null; else pend.skill = null;
+      }
+    }
     ctrl.press.basic = ctrl.press.skill1 = ctrl.press.skill2 = ctrl.press.ult = false;
   };
 
@@ -1682,6 +2089,18 @@
 
     this.updateProjs(dt);
     this.updateZones(dt);
+    if (this.rule === "gifts") this.updateGifts(dt);
+    // 黑侠客分身：到时消散（被击散的 0.9s 尸体期由 kill() 设置 cloneT）
+    for (let i = this.fighters.length - 1; i >= 0; i--) {
+      const c = this.fighters[i];
+      if (!c.isClone) continue;
+      c.cloneT = (c.cloneT != null ? c.cloneT : (LD.BOSS.ninja ? LD.BOSS.ninja.skill1.dur : 6)) - dt;
+      if (c.cloneT <= 0) {
+        FX.burst(c.x, c.y - 26, 24, ["#a78bfa", "#334155", "#fff"], { speed: 260 });
+        FX.float(c.x, c.y - 56, "分身消散", "#a78bfa", 14);
+        this.fighters.splice(i, 1);
+      }
+    }
     if (this.rule === "overlord") {
       this.updateStone(dt);
       const dg = this.fighters.find(f => f.kind === "dragon");
@@ -1808,8 +2227,10 @@
     }
 
     // 移动
-    let canMove = f.stun <= 0 && f.root <= 0 && f.meditate <= 0;
-    let sp = C.hero.speed;
+    // 王从天降飞起期间自身定身（表现与眩晕一致：不能移动、不能出招）
+    const kingRising = !!(f.slot && f.slot.ult.on && f.slot.ult.phase === "kingRise");
+    let canMove = f.stun <= 0 && f.root <= 0 && f.meditate <= 0 && !kingRising;
+    let sp = C.hero.speed * (f.speedMul || 1);   // BOSS 等特殊单位可带速度倍率
     if (f.parryT > 0) sp *= 0.42;
     const ls = f.slot.skill1.phase === "laserCharge" || f.slot.skill2.phase === "laserCharge";
     if (ls) canMove = false;   // 激光波蓄力期间无法移动，方向锁定为出手朝向
@@ -1855,6 +2276,11 @@
       const p = this.projs[i];
       p.life += dt;
       if (p.type === "bomb") {
+        // v2.5：带初速的炸弹会被"扔"出去（快枪手炸弹投掷），减速滑行到目标附近再爆
+        if (p.vx || p.vy) {
+          p.x += p.vx * dt; p.y += p.vy * dt;
+          const bd = Math.exp(-1.6 * dt); p.vx *= bd; p.vy *= bd;
+        }
         if (p.life >= p.data.fuse) { this.boom(p); this.projs.splice(i, 1); }
         continue;
       }
@@ -2084,10 +2510,11 @@
           const ang = z.ang0 + z.life * z.spd;
           z.x = o.x + Math.cos(ang) * z.orbitR;
           z.y = (o.y - 26) + Math.sin(ang) * z.orbitR * 0.72;
-          // 判定与水球模型一致：水球圆（r=17）+ 人物身体核心，不再用整段碰撞半径放大
+          // 判定：水球圆（r=orbR）+ 身体补偿 hitPad（默认 32，v2.4.2 起放宽）
+          const pad = z.hitPad != null ? z.hitPad : 32;
           for (const f of this.fighters) {
             if (f.side === o.side || f.dead || f.kind !== "hero" || this.sameTeam(o, f)) continue;
-            if (Math.hypot(f.x - z.x, (f.y - 20) - z.y) > z.r + 20) continue;
+            if (Math.hypot(f.x - z.x, (f.y - 20) - z.y) > z.r + pad) continue;
             const key = "t" + f.side;
             z.hits[key] = (z.hits[key] || 0) + dt;
             if (z.hits[key] >= z.tick) {
@@ -2111,6 +2538,32 @@
               FX.float(z.x, z.y - 24, "水球碎了", "#67e8f9", 12);
               z.life = z.max;
               break;
+            }
+          }
+        }
+      }
+      if (z.type === "shuriken") {
+        // 螺旋手里剑：中速飞行 + 场地边缘反弹，范围内的敌人被中度吸引并持续掉血
+        z.x += z.vx * dt; z.y += z.vy * dt;
+        if (z.x < 60 || z.x > C.W - 60) { z.vx *= -1; z.x = clamp(z.x, 60, C.W - 60); }
+        if (z.y < C.H * 0.34 || z.y > C.H - 40) { z.vy *= -1; z.y = clamp(z.y, C.H * 0.34, C.H - 40); }
+        z.spin = (z.spin || 0) + dt * 9;
+        if (z.life % 0.06 < dt) FX.trail(z.x + rand(-z.r, z.r) * 0.5, z.y + rand(-z.r, z.r) * 0.5, "#38bdf8", 6, 0.35);
+        for (const f of this.fighters) {
+          if (f.side === z.owner.side || f.dead || f.kind !== "hero" || this.sameTeam(z.owner, f)) continue;
+          const dx = z.x - f.x, dy = z.y - (f.y - 26);
+          const d = Math.hypot(dx, dy) || 1;
+          if (d < z.pullR && d > 1) {                     // 中度吸引：越近吸得越轻，防止完全吸死
+            const k = (z.pull || 120) * dt * (0.35 + 0.65 * (1 - d / z.pullR));
+            f.x += dx / d * k; f.y += dy / d * k;
+          }
+          if (d <= z.r + f.r) {
+            const key = "t" + f.side;
+            z.hits[key] = (z.hits[key] || 0) + dt;
+            if (z.hits[key] >= z.tick) {
+              z.hits[key] = 0;
+              this.damage(z.owner, f, z.dmg, { type: "ult", kb: 0, from: z.owner });
+              FX.burst(f.x, f.y - 24, 8, ["#38bdf8", "#fff"], { speed: 150 });
             }
           }
         }
@@ -2266,6 +2719,24 @@
           ctx.globalAlpha = 0.8 * a;
           ctx.font = "700 13px system-ui"; ctx.textAlign = "center"; ctx.fillStyle = "#c4b5fd";
           ctx.fillText("绝望囚牢 " + Math.max(0, z.max - z.life).toFixed(1) + "s", z.x, z.y - z.r - 12);
+        } else if (z.type === "shuriken") {
+          // 螺旋手里剑：巨大蓝色能量球 + 旋转叶片
+          const a = Math.min(1, z.life * 5);
+          ctx.globalAlpha = a;
+          V.glow(ctx, z.x, z.y, z.r * 2.4, "rgba(56,189,248,.55)", 1);
+          ctx.save();
+          ctx.translate(z.x, z.y); ctx.rotate(z.spin || 0);
+          ctx.strokeStyle = "rgba(224,242,254,.95)"; ctx.lineWidth = 4; ctx.lineCap = "round";
+          for (let b = 0; b < 4; b++) {
+            ctx.rotate(Math.PI / 2);
+            ctx.beginPath(); ctx.moveTo(z.r * 0.25, 0); ctx.quadraticCurveTo(z.r * 0.7, -z.r * 0.34, z.r * 0.95, 0);
+            ctx.quadraticCurveTo(z.r * 0.7, z.r * 0.34, z.r * 0.25, 0); ctx.stroke();
+          }
+          const gg = ctx.createRadialGradient(0, 0, 2, 0, 0, z.r * 0.5);
+          gg.addColorStop(0, "rgba(255,255,255,.95)"); gg.addColorStop(1, "rgba(56,189,248,.85)");
+          ctx.fillStyle = gg;
+          ctx.beginPath(); ctx.arc(0, 0, z.r * 0.5, 0, TAU); ctx.fill();
+          ctx.restore();
         } else if (z.type === "pillar") {
           if (z.life < z.warn) {
             ctx.globalAlpha = 0.32 + Math.sin(z.life * 40) * 0.18;
@@ -2287,6 +2758,37 @@
 
       // 弹道
       this.projs.forEach(p => this.drawProj(ctx, p));
+
+      // 天外来物：技能 / 大招掉落物（降落 2 秒后落地可拾取）
+      (this.gifts || []).forEach(g => {
+        const sk = LD.skill(g.id);
+        if (!sk) return;
+        const fall = g.landed ? 0 : 1 - g.t / ((LD.GIFTS && LD.GIFTS.fallT) || 2);
+        const yy = g.y - 16 - fall * 130;
+        const isUlt = g.kind === "ult";
+        ctx.save();
+        // 影子
+        ctx.globalAlpha = 0.3; ctx.fillStyle = "#000";
+        ctx.beginPath(); ctx.ellipse(g.x, g.y + 4, 16 * (1 - fall * 0.5), 6 * (1 - fall * 0.5), 0, 0, TAU); ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.globalCompositeOperation = "lighter";
+        V.glow(ctx, g.x, yy, isUlt ? 40 : 28, isUlt ? "rgba(252,211,77,.8)" : "rgba(103,232,249,.8)", 1);
+        ctx.globalCompositeOperation = "source-over";
+        ctx.font = (isUlt ? "24px" : "19px") + " system-ui";
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.fillText(sk.icon || "?", g.x, yy);
+        if (!g.landed) {
+          ctx.globalAlpha = 0.7; ctx.strokeStyle = isUlt ? "#fcd34d" : "#67e8f9"; ctx.lineWidth = 2;
+          ctx.setLineDash([6, 5]);
+          ctx.beginPath(); ctx.arc(g.x, g.y, 20, 0, TAU); ctx.stroke();
+          ctx.setLineDash([]);
+        } else {
+          ctx.font = "700 11px system-ui";
+          ctx.fillStyle = isUlt ? "#fcd34d" : "#7fe6f7";
+          ctx.fillText(isUlt ? "大招" : "技能", g.x, yy + (isUlt ? 24 : 22));
+        }
+        ctx.restore();
+      });
 
       // 能量石（霸主争霸）
       if (this.stone) {
@@ -2369,7 +2871,7 @@
         }
         // 隐匿：自己的视角半透明（闪烁期全显），敌人视角完全消失（闪烁期显形）
         if (f.stealthT > 0 && !f.dead) {
-          const flash = f.stealthT > 1.6 && f.stealthT <= 2.0;
+          const flash = !f._ghostNoFlash && f.stealthT > 1.6 && f.stealthT <= 2.0;
           if (f !== meHero && !flash) return;        // 别人视角：完全看不见
           ctx.save(); ctx.globalAlpha = flash ? 1 : 0.45;
         }
@@ -2545,6 +3047,20 @@
       V.glow(ctx, 0, 0, p.r * 2.4, "rgba(165,243,252,.7)", 1);
       ctx.fillStyle = "#f0feff";
       ctx.beginPath(); ctx.moveTo(-16, 0); ctx.lineTo(0, -3.4); ctx.lineTo(14, 0); ctx.lineTo(0, 3.4); ctx.closePath(); ctx.fill();
+      ctx.restore(); return;
+    }
+    if (p.type === "shuriken") {
+      // 黑侠客飞镖：旋转四角星
+      ctx.translate(p.x, p.y); ctx.rotate(p.life * 16);
+      V.glow(ctx, 0, 0, p.r * 2.2, "rgba(103,232,249,.7)", 1);
+      ctx.fillStyle = "#e0faff";
+      for (let b = 0; b < 4; b++) {
+        ctx.rotate(Math.PI / 2);
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(p.r * 0.4, -p.r * 0.35); ctx.lineTo(p.r, 0); ctx.lineTo(p.r * 0.4, p.r * 0.35);
+        ctx.closePath(); ctx.fill();
+      }
+      ctx.fillStyle = "#22d3ee";
+      ctx.beginPath(); ctx.arc(0, 0, p.r * 0.3, 0, TAU); ctx.fill();
       ctx.restore(); return;
     }
     if (p.type === "dung") {

@@ -122,7 +122,7 @@ check("格挡机制不变（挡普攻 2s / 挡技能 8s）",
 
 console.log("\n=== 2. 新增普攻 ===");
 const pistol = LD.skill("pistol"), rock = LD.skill("rock"), mace = LD.skill("mace");
-check("手枪：普攻 / CD 5 / 伤害 13 / 直线高速弹", pistol.kind === "basic" && pistol.cd === 5 && pistol.dmg === 13 && pistol.proj.speed >= 800,
+check("手枪：普攻 / CD 3 / 伤害 13 / 直线高速弹", pistol.kind === "basic" && pistol.cd === 3 && pistol.dmg === 13 && pistol.proj.speed >= 800,
   pistol.cd + "s " + pistol.proj.speed);
 check("石头：普攻 / CD 4 / 低速 / 命中眩晕 0.4", rock.kind === "basic" && rock.cd === 4 && rock.stun === 0.4 && rock.proj.speed < 700,
   rock.cd + "s stun=" + rock.stun);
@@ -382,12 +382,12 @@ console.log("\n=== 9. 规则：霸主争霸 ===");
   LD.AI.tickHero(g[1], 0.016);
   check("霸主：非霸主人机仇恨转向霸主", g[1].lock === g[0].side, "bot.lock=" + g[1].lock + " overlord.side=" + g[0].side);
 
-  // 霸主阵亡 → 石头重新掉落
+  // 霸主阵亡 → 能量石直接消散（v2.5：不再掉回场上）
   const h = mkBattle("overlord", null, 2);
   B.becomeOverlord(h[0]);
   B.state = "fight";
   B.kill(h[0], h[1]);
-  check("霸主：霸主阵亡后能量石掉回场上重新争夺", !!B.stone && h[0].overlord === false, "stone=" + !!B.stone);
+  check("霸主：霸主阵亡后能量石消散，不再掉落（v2.5）", !B.stone && h[0].overlord === false, "stone=" + !!B.stone);
 }
 
 /* ============================================================
@@ -437,7 +437,7 @@ console.log("\n=== 10. 角色卡房间 ===");
  * 11. 三种模式人人可玩 / 界面接线
  * ============================================================ */
 console.log("\n=== 11. 模式接线 ===");
-check("规则表含 3 种模式", LD.RULES.length === 3 && ["brawl", "team", "overlord"].every(id => LD.ruleInfo(id).id === id));
+check("规则表含 4 种模式（v2.5 新增天外来物）", LD.RULES.length === 4 && ["brawl", "team", "overlord", "gifts"].every(id => LD.ruleInfo(id).id === id));
 check("阵营配色 4 队", LD.TEAM_COLORS.length === 4 && LD.TEAM_NAMES.length === 4, LD.TEAM_NAMES.join("/"));
 check("自定义房间入口已接入角色卡", typeof UI.renderRoom === "function" && typeof UI.roomStart === "function");
 check("多人准备阶段渲染函数就绪", typeof UI.renderNetRoom === "function" && typeof UI.applyNetRoom === "function" && typeof UI.netHostStart === "function");
@@ -1000,12 +1000,407 @@ console.log("=== 15. v2.4 调整 ===");
   for (let t = 0; t < 200 && B.zones.indexOf(orb) >= 0; t++) {
     const o2 = B.zones.find(z => z.type === "water" && z.life < z.max && z.x > me.x + 20);
     if (!o2) { step(S, 1); continue; }
-    const dx = o2.x - foe.x, dy = o2.y - (foe.y - 26), dd = Math.hypot(dx, dy) || 1;
-    B.spawnProj({ x: foe.x + dx / dd * 30, y: (foe.y - 26) + dy / dd * 30, vx: dx / dd * 620, vy: dy / dd * 620,
+    // 从球外侧 60px 处朝球心直射：球在飞行途中绕走也不会打空（打 620 速度的远距离擦边会飘）
+    const a = Math.random() * Math.PI * 2;
+    B.spawnProj({ x: o2.x + Math.cos(a) * 60, y: o2.y + Math.sin(a) * 60,
+      vx: -Math.cos(a) * 900, vy: -Math.sin(a) * 900,
       r: 9, dmg: 12, life: 1.4, owner: foe, type: "fireball", kindTag: "basic" });
-    step(S, 4);
+    step(S, 2);
   }
   check("水之呼吸：12 伤火球被水球吸收（水球碎掉）", B.zones.indexOf(orb) < 0 && orb.abs >= 12, "abs=" + orb.abs);
+}
+
+/* ============================================================
+ * 16. v2.4.2：背景音乐开关 / 水之呼吸判定放宽 / 手枪 CD
+ * ============================================================ */
+console.log("\n=== 16. v2.4.2 ===");
+
+// 手枪 CD 3s
+check("手枪：CD 从 5s 降到 3s", LD.skill("pistol").cd === 3, LD.skill("pistol").cd);
+
+// 水之呼吸：半径与判定补偿
+{
+  const sk = LD.skill("waterOrbs");
+  check("水之呼吸：球半径放大到 24", sk.orbR === 24, String(sk.orbR));
+  check("水之呼吸：判定补偿 hitPad 32", sk.hitPad === 32, String(sk.hitPad));
+
+  const f = mkBattle("brawl", null, 2, { ult: "waterOrbs" });
+  const me = f[0], foe = f[1];
+  foe.ctrl = null; foe.bot = null;
+  me.energy = me.maxEnergy; me.cd.ult = 0;
+  B.trySlot(me, "ult", { mx: 0, my: 0, hold: {}, press: {} });
+  step(S, 2);
+  const orbs = B.zones.filter(z => z.type === "water");
+  check("水之呼吸：zone 带上 hitPad", orbs.length === 3 && orbs.every(z => z.hitPad === 32),
+    orbs.map(z => z.hitPad).join(","));
+
+  // 判定放宽：把敌人贴在「球半径 + 30」处（旧规则 17+20=37 够不到, 新规则 24+32=56 命中）
+  // 注意 1: 大招演出(LD.Cine)期间整个世界冻结, 必须给够帧数(演出 2.6s + tick 0.45s)
+  // 注意 2: tick 是「每颗球各自累计」的, 必须盯着同一颗球贴, 不能每帧换球
+  const orb = orbs[0];
+  let dmg = 0;
+  for (let i = 0; i < 400 && !dmg && B.zones.indexOf(orb) >= 0; i++) {
+    foe.x = orb.x + (orb.r + 30);
+    foe.y = orb.y + 20;                          // 判定用 (f.y-20), 这里正好等于球心高度
+    foe.hp = foe.maxHp;                          // 每帧复位, 只关心是否发生命中
+    step(S, 1);
+    if (foe.hp < foe.maxHp) dmg = 1;
+  }
+  check("水之呼吸：离球心 r+30 的擦边位置也能判定命中", dmg === 1, "dmg=" + dmg);
+}
+
+// 背景音乐开关（存档保存）
+{
+  const bgm = LD.BGM;
+  check("BGM：模块暴露开关接口", !!bgm && typeof bgm.setOn === "function" && typeof bgm.toggle === "function");
+  check("BGM：默认开启", bgm.isOn() === true, bgm.label());
+  bgm.setOn(false);
+  check("BGM：关闭后状态为关且写入存档", bgm.isOn() === false && LD.Profile.d.bgmOn === false, bgm.label());
+  LD.Profile.d.bgmOn = true;
+  bgm.applyProfile();
+  check("BGM：按存档恢复开启", bgm.isOn() === true, bgm.label());
+  check("BGM：按钮文案随状态变化", bgm.label().indexOf("音乐") >= 0, bgm.label());
+  check("BGM：主菜单右上角按钮已注入构建产物", /id="btnBgm"/.test(html), "btnBgm");
+}
+
+/* ============================================================
+ * v2.5 关卡 / BOSS / 天外来物
+ * ============================================================ */
+console.log("\n=== v2.5.1 关卡与难度 ===");
+{
+  check("关卡共 3 关，BOSS 依次 dragon/ninja/gun",
+    LD.LEVELS.length === 3 && LD.LEVELS.map(l => l.boss).join(",") === "dragon,ninja,gun",
+    LD.LEVELS.map(l => l.boss).join(","));
+  check("困难模式血量 = 普通 2 倍", LD.DIFF.hard.hpM === 2.0, LD.DIFF.hard.hpM);
+  check("困难模式出手频率提高（rateM 1.6）", LD.DIFF.hard.rateM === 1.6, LD.DIFF.hard.rateM);
+  const nj = B.mkBoss("ninja", { diff: LD.DIFF.normal });
+  const gn = B.mkBoss("gun", { diff: LD.DIFF.normal });
+  const njHard = B.mkBoss("ninja", { diff: LD.DIFF.hard });
+  check("黑侠客：人形 BOSS，血 150，配装为 boss 专属技能",
+    nj.kind === "hero" && nj.isBoss && nj.maxHp === 150 &&
+    nj.loadout.basic === "n_shuriken" && nj.loadout.skill1 === "n_clone" &&
+    nj.loadout.skill2 === "n_raid" && nj.loadout.ult === "n_ult",
+    "hp=" + nj.maxHp);
+  check("快枪手：人形 BOSS，血 190，配装为 boss 专属技能",
+    gn.kind === "hero" && gn.isBoss && gn.maxHp === 190 &&
+    gn.loadout.basic === "g_shot" && gn.loadout.ult === "g_ghost", "hp=" + gn.maxHp);
+  check("困难血量翻倍：黑侠客困难 300", njHard.maxHp === 300, "hp=" + njHard.maxHp);
+  check("困难出手更频繁：BOSS rateM < 1", njHard.rateM < 1 && njHard.rateM < nj.rateM, "rateM=" + njHard.rateM.toFixed(3));
+  check("mkBoss(dragon) 仍走巨龙通道", B.mkBoss("dragon", {}).kind === "dragon");
+  ["n_shuriken", "n_clone", "n_raid", "n_ult", "g_shot", "g_bomb", "g_burst", "g_ghost"].forEach(id => {
+    const sk = LD.skill(id);
+    check("BOSS 技能已注册且不进商店：" + id, !!sk && sk.kind === "boss", sk ? sk.kind : "缺失");
+  });
+}
+
+console.log("\n=== v2.5.2 黑侠客：分身 / 突袭 / 螺旋手里剑 ===");
+{
+  const hero = B.mkHero(0, { x: 480, y: 400, look: P.look(), name: "勇者" });
+  hero.ctrl = { mx: 0, my: 0, hold: {}, press: {} };
+  const boss = B.mkBoss("ninja", { diff: LD.DIFF.normal });
+  B.setup({ mode: "dragon", fighters: [hero, boss], theme: {} });
+  B.resetRound(false);
+  B.state = "fight"; B.countdown = 0;
+  hero.x = 480; hero.y = 400; boss.x = 700; boss.y = 300;
+
+  // 分身：同血量同外形，打它白费
+  IMPL_START: {
+    const sk = LD.skill("n_clone");
+    B.trySlot(boss, "skill1", boss.ctrl);
+    // trySlot 走 IMPL.n_clone.start（CD 刚好为 0）
+  }
+  check("黑侠客：召唤出分身（场上 3 个单位）", B.fighters.length === 3, "n=" + B.fighters.length);
+  const clone = B.fighters.find(f => f.isClone);
+  check("黑侠客：分身同血量同外形同阵营", !!clone && clone.maxHp === boss.maxHp && clone.look === boss.look && clone.team === boss.team,
+    clone ? "hp=" + clone.maxHp : "无分身");
+  const beforeHp = clone ? clone.hp : -1;
+  const wasted = clone ? B.damage(null, clone, 50) : -1;
+  check("黑侠客：打在分身上的伤害全部白费", wasted === 0 && clone.hp === beforeHp, "dmg=" + wasted);
+  check("黑侠客：本体索敌跳过自己的分身", B.foeOf(boss).side === hero.side, "target=" + B.foeOf(boss).side);
+
+  // 分身到时消散
+  if (clone) clone.cloneT = 0.05;
+  step(S, 6);
+  check("黑侠客：分身 6s 后消散（击散也只 0.9s）", !B.fighters.some(f => f.isClone), "n=" + B.fighters.length);
+
+  // 突袭：闪现到玩家身旁 → 0.4s 蓄力 → 三连斩
+  hero.hp = hero.maxHp; boss.cd.skill2 = 0; boss.slot.skill2 = { on: false, phase: "", t: 0, d: {} };
+  hero.x = 300; hero.y = 400; boss.x = 760; boss.y = 400;   // 出生点随机，断言前必须固定双方坐标
+  const dBefore = Math.hypot(hero.x - boss.x, hero.y - boss.y);
+  B.trySlot(boss, "skill2", boss.ctrl);
+  const dAfterBlink = Math.hypot(hero.x - boss.x, hero.y - boss.y);
+  check("黑侠客：突袭闪现到玩家身旁", dAfterBlink < 120 && dBefore > 200, dBefore.toFixed(0) + "→" + dAfterBlink.toFixed(0));
+  const hpBeforeRaid = hero.hp;
+  for (let i = 0; i < 60 && boss.slot.skill2.on; i++) step(S, 1);   // 0.4s 蓄力 + 三连斩
+  check("黑侠客：突袭蓄力后造成三连斩伤害", hero.hp < hpBeforeRaid, "掉血 " + (hpBeforeRaid - hero.hp));
+
+  // 螺旋手里剑：吸引 + 持续伤害（手工布置静止领域，绕开大招演出）
+  // 关掉 BOSS 的 AI：它贴脸攻击的击退会把勇者推离球体，污染吸引判定
+  boss.bot = null; B.projs.length = 0;
+  hero.hp = hero.maxHp; hero.x = 300; hero.y = 400; hero.vx = 0; hero.vy = 0;   // 清掉突袭留下的击退速度，否则会一路向左飘出吸引范围
+  B.zones.push({ type: "shuriken", x: 400, y: 374, vx: 0, vy: 0, r: 54, life: 0, max: 4.5,
+    dmg: 12, tick: 0.35, pull: 130, pullR: 175, owner: boss, hits: {}, color: "#38bdf8" });
+  const d0 = Math.hypot(hero.x - 400, (hero.y - 26) - 374);
+  step(S, 60);                                        // 吸引是「越近吸得越强」的二次项，位移要看 1s 的累积
+  const d1 = Math.hypot(hero.x - 400, (hero.y - 26) - 374);
+  check("螺旋手里剑：范围内敌人被吸引", d1 < d0 - 20, d0.toFixed(0) + "→" + d1.toFixed(0));
+  hero.hp = hero.maxHp;                               // 复位血量，单独验证持续伤害
+  let hurt = 0;
+  for (let i = 0; i < 150 && !hurt; i++) { step(S, 1); if (hero.hp < hero.maxHp) hurt = 1; }
+  check("螺旋手里剑：持续造成伤害", hurt === 1, "hp=" + hero.hp);
+}
+
+console.log("\n=== v2.5.3 快枪手：炸弹 / 十响 / 隐身 ===");
+{
+  const hero = B.mkHero(0, { x: 480, y: 400, look: P.look(), name: "勇者" });
+  hero.ctrl = { mx: 0, my: 0, hold: {}, press: {} };
+  const boss = B.mkBoss("gun", { diff: LD.DIFF.normal });
+  B.setup({ mode: "dragon", fighters: [hero, boss], theme: {} });
+  B.resetRound(false);
+  B.state = "fight"; B.countdown = 0;
+  hero.x = 480; hero.y = 400; boss.x = 700; boss.y = 300;
+
+  // 炸弹投掷：朝玩家位置扔出
+  boss.cd.skill1 = 0;
+  B.trySlot(boss, "skill1", boss.ctrl);
+  const bomb = B.projs.find(p => p.type === "bomb" && (p.vx || p.vy));
+  check("快枪手：炸弹朝玩家位置扔出（带初速）", !!bomb, bomb ? "v=" + Math.hypot(bomb.vx, bomb.vy).toFixed(0) : "无炸弹");
+  const hpB = hero.hp;
+  for (let i = 0; i < 90 && B.projs.indexOf(bomb) >= 0; i++) step(S, 1);
+  check("快枪手：炸弹落到玩家附近爆炸造成伤害", hero.hp < hpB, "掉血 " + (hpB - hero.hp));
+
+  // 连环十响：一次技能打出 10 发（用「出现过的子弹集合」计数，比数并发更稳，不受命中消失影响）
+  boss.cd.skill2 = 0; boss.x = 700; boss.y = 300;
+  B.trySlot(boss, "skill2", boss.ctrl);
+  const seen = new Set();
+  const sampleBurst = () => B.projs.forEach(p => { if (p.kindTag === "skill" && p.type === "bullet") seen.add(p); });
+  for (let i = 0; i < 200 && seen.size < 10; i++) { sampleBurst(); step(S, 1); }
+  sampleBurst();                                    // 第 10 发与 endSlot 同帧，退出后再采一次
+  check("快枪手：连环十响打出 10 发子弹", seen.size >= 10, "共发射 " + seen.size + " 发");
+
+  // 幻影隐身：8s，期间攻击不破隐
+  boss.cd.ult = 0; boss.stealthT = 0; boss.stealthKeep = false;
+  B.trySlot(boss, "ult", boss.ctrl);
+  check("快枪手：大招进入隐身且带 stealthKeep", boss.stealthT > 0 && boss.stealthKeep === true,
+    "stealthT=" + (boss.stealthT || 0).toFixed(1));
+  boss.cd.basic = 0;
+  B.trySlot(boss, "basic", boss.ctrl);              // 隐身中开枪
+  check("快枪手：隐身期间普攻不破除隐身", boss.stealthT > 0 && boss.stealthKeep === true,
+    "stealthT=" + (boss.stealthT || 0).toFixed(1));
+}
+
+console.log("\n=== v2.5.4 天外来物 ===");
+{
+  const fs2 = mkBattle("gifts", null, 2, { basic: "slash", skill1: "dashSlash", skill2: "hook", ult: "bloodRage" });
+  const me = fs2[0], foe = fs2[1];
+  /* 屏幕定格(FX.stop)期间世界完全冻结（dt=0），固定帧数等不到结果 —— 统一用「步进到条件成立」的等待 */
+  const waitPick = (cond, cap) => { for (let i = 0; i < (cap || 60) && !cond(); i++) step(S, 1); };
+  check("天外来物：开局清空技能与大招，只留普攻",
+    me.loadout.basic === "slash" && me.loadout.skill1 === null && me.loadout.skill2 === null && me.loadout.ult === null &&
+    foe.loadout.skill1 === null && foe.loadout.ult === null,
+    "skill1=" + me.loadout.skill1);
+  check("天外来物：计时器已初始化", B.giftT > 0 && B.giftUltT > 0, B.giftT.toFixed(1) + "/" + B.giftUltT.toFixed(1));
+
+  // 每 10s / 20s 刷落：把计时拨到临届点
+  B.giftT = 0.02; B.giftUltT = 0.02;
+  step(S, 2);
+  check("天外来物：刷出技能与大招掉落物", B.gifts.some(g => g.kind === "skill") && B.gifts.some(g => g.kind === "ult"),
+    B.gifts.map(g => g.kind).join(","));
+  const g1 = B.gifts.find(g => g.kind === "skill");
+  check("天外来物：降落中不可拾取（2s 落地）", g1 && !g1.landed);
+
+  // 拾取：先 K 后 L
+  g1.landed = true; g1.id = "windBlade"; g1.x = me.x; g1.y = me.y;
+  waitPick(() => me.loadout.skill1 === "windBlade");
+  check("天外来物：碰到掉落物自动装入 K 槽", me.loadout.skill1 === "windBlade", String(me.loadout.skill1));
+  B.spawnGift("skill", "hook", me.x, me.y, true);
+  waitPick(() => me.loadout.skill2 === "hook");
+  check("天外来物：第二个技能装入 L 槽", me.loadout.skill2 === "hook", String(me.loadout.skill2));
+
+  // 槽位已满：触碰挂 pending，按 K 先照常出手、0.3s 后置换，旧技能留在原地
+  const g3 = B.spawnGift("skill", "windBlade", me.x, me.y, true);   // 与 K 槽同名方便断言置换
+  g3.id = "laserWave";
+  me.cd.skill1 = 0;
+  waitPick(() => !!(me.giftPending && me.giftPending.skill && me.giftPending.skill.g === g3));
+  check("天外来物：满槽触碰进入待置换状态", !!me.giftPending && !!me.giftPending.skill && me.giftPending.skill.g === g3,
+    JSON.stringify(!!(me.giftPending && me.giftPending.skill)));
+  me.cd.skill1 = 0; me.cd.skill2 = 0;
+  me.ctrl.press.skill1 = true;                                      // 按 K
+  me.ctrl.hold.skill1 = true;
+  for (let i = 0; i < 30 && !me.giftSwap; i++) step(S, 1);
+  me.ctrl.press.skill1 = false; me.ctrl.hold.skill1 = false;
+  check("天外来物：按 K 后先照常出手（置换挂起 0.3s）", !!me.giftSwap && me.giftSwap.drop === g3, String(!!me.giftSwap));
+  for (let i = 0; i < 180 && me.loadout.skill1 !== "laserWave"; i++) step(S, 1);   // 0.3s 置换（含定格等待）
+  check("天外来物：0.3s 后新技能装入 K 槽", me.loadout.skill1 === "laserWave", String(me.loadout.skill1));
+  check("天外来物：被换下的技能以掉落物留在原地",
+    B.gifts.some(g => g.id === "windBlade" && g.x === g3.x && g.y === g3.y),
+    B.gifts.map(g => g.id).join(","));
+
+  // 大招：满槽触碰 → 按 O 置换（先清场 + 停掉自然刷落，避免别的掉落物来抢 pending）
+  B.gifts.length = 0; B.giftT = 999; B.giftUltT = 999;
+  me.loadout.ult = "bloodRage";                                     // 造出「已有大招」的满槽状态
+  B.spawnGift("skill", "windBlade", me.x, me.y, true);              // 地上同时放一个技能掉落物
+  const gu = B.spawnGift("ult", "thousandSwords", me.x, me.y, true);
+  waitPick(() => !!(me.giftPending && me.giftPending.ult));
+  check("天外来物：已有大招时触碰挂 pending",
+    !!me.giftPending && !!me.giftPending.ult && me.giftPending.ult.kind === "ult",
+    JSON.stringify(!!(me.giftPending && me.giftPending.ult)));
+  check("天外来物：站在技能掉落物上也能同时挂大招 pending",
+    !!me.giftPending && !!me.giftPending.skill,
+    "skill=" + !!(me.giftPending && me.giftPending.skill));
+  me.cd.ult = 0; me.energy = me.maxEnergy;
+  me.ctrl.press.ult = true; me.ctrl.hold.ult = true;
+  for (let i = 0; i < 30 && !me.giftSwap; i++) step(S, 1);
+  me.ctrl.press.ult = false; me.ctrl.hold.ult = false;
+  check("天外来物：按 O 后大招置换挂起（先照常开大）", !!me.giftSwap && me.giftSwap.slot === "ult", String(!!me.giftSwap));
+  for (let i = 0; i < 240 && me.loadout.ult !== "thousandSwords"; i++) step(S, 1);  // 大招演出期间世界冻结，置换倒计时也暂停
+  check("天外来物：演出结束后大招完成置换", me.loadout.ult === "thousandSwords", String(me.loadout.ult));
+  check("天外来物：被换下的大招留在原地（可被别人捡）", B.gifts.some(g => g.kind === "ult" && g.id === "bloodRage"),
+    B.gifts.map(g => g.kind + ":" + g.id).join(","));
+
+  // 回归：同类旧的待置换失效（掉落物被回收 / 被捡走）后，新掉落物要能立刻挂上
+  B.gifts.length = 0;
+  const dOld = B.spawnGift("skill", "windBlade", me.x, me.y, true);
+  waitPick(() => !!(me.giftPending && me.giftPending.skill && me.giftPending.skill.g === dOld));
+  B.gifts.length = 0;                                 // 旧掉落物被系统收回
+  const dNew = B.spawnGift("skill", "hook", me.x, me.y, true);   // 同类型的新掉落物就在脚下
+  waitPick(() => !!(me.giftPending && me.giftPending.skill && me.giftPending.skill.g === dNew));
+  check("天外来物：同类旧待置换失效后，脚下的新掉落物能立刻挂上",
+    !!me.giftPending && !!me.giftPending.skill && me.giftPending.skill.g === dNew,
+    me.giftPending && me.giftPending.skill ? String(me.giftPending.skill.g.id) : "无");
+
+  // 场上上限：技能 3 / 大招 2，超限最旧的消失
+  B.gifts.length = 0;
+  const olds = [];
+  for (let i = 0; i < 5; i++) olds.push(B.spawnGift("skill", "windBlade", 100 + i * 30, 300, true));
+  B.trimGifts("skill");
+  check("天外来物：技能掉落物最多 3 个，最旧的消失",
+    B.gifts.filter(g => g.kind === "skill").length === 3 && !B.gifts.includes(olds[0]) && B.gifts.includes(olds[4]),
+    "n=" + B.gifts.length);
+  B.gifts.length = 0;
+  for (let i = 0; i < 4; i++) B.spawnGift("ult", "bloodRage", 100 + i * 30, 300, true);
+  B.trimGifts("ult");
+  check("天外来物：大招掉落物最多 2 个", B.gifts.filter(g => g.kind === "ult").length === 2, "n=" + B.gifts.length);
+
+  // AI 也会捡：把人机放在掉落物旁边，观察配装被填上
+  const aiBattle = mkBattle("gifts", null, 2);
+  const bot = aiBattle[1];
+  LD.AI.mkBot(bot, "normal");
+  B.gifts.length = 0;
+  const drop = B.spawnGift("skill", "windBlade", bot.x, bot.y, true);
+  step(S, 3);
+  check("天外来物：AI 会捡起掉落物装入空槽", bot.loadout.skill1 === "windBlade" || bot.loadout.skill2 === "windBlade",
+    "skill1=" + bot.loadout.skill1 + " skill2=" + bot.loadout.skill2);
+}
+
+/* ============================================================
+ * 17. v2.5.1：螺旋手里剑进店 / BOSS 技能与普攻修复 / 王从天降定身 / 文案
+ * ============================================================ */
+console.log("\n=== 17. v2.5.1 ===");
+{
+  /* ---- 螺旋手里剑进大招商店 ---- */
+  const sh = LD.skill("shuriken");
+  check("螺旋手里剑已进店（大招 / 售价 10）", !!sh && sh.kind === "ult" && sh.price === 10, sh ? sh.kind + "/" + sh.price : "null");
+  check("螺旋手里剑：每段 12 伤 / 0.35s / 中速巨球 / 带吸引",
+    sh.dmg === 12 && sh.tick === 0.35 && sh.speed === 250 && sh.r === 54 && sh.pull > 0,
+    [sh.dmg, sh.tick, sh.speed, sh.r, sh.pull].join(","));
+  check("螺旋手里剑：商店大招列表含它", LD.skillsBy("ult").some(s => s.id === "shuriken"));
+  check("螺旋手里剑：与黑侠客大招共用同一份实现", LD.SKILL_IMPL.shuriken === LD.SKILL_IMPL.n_ult);
+  check("黑侠客的螺旋手里剑每段也是 12", LD.skill("n_ult").dmg === 12, LD.skill("n_ult").dmg);
+
+  // 勇者实际放一次
+  const h1 = B.mkHero(0, { x: 300, y: 400, look: P.look(), loadout: { basic: "slash", ult: "shuriken" }, name: "H" });
+  h1.ctrl = { mx: 0, my: 0, hold: {}, press: {} };
+  const h2 = B.mkHero(1, { x: 700, y: 400, look: P.look(), name: "F" });
+  B.setup({ mode: "duel", fighters: [h1, h2] });
+  B.resetRound(false); B.state = "fight"; B.countdown = 0;
+  h1.x = 300; h1.y = 400; h2.x = 700; h2.y = 400;   // 出生点随机，断言方向前先固定坐标
+  h1.energy = h1.maxEnergy; h1.cd.ult = 0; h1.facing = { x: 1, y: 0 };
+  B.trySlot(h1, "ult", h1.ctrl);
+  const sz = B.zones.find(z => z.type === "shuriken");
+  check("螺旋手里剑：勇者释放后生成飞行蓝球领域", !!sz && sz.dmg === 12 && sz.vx > 0,
+    sz ? "dmg=" + sz.dmg + " vx=" + Math.round(sz.vx) : "无");
+
+  /* ---- 黑侠客 AI 会真的按键用技能 ---- */
+  const hero = B.mkHero(0, { x: 300, y: 400, look: P.look(), name: "勇者" });
+  hero.ctrl = { mx: 0, my: 0, hold: {}, press: {} };
+  const ninja = B.mkBoss("ninja", { diff: LD.DIFF.normal });
+  B.setup({ mode: "dragon", fighters: [hero, ninja], theme: {} });
+  B.resetRound(false); B.state = "fight"; B.countdown = 0;
+  hero.x = 300; hero.y = 400; ninja.x = 700; ninja.y = 400;
+  ninja.cd.skill1 = 0; ninja.slot.skill1 = { on: false, phase: "", t: 0, d: {} };
+  LD.AI.tickHero(ninja, 0.5);
+  check("黑侠客 AI：会按下技能 1 键（召唤分身）", ninja.ctrl.press.skill1 === true, String(ninja.ctrl.press.skill1));
+  ninja.cd.skill1 = 999; ninja.ctrl.press = {};
+  ninja.cd.skill2 = 0; ninja.slot.skill2 = { on: false, phase: "", t: 0, d: {} };
+  LD.AI.tickHero(ninja, 0.5);
+  check("黑侠客 AI：会按下技能 2 键（突袭）", ninja.ctrl.press.skill2 === true, String(ninja.ctrl.press.skill2));
+  check("黑侠客 AI：把飞镖当远程武器（保持距离 235）", ninja.bot.desired > 200, ninja.bot.desired);
+
+  /* ---- 西部快枪手普攻 ---- */
+  const gun = B.mkBoss("gun", { diff: LD.DIFF.normal });
+  const hero2 = B.mkHero(0, { x: 300, y: 400, look: P.look(), name: "勇者" });
+  hero2.ctrl = { mx: 0, my: 0, hold: {}, press: {} };
+  B.setup({ mode: "dragon", fighters: [hero2, gun], theme: {} });
+  B.resetRound(false); B.state = "fight"; B.countdown = 0;
+  hero2.x = 300; hero2.y = 400; gun.x = 700; gun.y = 400; gun.facing = { x: -1, y: 0 };
+  gun.cd.basic = 0;
+  const n0 = B.projs.length;
+  B.trySlot(gun, "basic", gun.ctrl);
+  const shot = B.projs[B.projs.length - 1];
+  check("快枪手：普攻能打出子弹（不再因 sk.proj 缺失报错）",
+    B.projs.length === n0 + 1 && !!shot && shot.type === "bullet" && shot.dmg === LD.BOSS.gun.basic.dmg,
+    shot ? shot.type + "/dmg" + shot.dmg : "没打出子弹");
+  check("快枪手：普攻 CD 1s", Math.abs(gun.cd.basic - 1.0) < 0.01, gun.cd.basic.toFixed(2));
+  gun.cd.basic = 0; gun.facing = { x: 1, y: 0 };
+  B.trySlot(gun, "basic", gun.ctrl);
+  check("快枪手：子弹朝面朝方向飞出（有速度）", Math.abs(B.projs[B.projs.length - 1].vx) > 100,
+    Math.round(B.projs[B.projs.length - 1].vx));
+
+  /* ---- 困难模式：人形 BOSS 血量 ×2、伤害 ×1.4 真正生效 ---- */
+  const hardNinja = B.mkBoss("ninja", { diff: LD.DIFF.hard });
+  check("困难：人形 BOSS 血量 = 普通 2 倍", hardNinja.maxHp === LD.BOSS.ninja.hp * 2, hardNinja.maxHp + " vs " + LD.BOSS.ninja.hp);
+  check("困难：人形 BOSS 伤害倍率 1.4", hardNinja.dmgM === 1.4, hardNinja.dmgM);
+  check("困难：人形 BOSS 出手更快（rateM < 1）", hardNinja.rateM < 1, hardNinja.rateM.toFixed(3));
+  const tgt = B.mkHero(0, { x: 300, y: 400, look: P.look(), name: "靶子" });
+  tgt.team = 0; hardNinja.team = 1; tgt.side = 0; hardNinja.side = 1;
+  check("困难：人形 BOSS 打出的 10 点伤害变成 14", B.damage(hardNinja, tgt, 10) === 14, tgt.hp + "/" + tgt.maxHp);
+
+  /* ---- 王从天降：飞起期间不能移动、不能出招 ---- */
+  const king = B.mkHero(0, { x: 300, y: 400, look: P.look(), loadout: { basic: "slash", skill1: "dashSlash", ult: "kingDrop" }, name: "王" });
+  king.ctrl = { mx: 0, my: 0, hold: {}, press: {} };
+  const dummy = B.mkHero(1, { x: 700, y: 400, look: P.look(), name: "靶" });
+  B.setup({ mode: "duel", fighters: [king, dummy] });
+  B.resetRound(false); B.state = "fight"; B.countdown = 0;
+  king.x = 300; king.y = 400; king.energy = king.maxEnergy; king.cd.ult = 0;
+  B.trySlot(king, "ult", king.ctrl);
+  check("王从天降：一段标记落点", king.slot.ult.phase === "kingMark", king.slot.ult.phase);
+  B.trySlot(king, "ult", king.ctrl);
+  check("王从天降：二段进入飞起", king.slot.ult.phase === "kingRise", king.slot.ult.phase);
+  for (let i = 0; i < 300 && LD.Cine.active; i++) step(S, 1);      // 等大招演出结束（世界冻结期间指针不推进）
+  king.x = 300; king.y = 400; king.ctrl.mx = 1; king.ctrl.my = 0;
+  const kx0 = king.x;
+  for (let i = 0; i < 6; i++) step(S, 1);
+  check("王从天降：飞起期间无法移动", Math.abs(king.x - kx0) < 1, "dx=" + (king.x - kx0).toFixed(1) + " phase=" + king.slot.ult.phase);
+  check("王从天降：飞起状态仍在（定身判定有效）", king.slot.ult.phase === "kingRise", king.slot.ult.phase);
+  king.cd.basic = 0; king.cd.skill1 = 0;
+  B.trySlot(king, "basic", king.ctrl);
+  check("王从天降：飞起期间普攻被锁", king.slot.basic.on === false && king.cd.basic === 0, "cd=" + king.cd.basic);
+  B.trySlot(king, "skill1", king.ctrl);
+  check("王从天降：飞起期间位移类技能也被锁", king.slot.skill1.on === false && king.cd.skill1 === 0, "cd=" + king.cd.skill1);
+  for (let i = 0; i < 200 && king.slot.ult.phase === "kingRise"; i++) step(S, 1);   // 等落地
+  check("王从天降：落地后结束定身", king.slot.ult.phase !== "kingRise", king.slot.ult.phase);
+  const kx1 = king.x;
+  king.ctrl.mx = 1;
+  // 落地砸中目标会有命中定格（FX.stop 期间 dt=0、世界冻结），不能用固定帧数判定
+  for (let i = 0; i < 120 && Math.abs(king.x - kx1) < 5; i++) step(S, 1);
+  check("王从天降：落地后可以正常移动", Math.abs(king.x - kx1) > 5, "dx=" + (king.x - kx1).toFixed(1));
+
+  /* ---- 天外来物模式介绍简化 ---- */
+  const gifts = LD.ruleInfo("gifts");
+  check("天外来物：规则介绍已简写（< 100 字）", gifts.desc.length < 100, gifts.desc.length + " 字");
+  check("天外来物：简写后仍说清关键规则（10s 技能 / 20s 大招 / 置换）",
+    gifts.desc.indexOf("10 秒") >= 0 && gifts.desc.indexOf("20 秒") >= 0 && gifts.desc.indexOf("置换") >= 0, gifts.desc);
 }
 
 const errs = [S].filter(x => x.err);

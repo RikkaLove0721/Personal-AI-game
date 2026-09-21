@@ -4,6 +4,7 @@
  *  dist/music/*.ogg；运行时通过服务器 /music/list 拿歌单、/music/<名> 拉流。
  *  规则：随机乱序播放（一轮播完重新洗牌）、低音量循环、首次交互后启动
  *  （浏览器自动播放策略），多端：exe（WebView2）与浏览器都可以。
+ *  开关：主菜单右上角可随时开关，状态写进存档（bgmOn），下次启动保持一致。
  * ============================================================ */
 (function (LD) {
   "use strict";
@@ -15,14 +16,59 @@
     el: null,             // 当前 <audio>
     started: false,
     failed: 0,            // 连续播放失败次数（超限后静默放弃）
-    muted: false,
+    muted: false,         // 关掉音乐（主菜单右上角开关，随存档保存）
 
     init() {
       if (typeof fetch === "undefined") return;      // 无头测试环境直接跳过
+      this.applyProfile();                           // 先按存档恢复开关状态
       try {
         fetch("/music/list").then(r => (r.ok ? r.json() : { music: [] }))
           .then(d => { this.list = (d && d.music) || []; this._hook(); })
           .catch(() => {});
+      } catch (e) { /* 忽略 */ }
+    },
+
+    /* 从存档读取开关状态（字段不存在视为开启） */
+    applyProfile() {
+      try {
+        const v = LD.Profile && LD.Profile.d ? LD.Profile.d.bgmOn : true;
+        this.muted = v === false;
+      } catch (e) { this.muted = false; }
+      if (this.muted && this.el) { try { this.el.pause(); } catch (e) { /* 忽略 */ } }
+      return !this.muted;
+    },
+
+    /* 是否开启音乐 */
+    isOn() { return !this.muted; },
+
+    /* 按钮文案 */
+    label() { return this.muted ? "🔇 音乐关" : "🎵 音乐开"; },
+
+    /* 开关：on=true 开，false 关；persist=false 时不写存档 */
+    setOn(on, persist) {
+      on = !!on;
+      this.muted = !on;
+      if (on) {
+        if (this.el) {
+          try {
+            this.el.muted = false;
+            const p = this.el.play();
+            if (p && p.catch) p.catch(() => {});
+          } catch (e) { /* 忽略 */ }
+        }
+        if (!this.started) this.start();
+      } else if (this.el) {
+        try { this.el.pause(); this.el.muted = true; } catch (e) { /* 忽略 */ }
+      }
+      if (persist !== false) this._save();
+      return on;
+    },
+
+    toggle() { return this.setOn(this.muted, true); },
+
+    _save() {
+      try {
+        if (LD.Profile) { LD.Profile.d.bgmOn = !this.muted; LD.Profile.save(); }
       } catch (e) { /* 忽略 */ }
     },
 
@@ -42,13 +88,6 @@
       this.order = this._shuffle(this.list.slice());
       this.idx = 0;
       this._play();
-    },
-
-    toggleMute() {
-      this.muted = !this.muted;
-      if (this.el) this.el.muted = this.muted;
-      if (!this.muted && !this.started) this.start();
-      return this.muted;
     },
 
     _shuffle(arr) {
