@@ -85,7 +85,10 @@ const me = B.fighters[B.mySide != null ? B.mySide : 0];
 tap(S, "KeyK");                     // 施放激光波
 step(S, 120);                       // 蓄力1.5s + 光束0.22s + endSlot
 const cd0 = me.cd.skill1;
-check("施放后 CD 进入 8 秒冷却", cd0 > 7.4 && cd0 <= 8, cd0.toFixed(2));
+/* 命中巨龙会触发命中定格（FX.stop 期间 dt=0），蓄力+光束实际会多花几帧，
+ * 所以 cd0 会在 7.38 ~ 7.45 之间抖一帧。这里只验证「CD 被重置到 8 秒附近」，
+ * 真正的「不再卡死」由下一条（1 秒后 CD 正常递减）把关。 */
+check("施放后 CD 进入 8 秒冷却", cd0 > 7.2 && cd0 <= 8, cd0.toFixed(2));
 step(S, 60);                        // 1 秒后
 const cd1 = me.cd.skill1;
 check("1秒后 CD 正常递减（不再卡死）", cd1 < cd0 - 0.8 && cd1 > 6, cd0.toFixed(2) + "→" + cd1.toFixed(2));

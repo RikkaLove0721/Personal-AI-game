@@ -36,7 +36,7 @@
   /* ==========================================================
    *  界面控制
    * ========================================================== */
-  const OVS = ["ovMenu", "ovSolo", "ovLevels", "ovDuelSetup", "ovMulti", "ovJoin", "ovWait", "ovSkin", "ovSkill", "ovLoad", "ovHelp", "ovEnd", "ovPause"];
+  const OVS = ["ovMenu", "ovSolo", "ovLevels", "ovDuelSetup", "ovMulti", "ovJoin", "ovWait", "ovSkin", "ovSkill", "ovLoad", "ovHelp", "ovEnd", "ovPause", "ovPerk", "ovArmy", "ovTower", "ovAch"];
   const UI = LD.UI = { screen: "ovMenu" };
 
   UI.show = function (id) {
@@ -47,8 +47,13 @@
     if (id === "ovSkin") UI.renderSkin();
     if (id === "ovSkill") UI.renderSkill();
     if (id === "ovLevels") UI.renderLevels();
+    if (id === "ovSolo") UI.renderGauntletCard();
     if (id === "ovLoad") UI.renderLoad();
     if (id === "ovHelp") UI.renderHelp();
+    if (id === "ovSolo") UI.renderGauntletCard();
+    if (id === "ovAch") UI.renderAch();
+    if (id === "ovArmy") UI.renderArmy();
+    if (id === "ovTower") UI.renderTowerShop();
     /* 回到多人房间（含从装扮/技能页返回）→ 同步一次自己的配装给房主 */
     if (id === "ovWait" && LD.Net.ws) LD.Net.sendProfile();
   };
@@ -59,13 +64,17 @@
     if (c) c.textContent = P.d.cheat ? "已使用 " + P.d.cheat + " 次" : "";
   };
 
-  UI.toast = function (msg, gold) {
+  UI.toast = function (msg, gold, ms) {
     const w = $("toast");
     const d = document.createElement("div");
     d.className = "tst" + (gold ? " gold" : "");
+    /* v2.7：支持换行（技能介绍浮框会一次贴好几行），并可自定义停留时长 */
+    d.style.whiteSpace = "pre-line";
+    d.style.maxWidth = "min(560px, 86vw)";
+    d.style.textAlign = "left";
     d.textContent = msg;
     w.appendChild(d);
-    setTimeout(() => { d.style.transition = "opacity .3s"; d.style.opacity = "0"; setTimeout(() => d.remove(), 320); }, 1500);
+    setTimeout(() => { d.style.transition = "opacity .3s"; d.style.opacity = "0"; setTimeout(() => d.remove(), 320); }, ms || 1500);
   };
 
   UI.tip = function (msg) {
@@ -86,11 +95,35 @@
   /* ==========================================================
    *  皮肤商店
    * ========================================================== */
-  UI.skinTab = "head";
+  UI.skinTab = "suit";
   UI.renderSkin = function () {
     const part = this.skinTab;
     const wrap = $("skinShop");
     wrap.innerHTML = "";
+    if (part === "suit") {
+      /* v2.8 套装页：一键购买 / 整套穿戴；散件仍出现在头部 / 上身 / 下身三页 */
+      (LD.SUITS || []).forEach(s => {
+        const owned = P.ownsSuit(s.id);
+        const eq = owned && Object.keys(s.pieces).every(k => P.d.equip[k] === s.pieces[k]);
+        const d = document.createElement('div');
+        d.className = 'item' + (owned ? ' own' : '') + (eq ? ' eq' : '') + (!owned && P.d.coins >= s.price ? ' can' : '');
+        d.style.gridColumn = 'span 2';
+        d.innerHTML =
+          '<div class="pv"><canvas width="120" height="150" style="width:90px;height:112px"></canvas></div>' +
+          '<div class="nm">' + s.icon + ' ' + s.name + '</div>' +
+          '<div class="pr">' + (eq ? '整套穿戴中' : owned ? '点击整套穿上' : '<i class="coin"></i> ' + s.price) + '</div>' +
+          (owned ? '<div class="st' + (eq ? ' eq' : '') + '">' + (eq ? '★' : '✓') + '</div>' : '');
+        d.title = s.desc || '';
+        d.onclick = () => {
+          Audio2.ui();
+          if (owned) { P.equipSuit(s.id); UI.toast('已整套穿上「' + s.name + '」'); UI.renderSkin(); }
+          else if (doBuy(P.buySuit(s.id), s.name)) UI.renderSkin();
+        };
+        wrap.appendChild(d);
+        const cv = d.querySelector('canvas');
+        V.heroPreview(cv, suitLookFor(s), 0);
+      });
+    } else {
     LD.partsBy(part).forEach(p => {
       const owned = P.ownsPart(p.id), eq = P.d.equip[part] === p.id;
       const d = document.createElement("div");
@@ -98,32 +131,48 @@
       d.innerHTML =
         '<div class="pv"><canvas width="120" height="150" style="width:60px;height:75px"></canvas></div>' +
         '<div class="nm">' + p.name + '</div>' +
-        '<div class="pr">' + (eq ? "已装备" : owned ? "点击穿上" : "🪙 " + p.price) + '</div>' +
+        '<div class="pr">' + (eq ? "已装备" : owned ? "点击穿上" : '<i class="coin"></i> ' + p.price) + '</div>' +
         (owned ? '<div class="st' + (eq ? ' eq' : '') + '">' + (eq ? "★" : "✓") + '</div>' : '');
       d.onclick = () => {
         Audio2.ui();
         if (owned) { P.equipPart(p.id); UI.toast("已换上「" + p.name + "」"); UI.renderSkin(); }
-        else doBuy(P.buyPart(p.id), p.name);
+        else if (doBuy(P.buyPart(p.id), p.name)) UI.renderSkin();
       };
       wrap.appendChild(d);
       const cv = d.querySelector("canvas");
       V.heroPreview(cv, previewLookFor(p), 0);
     });
+    }
     document.querySelectorAll("#skinTabs .tab").forEach(t => t.classList.toggle("on", t.dataset.part === part));
     UI.refreshSkinPv();
   };
 
-  // 预览：把某个部件临时换上
+  // 预览：把某个部件临时换上（v2.8 图片部件带上 img 键）
   function previewLookFor(p) {
     const look = P.look();
     const key = p.part === "head" ? "head" : p.part;
-    if (p.part === "head") look.head = { model: p.model, c1: p.c1, c2: p.c2, c3: p.c3 };
-    else if (p.part === "upper") look.upper = { c1: p.c1, c2: p.c2 };
-    else look.lower = { c1: p.c1, c2: p.c2 };
+    if (p.part === "head") look.head = { model: p.model, c1: p.c1, c2: p.c2, c3: p.c3, img: p.img };
+    else if (p.part === "upper") look.upper = { c1: p.c1, c2: p.c2, img: p.img };
+    else look.lower = { c1: p.c1, c2: p.c2, img: p.img };
+    return look;
+  }
+
+  // 预览：整套穿上
+  function suitLookFor(s) {
+    const look = P.look();
+    const h = LD.part(s.pieces.head), u = LD.part(s.pieces.upper), l = LD.part(s.pieces.lower);
+    if (h) look.head = { model: h.model, c1: h.c1, c2: h.c2, c3: h.c3, img: h.img };
+    if (u) look.upper = { c1: u.c1, c2: u.c2, img: u.img };
+    if (l) look.lower = { c1: l.c1, c2: l.c2, img: l.img };
     return look;
   }
 
   UI.refreshSkinPv = function () { V.heroPreview($("skinPv"), P.look(), 0); };
+  /* v2.8：贴图（data URL）是异步解码的，首帧预览可能还没图；加载完成后若商店开着就重画一遍 */
+  V.onSkinImgLoad = function () {
+    const ov = $("ovSkin");
+    if (ov && !ov.classList.contains("hide")) UI.renderSkin();
+  };
 
   /* ==========================================================
    *  技能商店
@@ -164,15 +213,22 @@
       }
       if (slot) acts += '<button class="btn sm ghost" data-un="' + s.id + '" style="padding:3px 9px;font-size:10px">卸下</button>';
       d.innerHTML =
+        '<button class="sinfo" data-info="1" aria-label="查看技能介绍" title="技能介绍">▾</button>' +
         '<div style="font-size:22px;margin:4px 0">' + s.icon + '</div>' +
         '<div class="nm">' + s.name + '</div>' +
         '<div style="font-size:10px;color:#8fa0c8;margin-top:3px;line-height:1.5">' + s.tags.join(" · ") + '</div>' +
-        '<div class="pr">' + (owned ? (slot ? "已装配 " + SLOT_LAB[slot] : "点击装配") : "🪙 " + s.price) + '</div>' +
+        '<div class="pr">' + (owned ? (slot ? "已装配 " + SLOT_LAB[slot] : "点击装配") : '<i class="coin"></i> ' + s.price) + '</div>' +
         (s.dmg ? '<div style="font-size:10px;color:#fb923c">伤害 ' + s.dmg + (s.cd ? ' · CD ' + (s.cdText || s.cd + "s") : '') + '</div>' : (s.cd ? '<div style="font-size:10px;color:#8fa0c8">CD ' + (s.cdText || s.cd + "s") + '</div>' : '')) +
         '<div style="display:flex;gap:4px;justify-content:center;margin-top:6px;flex-wrap:wrap">' + acts + '</div>' +
         (owned ? '<div class="st' + (slot ? ' eq' : '') + '">' + (slot ? "★" : "✓") + '</div>' : '');
       d.title = s.desc;
       d.onclick = (ev) => {
+        /* 右上角小箭头：只弹技能介绍，不购买不装配 */
+        if (ev.target.dataset && ev.target.dataset.info) {
+          ev.stopPropagation();
+          UI.showSkillCard(s);
+          return;
+        }
         if (ev.target.dataset && ev.target.dataset.eq) {
           const k = ev.target.dataset.eq;
           const r = P.equipSkill(k, s.id);
@@ -196,6 +252,18 @@
       wrap.appendChild(d);
     });
     document.querySelectorAll("#skillTabs .tab").forEach(t => t.classList.toggle("on", t.dataset.kind === kind));
+  };
+
+  /* v2.7 手机端技能介绍浮框：不购买、不装配，只把技能讲清楚 */
+  UI.showSkillCard = function (s) {
+    if (!s) return;
+    Audio2.ui();
+    const tags = (s.tags && s.tags.length) ? '<div style="color:#7fe6f7;font-size:11.5px;margin:2px 0 6px">' + s.tags.join(" · ") + '</div>' : "";
+    const num = (s.dmg ? ("伤害 " + s.dmg) : "") + (s.cd ? ((s.dmg ? " · " : "") + "CD " + (s.cdText || s.cd + "s")) : "");
+    UI.toast(
+      s.icon + " " + s.name + (num ? "（" + num + "）" : "") + "\n" + s.desc,
+      false, 3200
+    );
   };
 
   /* ==========================================================
@@ -250,7 +318,7 @@
           '<div class="t">' + l.icon + ' ' + l.name + '</div>' +
           '<div class="d">' + l.desc + '</div>' +
           '<div class="d" style="margin-top:6px;color:' + d.color + '">' +
-            '奖励 🪙 ' + d.reward + ' · 怪物血量 ×' + d.hpM + ' · 伤害 ×' + d.dmgM + ' · 频率 ×' + d.rateM + '</div>' +
+            '奖励 <i class="coin"></i> ' + d.reward + ' · 怪物血量 ×' + d.hpM + ' · 伤害 ×' + d.dmgM + ' · 频率 ×' + d.rateM + '</div>' +
           '<div class="badge' + (k === "hard" ? " hard" : "") + '">' + d.name + (done ? " · 已通关" : "") + '</div>';
         c.onclick = () => { Audio2.ui(); UI.startDragon(l, d); };
         g.appendChild(c);
@@ -266,9 +334,19 @@
       '<h3>操作</h3>',
       '<ul>',
       '<li><span class="k">W</span><span class="k">A</span><span class="k">S</span><span class="k">D</span> 或方向键：四向移动；<b>快速双击同一方向键</b>可短距离闪避（无无敌帧，冷却 2.5 秒，与普攻共享冷却——闪避后普攻同样要等 2.5 秒）</li>',
-      '<li><span class="k">J</span> 普攻　<span class="k">K</span> 技能 1　<span class="k">L</span> 技能 2　<span class="k">O</span> 大招　<span class="k">V</span> 切换索敌目标</li>',
-      '<li><span class="k">M</span> 静音　<span class="k">Esc</span> 暂停菜单（可继续战斗 / 返回房间 / 回主菜单）</li>',
+      '<li><span class="k">J</span> 普攻　<span class="k">K</span> 技能 1　<span class="k">L</span> 技能 2　<span class="k">O</span> 大招　<span class="k">P</span> 交互　<span class="k">V</span> 切换索敌目标</li>',
+      '<li><b>交互键 P</b>（手机端在大招键正上方）：靠近可交互物时角色头顶会弹出提示——掉落物 / 泥土显示「拾取」，柜子显示「躲藏」，汽车显示「驾驶」；再按一次 P 离开柜子或下车。手里拿着泥土时按 P 直接朝面向方向扔出。</li>',
+      '<li><b>汽车</b>：油量以车顶的横条显示（2000~6000 距离随机），车上不能使用技能与大招，普攻变成喇叭（坦克是 5 秒 CD 的火炮）。撞到敌人造成 10 伤害 + 击退（同一辆车 2 秒 CD）；在车上受到任何伤害都会免疫该次伤害并被甩下车、眩晕 2 秒。车体被打中会漏油：每 1 点伤害少 20 可行驶距离，打空就开不动了。</li>',
+      '<li><b>吹风机</b>：朝一个方向持续喷出 1 格宽、3~6 格长的气流，走进去会被顺着风向吹开（撞墙则贴墙滑）。气流本身不掉血，但机身可以打坏（110 血），打坏后立刻停风。</li>',
+      '<li><b>柜子</b>：躲进去后敌人看不见；但藏超过 2 秒会被 AI 察觉（已经被锁定的目标躲进去也没用）。被发现后任何攻击命中都会免疫这次伤害、但把你揪出柜子并眩晕 2 秒；柜子被打碎时同样会被弹出并眩晕 2 秒。<b>隐匿</b>技能是更高级的隐身，AI 完全发现不了。</li>',
+      '<li><span class="k">M</span> 静音　<span class="k">Esc</span> 暂停菜单（可继续战斗 / 返回房间 / 回主菜单）　<span class="k">B</span> 局内商店（丧尸危机 / 世界末日 / 塔防对战，不暂停战斗）</li>',
       '<li>技能槽位可以在「技能商店」里自由更换，最多 1 个普攻 + 2 个技能 + 1 个大招。<b>格挡</b>属于普攻分类，装在 J 槽。</li>',
+      '</ul>',
+      '<h3>大地图与视角</h3>',
+      '<ul>',
+      '<li>所有对战模式的场地都是 <b>1200 × 1200</b> 的大地图，而画面只有 960 × 600。</li>',
+      '<li>视角<b>跟随你的角色</b>：角色始终待在屏幕中心，走到哪里背景就滚到哪里；只有贴到地图边界时视角才会停住，这时角色才开始在屏幕上偏移。</li>',
+      '<li>视野外的敌人会在屏幕边缘显示<b>红色箭头</b>指示方位，按 <span class="k">V</span> 也能切换锁定目标。</li>',
       '</ul>',
       '<h3>索敌机制</h3>',
       '<ul>',
@@ -293,22 +371,57 @@
       '<li>单人「闯关模式」为关卡制，每关有普通 / 困难两档。困难模式怪物血更厚、更疼、出手更频繁。</li>',
       '<li>单人「闯关模式」普通通关 <b>+4 金币</b>，困难通关 <b>+10 金币</b>；'
       + '<b>人机对战</b>胜利普通 <b>+6 金币</b>、困难 <b>+12 金币</b>（三局两胜整局结算）。</li>',
-      '<li>部件（头 / 上身 / 下身）与普攻 / 技能均 <b>6 金币</b>，大招 <b>10 金币</b>。</li>',
+      '<li>部件（头 / 上身 / 下身）与普攻 / 技能均 <b>6 金币</b>，大招 <b>10 金币</b>。皮肤商店新增<b>套装</b>页：高清整装（如奶蛙）<b>18 金币</b>一套，也可拆开按件 <b>8 金币</b> 单买、与老部件自由混搭。</li>',
       '</ul>',
-      '<h3>四种对战模式（单人与联机都可选）</h3>',
+      '<h3>房间设置</h3>',
       '<ul>',
-      '<li><b>乱斗模式</b>：所有人互相为敌，最后站着的赢下回合。</li>',
+      '<li>房间界面已精简：模式按钮与修饰符按钮<b>悬停鼠标</b>可看到介绍；「⏱ 时间」「🗺 地图」两个按钮点开小窗编辑。</li>',
+      '<li><b>对局时间</b>（60 / 120 / 180 秒）只有经典乱斗、阵营、追猎、热身、世界末日会用到；缩圈由毒圈计时，霸主 / 天外来物不限时，丧尸危机打到只剩一人，车轮战每场固定 60 秒。</li>',
+      '<li><b>地图配置</b>：先选预设（全部随机 / 雨林 / 沙漠 / 废墟 / 雪原 / 竞技场 / 熔炉 / 城市），再用 15 条滑条微调各类设施数量（0 = 不生成）：实心柱、可破坏箱、可推动方块、围栏、草丛（站进去隐身）、炸药桶（打爆原地爆炸）、汽车（多格可推）、水池（减速）、轮胎（很轻）、补给箱（打破掉血包 / 能量 / 移速）、路障、建筑（石墙房间）、柜子（可躲藏）、泥土（可搬起投掷）、吹风机（持续喷风）。位置每局随机。</li>',
+      '<li>联机房间里以上配置由房主设定，客机只能看到摘要。</li>',
+      '</ul>',
+      '<h3>对战模式（单人与联机都可选，共 11 种；塔防仅本地面板）</h3>',
+      '<ul>',
+      '<li><b>经典乱斗</b>：所有人互相为敌，最后站着的赢下回合。</li>',
       '<li><b>阵营模式</b>：红黄蓝绿四队，同队之间互不造成伤害（名字前有队伍色点），最后只剩一个阵营时获胜；全同阵营不能开局。</li>',
       '<li><b>霸主争霸</b>：巨龙同场混战。击败巨龙会爆出<b>能量石</b>并飞向随机位置，第一个抢到的人成为<b>霸主</b>：血量上限与当前血量 ×1.5、头顶加皇冠，其他人机的仇恨会转向霸主；霸主阵亡后能量石直接消散，不再掉落。</li>',
-      '<li><b>天外来物</b>：开局只有普攻，技能与大招全靠天上降落。每 10 秒落一个技能、每 20 秒落一个大招（降落 2 秒后可拾取），碰到即装备；K/L 两格满了就按键置换，被换下的技能留在原地（按键先照常出手，0.3 秒后完成置换）。最后活着的人获胜。AI 也会捡。</li>',
-      '<li>单人「勇者格斗」就是角色卡房间：第一张卡是你（可直接换装扮 / 技能），后面的人机卡可增删（最多 3 个）、可选难度（木桩 / 普通 / 困难）与配装。</li>',
+      '<li><b>天外来物</b>：开局只有普攻，技能与大招全靠天上降落。每 10 秒落一个技能、每 20 秒落一个大招（降落 2 秒后可拾取），走到掉落物旁按 <span class="k">P</span> 拾取：技能进 K/L 两格，两格都满时替换<b>最早获得</b>的那个；大招替换当前大招，被换下的会留在原地。最后活着的人获胜。AI 也会捡。</li>',
+      '<li><b>缩圈乱斗</b>：开局也只有普攻，技能与大招靠天上掉落——场上最多同时 6 个技能、3 个大招，而且有一半概率<b>落在圈外</b>，想捡就得冒着中毒的风险出去。地图上只有 4 个大圈是安全区、其余全是毒；安全圈会一个个消失并持续缩小，最后只剩一个小圈逼大家正面开打。圈外每 0.5 秒掉 5 血，但圈外也会掉<b>血包</b>。最后活着的人获胜。</li>',
+      '<li><b>丧尸危机</b>：<b>不限时</b>，场地不断刷出<b>僵尸</b>（100 血、移速 110%，固定「突刺 + 撕咬」两个技能，没有普攻、大招和闪避）。僵尸专盯玩家。你可以绕开它们，也可以杀掉爆<b>局内金币</b>（僵尸 1 枚 / 只、玩家 3 枚 / 人）；点战斗界面右上角的 <span class="k">🛒 商店</span> 按钮（电脑按 <span class="k">B</span>）打开<b>局内商店</b>，花 3 金币买血包、血量加成或移速加成（移速最多叠 3 次）。商店开着时战斗<b>不会暂停</b>，商品只在当局有效。打到只剩一人即获胜。</li>',
+      '<li><b>世界末日</b>：所有玩家<b>同一阵容、互不伤害</b>，出生在地图正中的<b>石墙庇护所</b>里（左右各一个两格宽门洞）。庇护所外会不断刷出僵尸，<b>存活玩家越多刷得越快</b>，僵尸会直冲门洞闯进来；<b>门洞外有一圈青色减速带</b>，僵尸进圈后移速减半。墙外是红圈，待在外面每 0.6 秒掉 4 血。对僵尸造成的伤害与击杀都计入个人分数（1 伤 = 1 分、击杀 +10 分），击杀还掉局内金币，可按 <span class="k">B</span> 买血包 / 血量 / 移速 / 能量球。最后存活的玩家获胜；时间到时仍有多人存活，则<b>分数最高者获胜</b>（不看剩余血量）。</li>',
+      '<li><b>车轮战</b>：排队单挑，擂台上每次只有两人对决，败者永久出局，胜者回血 30% 迎接下一位挑战者。（仅本地面板可用）</li>',      '<li><b>追猎时刻</b>：开局<b>随机抽一名玩家当猎人</b>——先播一段猎人特写，猎人头顶加皇冠、血量 <b>800</b>、全部 CD 减半，且<b>伤害随存活幸存者数提升</b>（每多一名 +20%）；其余人是生存者，各自保留自己选的技能、互相同队。开场就有一个大毒圈并缓慢收缩（90 秒过去仍有大片走位空间）。猎人要在 90 秒内清场，生存者撑到倒计时结束就赢。</li>',
+      '<li><b>乱斗热身</b>：限时刷分。对局时长在房间界面的「对局时间」里统一选 <b>60 / 120 / 180 秒</b>，阵亡不淘汰、1.6 秒后在随机位置复活，每次击杀得 1 分，时间到分数最高者获胜。不计回合、没有淘汰，纯粹练手。</li>',
+      '<li><b>塔防对战</b>：3v3 单线推塔，<b>没有时间限制</b>，一直打到一方水晶爆掉。地图 2800×600，左右镜像，红蓝一塔之间留出一大片中心战区。双方每 32 秒刷 6 只机器人小兵沿兵线推进，拆掉敌塔后自家小兵变强。防御塔（1500 血 / 射程 300）与水晶（3000 血 / 射程 340）会发射<b>高速追踪弹</b>，走进敌方范围时会显示一圈红圈警告；<b>防御塔没拆完水晶免疫伤害</b>。击杀小兵 / 英雄 / 助攻都给<b>局内金币</b>，按 <span class="k">B</span> 买被动装备（生命 / 攻击 / 护盾 / 能量 / 回血 / 霸体 / 闪避等，每件一次）、<b>主动装备</b>（最多 1 件，按 <span class="k">P</span> 释放）、可重复购买的<b>小兵强化</b>，以及开车时才能买的<b>汽油桶</b>（80 金，+2000 油，不限次数）。英雄 1–6 级，升级加血加伤害；阵亡后在原地立<b>墓碑</b>显示复活倒计时，倒计时结束回基地复活，基地回血圈每秒回复 12% 生命。房间界面可以选红队 / 蓝队。</li>',
+      '<li>单人「勇者格斗」的房间就是角色卡房间：第一张卡是你（可直接换装扮 / 技能），后面的人机卡可增删（最多 5 个，塔防会自动补满 5 个凑 3v3）、可选难度（木桩 / 普通 / 困难）与配装。</li>',
+      '</ul>',
+      '<h3>规则修饰符（可多选叠加）</h3>',
+      '<ul>',
+      '<li><b>低重力</b>：击退更远更飘，闪避距离 +50%。</li>',
+      '<li><b>高速</b>：移速 +35%，所有 CD 缩短 30%。</li>',
+      '<li><b>回复</b>：场上每 8 秒随机掉落一个血包，吃下回复 45 点生命。</li>',
+      '<li><b>僵尸</b>：场上会不断刷新僵尸干扰战局，僵尸只有<b>突刺 / 撕咬</b>两个技能，没有普攻、大招和闪避，击杀也<b>不掉</b>局内金币。</li>',
+      '<li><b>技能轮盘</b>：每 12 秒全场勇者随机换一套技能与大招。</li>',
+      '<li><b>物资刷新</b>：每 30 秒按当前地图预设刷新一次物资——被打碎的可破坏物复原、车辆回到原位并加满油、空地上重生两个能量包；石柱 / 墙体等固定障碍不受影响。</li>',
       '</ul>',
       '<h3>关卡（怪物规格：1 普攻 + 2 技能 + 1 大招）</h3>',
       '<ul>',
       '<li><b>第 1 关 熔核巨龙</b>：火球 / 突刺爪击 / 爆裂火焰。</li>',
       '<li><b>第 2 关 神秘黑侠客</b>：飞镖 / 暗影分身（同血量同外形，打它白费）/ 突袭三连斩 / 螺旋手里剑（吸引 + 持续伤害）。</li>',
       '<li><b>第 3 关 西部快枪手</b>：全程 1s 快枪 / 炸弹投掷 / 连环十响 / 8 秒隐身（隐身期间照常开枪且不现形）。</li>',
-      '<li>困难模式：怪物血量为普通的 <b>2 倍</b>，技能释放频率更高，伤害 ×1.4。</li>',
+      '<li><b>第 4 关 机械蜂后</b>：尾针 / 孵化自爆工蜂 / 蜂群冲锋 / 蜂群倾巢。先清小蜂还是先打本体，决定你的血线。</li>',
+      '<li><b>第 5 关 霜甲巨像</b>：冰锥 / 霜压 / 寒霜领域（减速）/ 绝对零度（读条时要躲进它脚下的安全圈）。</li>',
+      '<li><b>第 6 关 双子剑客</b>：两个共享血量的剑士，只有戴真身标记的那个吃满伤害（另一位只结算三成），每 8 秒换位。</li>',
+      '<li><b>第 7 关 赌徒</b>：掷骰 / 抽牌 / 出千（把你的飞行物全部打回来）/ 俄罗斯轮盘。</li>',
+      '<li><b>第 8 关 镜影</b>：配装与皮肤完全复制你的另一个自己，招式一模一样，只是所有 CD 比你长三成（大招 CD 另有下限，不会疯狂开大）。</li>',
+      '<li><b>第 9 关 磁暴坦克</b>：电弧 / 极性反转（把飞行物吸向场地中心）/ 电磁护盾（破盾放电）/ 雷暴。困难模式血量 300。</li>',
+      '<li>困难模式：怪物血量为普通的 <b>2 倍</b>，技能释放频率更高，伤害 ×1.4。通关后可 3 选 1 拿一个词条，叠加着连打后面的关卡。</li>',
+      '</ul>',
+      '<h3>成就与称号</h3>',
+      '<ul>',
+      '<li>主菜单 → <b>🏆 成就称号</b> 可查看全部成就，并佩戴已解锁的称号（称号会以紫色显示在你名字前）。</li>',
+      '<li>十种对战模式各有一个专属称号，条件统一为<b>在该模式中获胜 10 次</b>：乱斗之王（经典乱斗）/ 阵营统帅（阵营）/ 君临天下（霸主）/ 天选之人（天外来物）/ 缩圈之王（缩圈）/ 尸潮克星（丧尸危机）/ 末日幸存者（世界末日）/ 擂台霸主（车轮战）/ 荒野猎人（追猎）/ 热身达人（热身）。</li>',
+      '<li>其余称号看累计战绩：初出茅庐 / 讨伐者 / 百人斩 / 修罗 / 万贯家财 / 关卡大师 / 孤高之巅 / 清道夫 / 死战英雄。</li>',
+      '<li><b>死战闯关</b>：连续 6 关，前 4 关随机普通 BOSS、后 2 关随机困难 BOSS，每关一局定胜负；每关之间可 3 选 1 拿一个 Buff 叠加。中途失败即结束，通关奖励 <b>50 金币</b>。</li>',
       '</ul>',
       '<h3>联机方法（2-4 人）</h3>',
       '<ul>',
@@ -316,7 +429,7 @@
       '<li>2. 用 exe 启动的话服务器已经开好了；如提示防火墙，勾选「专用」和「公用」并允许。</li>',
       '<li>3. 房主：主菜单 → 多人游戏 → 创建房间，拿到 4 位房号。</li>',
       '<li>4. 朋友：浏览器打开房主的地址（形如 <b>http://192.168.x.x:8123</b>）→ 多人游戏 → 加入房间 → 输入房号。</li>',
-      '<li>5. 房间准备阶段所有人都是角色卡：可以换装扮 / 技能，房主可以增删人机（最多 3 个）并选择模式，2-4 人随时开局。</li>',
+      '<li>5. 房间准备阶段所有人都是角色卡：可以换装扮 / 技能，房主可以增删人机（最多 5 个）并选择模式，2-4 人随时开局。</li>',
       '<li>⚠️ 朋友不要开服务器，只开房主那一台；连不上先查防火墙与路由器「AP 隔离」。</li>',
       '</ul>'
     ].join("");
@@ -334,6 +447,7 @@
    *  HUD
    * ========================================================== */
   const slotEls = [];
+  let actEl = null;                      // v3.8：P 键交互框
   function buildHud() {
     $("slots").innerHTML = "";
     slotEls.length = 0;
@@ -345,40 +459,81 @@
       $("slots").appendChild(d);
       slotEls.push({ slot, el: d, ic: d.querySelector(".ic"), nm: d.querySelector(".nm"), cd: d.querySelector(".cd"), en: d.querySelector(".en") });
     });
+    /* v3.8 交互键 P：电脑端所有模式都显示当前可交互内容（与手机端同一个判定） */
+    const act = document.createElement("div");
+    act.className = "slot act empty";
+    act.innerHTML = '<span class="kb">P</span><span class="ic">✋</span><span class="nm">无</span>' +
+      '<span class="cd" style="display:none"></span><span class="en"></span>';
+    $("slots").appendChild(act);
+    actEl = { el: act, ic: act.querySelector(".ic"), nm: act.querySelector(".nm"), cd: act.querySelector(".cd") };
+  }
+
+  /* v2.7：名字里若带成就称号（形如「称号」名字），把称号单独高亮成紫色 */
+  function fmtName(n) {
+    if (!n) return "";
+    const m = /^「([^」]*)」(.*)$/.exec(n);
+    if (!m) return n;
+    return '<span class="ttl">「' + m[1] + '」</span>' + m[2];
   }
 
   UI.updateHud = function () {
     const me = B.hero(B.mySide == null ? 0 : B.mySide) || B.hero(0);
     if (!me) return;
     const pb = $("pBars"), eb = $("eBars");
-    /* 左上角 = 自己的血量与能量（带名字与队伍标识，避免混淆） */
+    /* v3.7 塔防：6 个人 6 条血，右侧列表压扁 */
+    if (eb) eb.classList.toggle("compact", B.rule === "tower");
+    /* 左上角 = 自己的血量与能量（带名字与队伍标识，避免混淆）
+     * v2.7：自己的名牌高亮成金色，成就称号部分再单独用紫色描出，局内一眼可辨 */
     const myTags = [];
-    if (me.name) myTags.push(me.name);
+    if (me.name) myTags.push(nameHtml(me));
     if (B.rule === "team" && me.team >= 0) myTags.push(LD.TEAM_NAMES[me.team]);
     if (me.overlord) myTags.push("👑 霸主");
-    pb.innerHTML = (myTags.length ? '<div class="tag">你 · ' + myTags.join(" · ") + '</div>' : "") +
-      bar("HP", me.hp, me.maxHp, "hp") + bar("能量", me.energy, me.maxEnergy, "en" + (me.energy >= me.maxEnergy ? " full" : ""));
-    /* 敌方：除自己以外的所有参战者（联机最多 3 个对手） */
-    const foes = B.fighters.filter(x => x.side !== me.side);
-    eb.innerHTML = foes.map(foe => {
+    if (B.rule === "hunt") myTags.push(me.huntRole === "hunter" ? "👑 猎人" : "🏃 生存者");
+    if (B.rule === "auction") myTags.push("<i class='coin'></i> " + (me.bcoins || 0));
+    if (B.rule === "warmup") myTags.push("得分 " + (B.wScore[B.fighters.indexOf(me)] || 0));
+    if (B.rule === "ring") myTags.push(B.inPoison(me.x, me.y) ? "☠ 毒圈中" : "🛡 安全区");
+    pb.innerHTML = (myTags.length ? '<div class="tag me">你 · ' + myTags.join(" · ") + '</div>' : "") +
+      bar("HP", me.hp, me.maxHp, "hp") +
+      '<div class="kd">击杀 <b style="color:#ffd98a">' + (me.kills || 0) + '</b> · 死亡 <b style="color:#fca5a5">' + (me.deaths || 0) + '</b></div>' +
+      (B.rule === "tower" ? "" : bar("能量", me.energy, me.maxEnergy, "en" + (me.energy >= me.maxEnergy ? " full" : "")));
+    /* 敌方：除自己以外的参战者（僵尸 / 杂兵 / 分身不占血条位，只在下面报数量）
+     * v2.7 修复：以前只收 kind === "hero"，导致闯关里的巨龙（kind === "dragon"）
+     * 在困难模式下血厚、玩家需要盯着血条打时却完全没有血条显示。 */
+    const foes = B.fighters.filter(x => (x.kind === "hero" || x.kind === "dragon") && !x.isZombie && !x.isClone && x.side !== me.side && !x.bench);
+    let html = foes.map(foe => {
       const tags = [];
       if (foe.kind === "dragon") {
         tags.push(foe.name + (foe.rageStage === 2 ? " · 狂暴" : foe.rageStage === 1 ? " · 暴怒" : ""));
       } else {
         if (B.rule === "team" && foe.team >= 0) tags.push(LD.TEAM_NAMES[foe.team]);
         if (foe.overlord) tags.push("👑 霸主");
+        if (foe.huntRole === "hunter") tags.push("👑 猎人");
+        if (foe.huntRole === "runner") tags.push("生存者");
+        if (B.rule === "warmup") tags.push((B.wScore[B.fighters.indexOf(foe)] || 0) + " 分");
         if (B.rule === "overlord" && B.stone && !B.stone.holder) tags.push("石头已掉落");
-        if (foe.name) tags.push(foe.name);
-        if (foe.dead) tags.push("已倒下");
+        if (foe.name) tags.push(nameHtml(foe));
+        if (foe.dead) tags.push(foe.respawnT > 0 && B.rule === "warmup" ? "复活中" : "已倒下");
       }
       const extra = tags.length ? '<div class="tag">' + tags.join(" · ") + '</div>' : "";
-      return extra + bar("HP", foe.hp, foe.maxHp, "hp foe");
+      return extra + bar("HP", foe.hp, foe.maxHp, "hp foe",
+        " · " + (foe.kills || 0) + "杀 " + (foe.deaths || 0) + "死");
     }).join("");
+    /* v2.7：僵尸 / 杂兵数量单独一行，避免十几个血条把屏幕糊满 */
+    const zN = B.fighters.filter(x => x.isZombie && !x.dead).length;
+    const mN = B.fighters.filter(x => x.kind === "minion" && !x.dead).length;
+    if (zN || mN) {
+      const parts = [];
+      if (zN) parts.push("🧟 僵尸 ×" + zN);
+      if (mN) parts.push("🐝 杂兵 ×" + mN);
+      html += '<div class="tag" style="color:#a3e635">' + parts.join("　") + '</div>';
+    }
+    eb.innerHTML = html;
     slotEls.forEach(s => {
       const id = me.loadout[s.slot], sk = LD.skill(id);
       if (!sk) {
+        /* v2.7：空槽位统一显示「无」，不再残留上一局装过的技能名 */
         s.el.className = "slot empty" + (s.slot === "ult" ? " big" : "");
-        s.ic.textContent = "—"; s.nm.textContent = "空槽位"; s.cd.style.display = "none"; s.en.style.transform = "scaleX(0)";
+        s.ic.textContent = "—"; s.nm.textContent = "无"; s.cd.style.display = "none"; s.en.style.transform = "scaleX(0)";
         return;
       }
       s.ic.textContent = sk.icon; s.nm.textContent = sk.name;
@@ -395,21 +550,121 @@
       }
       s.el.className = cls;
     });
+    if (actEl) {
+      const label = (B.interactLabel ? B.interactLabel(me) : "") || "";
+      actEl.nm.textContent = label || "无";
+      actEl.el.classList.toggle("empty", !label);
+      actEl.el.classList.toggle("ready", !!label);
+      const cd = me.activeCd || 0;
+      if (B.rule === "tower" && me.activeItem && cd > 0.05) {
+        actEl.cd.style.display = "flex";
+        actEl.cd.textContent = Math.ceil(cd);
+      } else actEl.cd.style.display = "none";
+    }
+    UI.updateModeHud();
   };
 
-  function bar(lab, v, max, cls) {
+  /* v2.7 顶部模式信息条：模式名 + 计时 + 各模式专属读数 */
+  UI.updateModeHud = function () {
+    const el = $("modeHud");
+    if (!el) return;
+    /* v2.7 丧尸危机 / v3.2 世界末日：战斗界面上的商店按钮只在局内显示，方便手机端随时买装备 */
+    const shopBtn = $("btnShopHud");
+    if (shopBtn) {
+      shopBtn.style.display = ((B.rule === "auction" || B.rule === "doomsday" || B.rule === "tower") && B.state === "fight") ? "" : "none";
+      shopBtn.classList.toggle("tower", B.rule === "tower");
+    }
+    const ri = LD.ruleInfo(B.rule);
+    const mmss = v => {
+      const s = Math.max(0, Math.ceil(v || 0));
+      const m = Math.floor(s / 60), ss = s % 60;
+      return m > 0 ? m + ":" + (ss < 10 ? "0" : "") + ss : ss + "s";
+    };
+    let title = ri ? ri.icon + " " + ri.name : "";
+    if (B.mode === "dragon" && B.level) title = "🗺 " + B.level.name + "（" + ((B.diff && B.diff.name) || "普通") + "）";
+    const subs = [];
+    const clock = B.rule === "tower" ? (B.towerT || 0) : B.roundT;
+    if (B.state === "countdown") subs.push('<span class="big">准备中…</span>');
+    else if (clock > 0) subs.push('<span class="big' + (clock <= 10 ? " warn" : "") + '">' + mmss(clock) + '</span>');
+    if (B.rule === "ring") {
+      const alive = (B.rings || []).filter(c => !c.dead).length;
+      const men = B.humans(true).length;
+      subs.push("安全圈 <b>" + alive + "</b> · 存活 <b>" + men + "</b> · 掉落 <b>" + (B.gifts || []).length + "</b>");
+    } else if (B.rule === "hunt") {
+      const hf = B.fighters.find(f => f.kind === "hero" && f.huntRole === "hunter");
+      const runners = B.humans(true).filter(f => f.huntRole === "runner").length;
+      subs.push("猎人 <b>" + ((hf && hf.name) || "-") + "</b> · 生存者 <b>" + runners + "</b>");
+    } else if (B.rule === "auction") {
+      const zN = B.fighters.filter(x => x.isZombie && !x.dead).length;
+      const meH = B.hero(B.mySide == null ? 0 : B.mySide);
+      subs.push("🧟 僵尸 <b>" + zN + "</b> · <i class='coin'></i> 局内金币 <b>" + (meH ? (meH.bcoins || 0) : 0) + "</b>");
+    } else if (B.rule === "doomsday") {
+      const zN = B.fighters.filter(x => x.isZombie && !x.dead).length;
+      const meH = B.hero(B.mySide == null ? 0 : B.mySide);
+      const my = meH ? (B.wScore[B.fighters.indexOf(meH)] || 0) : 0;
+      let top = 0;
+      B.humans().forEach(f => { const s = B.wScore[B.fighters.indexOf(f)] || 0; if (s > top) top = s; });
+      subs.push("🧟 僵尸 <b>" + zN + "</b> · 存活 <b>" + B.humans(true).length + "</b> · 你 <b>" + my + "</b> 分 · 最高 <b>" + top + "</b> 分"
+        + " · <i class='coin'></i> <b>" + (meH ? (meH.bcoins || 0) : 0) + "</b>");
+    } else if (B.rule === "warmup") {
+      const my = B.wScore[B.fighters.indexOf(B.hero(B.mySide == null ? 0 : B.mySide))] || 0;
+      let top = 0;
+      B.humans().forEach(f => { const s = B.wScore[B.fighters.indexOf(f)] || 0; if (s > top) top = s; });
+      subs.push("你 <b>" + my + "</b> 分 · 最高 <b>" + top + "</b> 分 · 阵亡后随机复活");
+    } else if (B.rule === "relay" && B.relay) {
+      const onStage = B.fighters.filter(f => f.kind === "hero" && !f.dead && !f.bench);
+      subs.push("擂台上 " + onStage.map(f => f.name).join(" vs ") + " · 剩余 " + B.fighters.filter(f => f.kind === "hero" && !f.dead).length + " 人");
+    } else if (B.rule === "team") {
+      subs.push("剩余阵营 <b>" + B.teamsAlive() + "</b>");
+    } else if (B.rule === "tower") {
+      const meH = B.hero(B.mySide == null ? 0 : B.mySide);
+      const ps = B.terrain ? B.terrain.props.filter(o => !o.dead && o.kind === "tower") : [];
+      const t0 = ps.filter(o => o.side === 0).length, t1 = ps.length - t0;
+      const s0 = (B.tScore && B.tScore[0]) || 0, s1 = (B.tScore && B.tScore[1]) || 0;
+      /* v3.8 无时限：时间那行改成双方比分 */
+      subs.unshift('<span class="big">红 <b style="color:#f87171">' + s0 + '</b> : <b style="color:#60a5fa">' + s1 + '</b> 蓝</span>');
+      const it = meH && meH.activeItem ? LD.towerItem(meH.activeItem) : null;
+      const itTxt = it ? (it.icon + " " + it.name + ((meH.activeCd || 0) > 0 ? " (" + Math.ceil(meH.activeCd) + "s)" : " 就绪")) : "无";
+      subs.push("剩余塔 <b>" + t0 + " / " + t1 + "</b> · 兵线 <b>" + (B.fighters.filter(f => f.kind === "laneMinion" && !f.dead).length) + "</b> 只");
+      subs.push("Lv.<b>" + (meH ? (meH.level || 1) : 1) + "</b> · 金币 <b>" + (meH ? (meH.bcoins || 0) : 0) + "</b> · 主动：<b>" + itTxt + "</b> · B 商店 / P 装备");
+    } else if (B.rule === "gifts") {
+      subs.push("天降技能 <b>" + (B.gifts || []).length + "</b> 个");
+    } else if (B.rule === "overlord") {
+      subs.push(B.stone ? "能量石已掉落！" : "击败巨龙夺取能量石");
+    }
+    if (B.mods && B.mods.length) {
+      subs.push('<span style="color:#c4b5fd">' + B.mods.map(id => {
+        const m = (LD.MODS || []).find(x => x.id === id);
+        return m ? m.icon + m.name : id;
+      }).join(" · ") + '</span>');
+    }
+    el.innerHTML = '<div class="mt">' + title + '</div>' + subs.map(s => '<div class="ms">' + s + '</div>').join("");
+  };
+
+  function bar(lab, v, max, cls, extra) {
     const p = Math.max(0, Math.min(1, v / max));
     return '<div class="barrow">' +
       '<span class="barlab">' + lab + '</span>' +
       '<div class="bartrack ' + cls + '"><div class="barfill" style="transform:scaleX(' + p + ')"></div>' +
-      '<div class="bartxt">' + Math.ceil(v) + " / " + Math.round(max) + '</div></div></div>';
+      '<div class="bartxt">' + Math.ceil(v) + " / " + Math.round(max) + (extra || "") + '</div></div></div>';
+  }
+  /* v3.8 塔防：红队红名、蓝队蓝名 */
+  function teamColor(f) {
+    if (!f || f.team == null || f.team < 0) return null;
+    if (B.rule === "tower") return f.team === 1 ? "#60a5fa" : "#f87171";
+    return (LD.TEAM_COLORS && LD.TEAM_COLORS[f.team]) || null;
+  }
+  function nameHtml(f) {
+    const c = teamColor(f);
+    const n = fmtName(f && f.name) || "";
+    return c ? '<span style="color:' + c + '">' + n + '</span>' : n;
   }
 
   /* ==========================================================
    *  输入
    * ========================================================== */
   const keys = {};
-  const ctrl = UI.ctrl = { mx: 0, my: 0, dodge: null, hold: { basic: false, skill1: false, skill2: false, ult: false }, press: { basic: false, skill1: false, skill2: false, ult: false } };
+  const ctrl = UI.ctrl = { mx: 0, my: 0, dodge: null, hold: { basic: false, skill1: false, skill2: false, ult: false, interact: false }, press: { basic: false, skill1: false, skill2: false, ult: false, interact: false } };
   const KEYMAP = {
     KeyJ: "basic", KeyK: "skill1", KeyL: "skill2", KeyO: "ult",
     Space: "skill2", ShiftLeft: "skill1", ShiftRight: "skill1"
@@ -428,9 +683,14 @@
       if (keys[c]) return;
       keys[c] = true;
       if (c === "KeyM") { Audio2.muted = !Audio2.muted; $("btnMute").textContent = Audio2.muted ? "🔇 静音" : "🔊 音效"; return; }
-      if (c === "Escape") { if (UI.screen === "ovPause") UI.show("game"); else UI.openPause(); return; }
+      if (c === "Escape") { if (UI.screen === "ovPause") UI.resumeGame(); else if (UI.screen === "ovArmy") UI.closeArmy(); else UI.openPause(); return; }
       if (c === "KeyR" && B.state === "over") { UI.restart(); return; }
       if (c === "KeyV") { ctrl.lockNext = e.shiftKey ? -1 : 1; return; }   // V 键：切换索敌目标（Shift+V 反向）
+      if (c === "KeyB") {                                                   // B 键：局内商店
+        if (B.rule === "tower") UI.openTower(); else UI.openArmy();
+        return;
+      }
+      if (c === "KeyP") { ctrl.press.interact = true; return; }             // v3.3 P 键：交互（拾取 / 躲藏 / 驾驶）
       const slot = KEYMAP[c];
       if (slot) { ctrl.press[slot] = true; ctrl.hold[slot] = true; }
       const dk = DIRKEYS[c];
@@ -460,35 +720,49 @@
     }
   };
 
-  UI.clearCtrl = function () { ctrl.mx = ctrl.my = 0; ctrl.dodge = null; ["basic", "skill1", "skill2", "ult"].forEach(k => { ctrl.hold[k] = false; ctrl.press[k] = false; }); Object.keys(lastTap).forEach(k => lastTap[k] = 0); };
+  UI.clearCtrl = function () { ctrl.mx = ctrl.my = 0; ctrl.dodge = null; ["basic", "skill1", "skill2", "ult", "interact"].forEach(k => { ctrl.hold[k] = false; ctrl.press[k] = false; }); Object.keys(lastTap).forEach(k => lastTap[k] = 0); };
 
   /* ==========================================================
    *  开局
    * ========================================================== */
   function botLook() {
-    /* 每局人机的皮肤随机搭配：头 / 上身 / 下身各从全目录随机抽一款 */
-    const pick = part => { const a = LD.partsBy(part); return a[(Math.random() * a.length) | 0]; };
-    const h = pick("head"), u = pick("upper"), l = pick("lower");
-    return {
-      head: { model: h.model, c1: h.c1, c2: h.c2, c3: h.c3 },
-      upper: { c1: u.c1, c2: u.c2 },
-      lower: { c1: l.c1, c2: l.c2 }
-    };
+    /* 每局人机的皮肤随机搭配：头 / 上身 / 下身各从全目录随机抽一款
+     * v3.5：统一走 LD.randomLook，图片皮肤会带上 img，不再出现缺头 / 缺裤子 */
+    return LD.randomLook();
   }
 
   UI.enterGame = function () {
     UI.clearCtrl();
+    B.paused = false;                  // v2.7：进局前统一清掉暂停，避免卡在倒计时「2」
     buildHud();
     $("hudVer").textContent = "v" + LD.VERSION;
     UI.show("game");
   };
 
-  UI.startDragon = function (level, diff) {
-    const hero = B.mkHero(0, { x: C.W * 0.26, y: C.H * 0.56, look: P.look(), loadout: P.d.loadout, name: P.displayName(), energy: 0 });
+  /* v2.6 闯关词条：连续挑战时叠加生效，重新从主菜单进入闯关页时清零 */
+  UI.runPerks = [];
+  UI.applyRunPerks = function (hero) {
+    (UI.runPerks || []).forEach(id => {
+      const perk = (LD.PERKS || []).find(x => x.id === id);
+      if (perk && hero) perk.apply(hero);
+    });
+  };
+  UI.resetRunPerks = function () { UI.runPerks = []; };
+
+  UI.startDragon = function (level, diff, opts) {
+    opts = opts || {};
+    B.dailyRun = false;
+    B.gauntletRun = !!opts.gauntlet;
+    $("endSub").dataset.daily = "";
+    const hero = B.mkHero(0, { x: B.world.w * 0.26, y: B.world.h * 0.5, look: P.look(), loadout: P.d.loadout, name: P.displayName(), energy: 0 });
     hero.ctrl = ctrl;
-    const boss = B.mkBoss(level.boss, { diff });
-    B.setup({ mode: "dragon", diff, level, fighters: [hero, boss], theme: { top: "#1a1226", bottom: "#08060f", grid: "rgba(251,113,133,.35)", moon: "rgba(251,146,60,.22)" } });
-    B.onEnd = win => UI.endDragon(win, level, diff);
+    /* v2.6 关卡工厂：双子剑客返回两个共享血量的个体；镜影复制玩家配装 */
+    const bosses = B.mkBossForLevel(level.boss, diff, hero);
+    B.setup({ mode: "dragon", diff, level, fighters: [hero].concat(bosses),
+      mods: opts.mods || [],
+      theme: { top: "#1a1226", bottom: "#08060f", grid: "rgba(251,113,133,.35)", moon: "rgba(251,146,60,.22)" } });
+    UI.applyRunPerks(hero);
+    B.onEnd = win => opts.gauntlet ? UI.endGauntlet(win, level, diff) : UI.endDragon(win, level, diff);
     UI.enterGame();
   };
 
@@ -505,45 +779,98 @@
   };
 
   UI.endDragon = function (win, level, diff) {
-    $("btnEndRoom").style.display = "none";   // 巨龙关卡没有房间概念
+    $("btnEndRoom").style.display = "none";   // 闯关没有房间概念
+    P.battleEnd(win, "dragon");
+    const meH = B.hero(0);
+    if (meH) P.stat("kills", meH.kills || 0);
     if (win) {
       const reward = diff.reward;
       const first = P.clear(level.id, diff.key, reward);
       Audio2.win();
       $("endTitle").textContent = "讨伐成功";
-      $("endSub").innerHTML = "击败了 <b>" + level.name + "</b>（" + diff.name + "）<br>获得 <b style='color:#ffd98a'>🪙 " + reward + " 金币</b>" +
+      $("endSub").innerHTML = "击败了 <b>" + level.name + "</b>（" + diff.name + "）<br>获得 <b style='color:#ffd98a'><i class='coin'></i> " + reward + " 金币</b>" +
         (first ? "<br><span style='color:#7ff0c4'>首次通关该难度！</span>" : "") +
-        "<br><span style='color:#8fa0c8'>当前金币：" + P.d.coins + "</span>";
+        "<br><span style='color:#8fa0c8'>当前金币：" + P.d.coins + "</span>" +
+        ($("endSub").dataset.daily ? "<br><span style='color:#fcd34d'>" + $("endSub").dataset.daily + "</span>" : "");
     } else {
       Audio2.lose();
       $("endTitle").textContent = "挑战失败";
       $("endSub").innerHTML = "被 <b>" + level.name + "</b>（" + diff.name + "）击败了<br><span style='color:#8fa0c8'>" + level.tip + "</span>";
     }
     UI.show("ovEnd");
+    /* v2.6 通关后提供词条 3 选 1 */
+    if (win) UI.offerPerk(level, diff);
+  };
+
+  /* ---------------- v2.6 闯关词条 3 选 1 ---------------- */
+  UI.offerPerk = function (level, diff) {
+    const h2 = document.querySelector("#ovPerk h2");
+    const sub = document.querySelector("#ovPerk .sub");
+    if (h2) h2.textContent = "选择一个词条";
+    if (sub) sub.textContent = "词条只在本次闯关内生效，可以不断叠加";
+    const pool = (LD.PERKS || []).filter(x => UI.runPerks.indexOf(x.id) < 0);
+    UI.perkChoices = [];
+    const bag = pool.slice();
+    while (UI.perkChoices.length < 3 && bag.length) {
+      UI.perkChoices.push(bag.splice((Math.random() * bag.length) | 0, 1)[0]);
+    }
+    if (!UI.perkChoices.length) return;
+    UI.perkLevel = level; UI.perkDiff = diff;
+    $("perkGrid").innerHTML = UI.perkChoices.map((pk, i) =>
+      '<div class="card" data-perk="' + i + '"><div class="t">' + pk.icon + " " + pk.name + '</div><div class="d">' + pk.desc + '</div></div>'
+    ).join("");
+    $("perkGrid").querySelectorAll("[data-perk]").forEach(el => {
+      el.onclick = () => {
+        Audio2.ui();
+        const pk = UI.perkChoices[+el.dataset.perk];
+        UI.runPerks.push(pk.id);
+        UI.toast("已获得词条：" + pk.name + "（下次闯关生效）", 1);
+        UI.show("ovLevels");
+      };
+    });
+    UI.show("ovPerk");
   };
 
   UI.endDuel = function (win) {
     /* 人机对战奖励：普通胜利 +6，困难胜利 +12（三局两胜整局结算一次） */
     $("btnEndRoom").style.display = "";       // 对局结束也可以回房间调整配装再打
     const reward = win ? (DuelSetup.level === "hard" ? 12 : 6) : 0;
+    /* v2.7：战绩与特殊模式计数终于记进档案（以前人机对战是不统计的） */
+    P.battleEnd(win, "duel", B.rule);       // 热身 / 车轮 / 追猎等特殊模式的计数都在 battleEnd 里统一处理
+    /* v2.7 乱斗热身：结算显示计分板 */
+    let scoreTxt = "";
+    if (B.rule === "tower") {
+      /* v3.7 塔防：结算显示队伍击杀与水晶体结果，而不是三局两胜的比分 */
+      scoreTxt = "红队 " + ((B.tScore && B.tScore[0]) || 0) + " : " + ((B.tScore && B.tScore[1]) || 0) + " 蓝队" +
+        (B.towerResult ? " · " + B.towerResult : "");
+    }
+    if (B.rule === "warmup") {
+      scoreTxt = B.humans().map(f => {
+        const s = B.wScore[B.fighters.indexOf(f)] || 0;
+        return (f.name || ("玩家" + (f.side + 1))) + " " + s;
+      }).join(" · ");
+    }
     if (win) {
       P.addCoins(reward);
       Audio2.win();
-      $("endTitle").textContent = "对决胜利";
-      $("endSub").innerHTML = "比分 " + B.score.join(" : ") +
-        "<br>获得 <b style='color:#ffd98a'>🪙 " + reward + " 金币</b>（" +
+      $("endTitle").textContent = B.rule === "tower" ? "推塔胜利" : "对决胜利";
+      $("endSub").innerHTML =
+        (scoreTxt ? "最终比分 " + scoreTxt + "<br>" : "比分 " + B.score.join(" : ") + "<br>") +
+        "获得 <b style='color:#ffd98a'><i class='coin'></i> " + reward + " 金币</b>（" +
         (DuelSetup.level === "hard" ? "困难" : "普通") + "难度）" +
         "<br><span style='color:#8fa0c8'>当前金币：" + P.d.coins + "</span>";
     } else {
       Audio2.lose();
-      $("endTitle").textContent = "对决失败";
-      $("endSub").innerHTML = "比分 " + B.score.join(" : ") + "<br><span style='color:#8fa0c8'>再战一局，胜利才有奖励（普通 6 / 困难 12）</span>";
+      $("endTitle").textContent = B.rule === "tower" ? "推塔失败" : "对决失败";
+      $("endSub").innerHTML = (scoreTxt ? "最终比分 " + scoreTxt + "<br>" : "比分 " + B.score.join(" : ") + "<br>") +
+        "<span style='color:#8fa0c8'>再战一局，胜利才有奖励（普通 6 / 困难 12）</span>";
     }
     UI.show("ovEnd");
   };
 
   UI.endNet = function (win) {
     $("btnEndRoom").style.display = "";
+    P.battleEnd(win, "net", B.rule);
     const champ = B.fighters[B.matchWinner];
     const champName = champ ? (champ.name || "玩家" + (B.matchWinner + 1)) : "未知";
     if (win) { Audio2.win(); $("endTitle").textContent = "你赢了！"; }
@@ -555,6 +882,7 @@
   };
 
   UI.restart = function () {
+    B.paused = false;
     if (B.mode === "net") {
       if (LD.Net.isHost) UI.netHostStart();
       else { LD.Net.toPeer({ t: "again" }); UI.toast("已请求再战，等待房主开始…"); }
@@ -571,6 +899,7 @@
     }
     B.fighters = []; B.projs = []; B.zones = [];
     LD.FX.clear(); LD.Cine.active = false;
+    B.paused = false; B.dailyRun = false;
     UI.show("ovMenu");
   };
 
@@ -578,7 +907,274 @@
   UI.openPause = function () {
     if (UI.screen !== "game" || B.state === "idle") return;
     $("btnPauseRoom").style.display = B.mode === "dragon" ? "none" : "";
+    $("btnArmyShop").style.display = (B.rule === "auction" || B.rule === "doomsday") ? "" : "none";
+    if (B.mode !== "net") B.paused = true;   // v2.6 本地对局真正暂停；联机只弹面板不冻结
     UI.show("ovPause");
+  };
+  UI.resumeGame = function () {
+    if (B.mode !== "net") B.paused = false;
+    UI.show("game");
+  };
+
+  /* ---------------- v2.7 军备竞赛：局内商店（B 开关，不暂停战斗，背景半透明） ---------------- */
+  UI.openArmy = function () {
+    /* v3.2：丧尸危机 / 世界末日都吃局内商店 */
+    if ((B.rule !== "auction" && B.rule !== "doomsday") || B.state !== "fight") return;
+    /* 按 B 再按一次 = 关闭 */
+    if (UI.screen === "ovArmy") { UI.closeArmy(); return; }
+    /* v2.7：商店不再暂停——开着商店世界照常跑，风险自担 */
+    UI.show("ovArmy");
+  };
+  UI.closeArmy = function () {
+    if (UI.screen === "ovArmy") UI.show("game");
+  };
+  UI.armyBuy = function (id) {
+    const me = B.hero(B.mySide == null ? 0 : B.mySide);
+    if (!me) return;
+    if (B.mode === "net" && !B.isHost) { UI.toast("联机对局中商店暂只对房主生效"); return; }
+    const item = B.armyShop().find(i => i.id === id);
+    if (!item) return;
+    if ((me.bcoins || 0) < item.price) {
+      Audio2.beep(200, 0.14, "square", 0.05);
+      UI.toast("局内金币不足，还差 " + (item.price - (me.bcoins || 0)) + " 枚");
+      return;
+    }
+    if (!B.armyBuy(me, id)) {
+      Audio2.beep(200, 0.14, "square", 0.05);
+      UI.toast(id === "heal" ? "满血状态买不了血包" : (id === "spd" ? "移速加成已叠满" : "买不了这件商品"));
+      return;
+    }
+    UI.toast("已购买：" + item.icon + " " + item.name);
+    UI.renderArmy();
+  };
+  UI.renderArmy = function () {
+    const me = B.hero(B.mySide == null ? 0 : B.mySide);
+    const coins = me ? (me.bcoins || 0) : 0;
+    const ce = $("armyCoins"); if (ce) ce.textContent = coins;
+    const hint = $("armyHint");
+    const grid = $("armyGrid");
+    if (!grid) return;
+    const coinPer = B.rule === "doomsday" ? ((LD.DOOMSDAY || {}).coin || 2) : ((LD.ZOMBIE || {}).coin || 1);
+    if (hint) hint.textContent = "击杀僵尸掉 " + coinPer + " 枚局内金币、击杀玩家掉 3 枚；商品只在当局有效，商店开着时战斗不会暂停";
+    const Z = LD.ZOMBIE || {};
+    grid.innerHTML = B.armyShop().map(it => {
+      const afford = coins >= it.price;
+      return '<div class="card" data-buy="' + it.id + '" style="cursor:' + (afford ? "pointer" : "default") +
+        ';opacity:' + (afford ? "1" : ".58") + '">' +
+        '<div class="t">' + it.icon + " " + it.name + '</div>' +
+        '<div class="d">' + it.desc + '</div>' +
+        '<div style="margin-top:8px;font-weight:800;color:' + (afford ? "#ffd98a" : "#8b93a7") + '">💰 ' + it.price + ' 金币</div></div>';
+    }).join("");
+    grid.querySelectorAll("[data-buy]").forEach(el => {
+      el.onclick = () => { Audio2.ui(); UI.armyBuy(el.dataset.buy); };
+    });
+  };
+
+  /* ---------------- v3.7 塔防：局内装备商店 ---------------- */
+  UI.openTower = function () {
+    if (B.rule !== "tower" || B.state !== "fight") return;
+    if (UI.screen === "ovTower") { UI.show("game"); return; }
+    UI.show("ovTower");
+  };
+  UI.towerBuy = function (id) {
+    const me = B.hero(B.mySide == null ? 0 : B.mySide);
+    if (!me) return;
+    if (B.mode === "net" && !B.isHost) { UI.toast("联机对局中商店暂只对房主生效"); return; }
+    const r = B.towerCanBuy(me, id);
+    if (!r.ok) {
+      Audio2.beep(200, 0.14, "square", 0.05);
+      UI.toast(r.why);
+      return;
+    }
+    B.towerBuy(me, id);
+    UI.toast("已购买：" + r.item.icon + " " + r.item.name);
+    UI.renderTowerShop();
+  };
+  UI.renderTowerShop = function () {
+    const me = B.hero(B.mySide == null ? 0 : B.mySide);
+    const coins = me ? (me.bcoins || 0) : 0;
+    const ce = $("towerCoins"); if (ce) ce.textContent = coins;
+    const grid = $("towerGrid");
+    if (!grid) return;
+    const hint = $("towerHint");
+    if (hint) {
+      const own = me && me.items ? Object.keys(me.items).length : 0;
+      const act = me && me.activeItem ? LD.towerItem(me.activeItem) : null;
+      hint.innerHTML = "已购 <b>" + own + "</b> 件 · 主动装备：" +
+        (act ? "<b style='color:#7ff0c4'>" + act.icon + " " + act.name + "</b>（按 P 释放）" : "<b>未携带</b>") +
+        " · 击杀小兵 32 / 英雄 240 / 助攻 120 金币";
+    }
+    const U = LD.TOWER.minionUp || { max: 5 };
+    grid.innerHTML = B.towerShop().map(it => {
+      const isTeam = it.kind === "team";
+      const isFuel = it.kind === "fuel";
+      const stack = isTeam ? B.towerStack(me, it.id) : 0;
+      const own = !!(me && me.items && me.items[it.id]);
+      const full = isTeam && stack >= (U.max || 5);
+      const actOwn = !!(me && me.activeItem);
+      /* v3.9 汽油桶：没上车 / 油箱满 都买不了，tag 直接说明原因 */
+      const car = me && me.rideCar;
+      const carFull = !!(car && (car.fuel || 0) >= (car.fuelMax || 0));
+      const fuelBlocked = isFuel && (!car || carFull);
+      const blocked = own || full || fuelBlocked || (it.kind === "active" && actOwn && me.activeItem !== it.id);
+      const afford = coins >= it.price;
+      const col = (own || full) ? "#7ff0c4" : (blocked ? "#8b93a7" : (afford ? "#ffd98a" : "#8b93a7"));
+      const tag = isFuel ? (!car ? "需上车" : (carFull ? "油箱已满" : "油 " + Math.round((car.fuel || 0) / (car.fuelMax || 1) * 100) + "%"))
+        : isTeam ? ("×" + stack + "/" + (U.max || 5))
+        : (own ? "已拥有" : (it.kind === "active" ? (me && me.activeItem === it.id ? "携带中" : "主动") : "被动"));
+      return '<div class="card" data-tbuy="' + it.id + '" style="cursor:' +
+        (blocked || !afford ? "default" : "pointer") + ';opacity:' + ((own || full) ? ".55" : (blocked ? ".45" : (afford ? "1" : ".62"))) + '">' +
+        '<div class="t">' + it.icon + " " + it.name +
+        ' <span style="float:right;font-size:10px;color:' + col + '">' + tag + '</span></div>' +
+        '<div class="d">' + it.desc + '</div>' +
+        '<div style="margin-top:8px;font-weight:800;color:' + col + '"><i class="coin"></i> ' + it.price + '</div></div>';
+    }).join("");
+    grid.querySelectorAll("[data-tbuy]").forEach(el => {
+      el.onclick = () => { Audio2.ui(); UI.towerBuy(el.dataset.tbuy); };
+    });
+  };
+
+  /* ---------------- v2.6 成就与称号 ---------------- */
+  UI.renderAch = function () {
+    const st = P.d.stats || {};
+    const clearedN = LD.LEVELS.filter(l => P.cleared(l.id, "normal")).length;
+    $("achStats").innerHTML = "累计击杀 <b>" + (st.kills || 0) + "</b> · 胜利 <b>" + (st.wins || 0) + "</b> · 失败 <b>" +
+      (st.losses || 0) + "</b> · 闯关通关 <b>" + clearedN + "/" + LD.LEVELS.length + "</b> · 累计金币 <b>" + (st.coinsEarned || 0) + "</b>";
+    $("titleGrid").innerHTML = (LD.TITLES || []).map(t => {
+      const ok = P.achUnlocked(t.ach);
+      const cur = P.d.title === t.id;
+      return '<div class="card" data-title="' + t.id + '" style="' + (ok ? "cursor:pointer" : "opacity:.4") + '">' +
+        '<div class="t">' + t.name + '</div><div class="d">' + (ok ? (cur ? "佩戴中（点击摘下）" : "点击佩戴") : "未解锁") + '</div></div>';
+    }).join("");
+    $("titleGrid").querySelectorAll("[data-title]").forEach(el => {
+      el.onclick = () => {
+        Audio2.ui();
+        const id = el.dataset.title;
+        const cur = P.d.title === id;
+        if (cur) P.setTitle("");
+        else if (!P.setTitle(id)) UI.toast("该称号尚未解锁");
+        UI.renderAch();
+      };
+    });
+    $("achGrid").innerHTML = (LD.ACHIEVEMENTS || []).map(a => {
+      const ok = P.achUnlocked(a.id);
+      return '<div class="card" style="' + (ok ? "" : "opacity:.4") + '"><div class="t">' + a.icon + " " + a.name + '</div><div class="d">' +
+        a.desc + (ok ? " · 已达成" : "") + '</div></div>';
+    }).join("");
+  };
+
+  /* ---------------- v3.1 死战闯关（替代每日挑战） ---------------- */
+  UI.gauntlet = null;
+  const GAUNTLET_N = 6;
+
+  function pickRandom(list, n) {
+    const bag = list.slice(), out = [];
+    while (out.length < n && bag.length) out.push(bag.splice((Math.random() * bag.length) | 0, 1)[0]);
+    return out;
+  }
+
+  UI.renderGauntletCard = function () {
+    const el = $("gauntletDesc");
+    if (!el) return;
+    const g = UI.gauntlet;
+    if (g && g.stage < GAUNTLET_N) {
+      el.textContent = "进行中：第 " + (g.stage + 1) + " / " + GAUNTLET_N + " 关 · " +
+        g.picks[g.stage].level.name + "（" + g.picks[g.stage].diff.name + "）";
+    } else {
+      el.textContent = "连打 6 关（前 4 关普通 / 后 2 关困难），每关之间选一个 Buff，通关 50 金币";
+    }
+  };
+
+  UI.startGauntlet = function () {
+    /* 前四关普通 BOSS，后两关困难 BOSS；关卡不重复 */
+    const picks = [];
+    const six = pickRandom(LD.LEVELS, GAUNTLET_N);
+    six.slice(0, 4).forEach(l => picks.push({ level: l, diff: LD.DIFF.normal }));
+    six.slice(4, 6).forEach(l => picks.push({ level: l, diff: LD.DIFF.hard }));
+    UI.gauntlet = { stage: 0, picks: picks, buffs: [] };
+    UI.resetRunPerks();
+    UI.gauntletStage();
+  };
+
+  UI.gauntletStage = function () {
+    const g = UI.gauntlet;
+    if (!g) return;
+    const p = g.picks[g.stage];
+    if (!p) return;
+    UI.toast("死战闯关 " + (g.stage + 1) + " / " + GAUNTLET_N + "：" + p.level.name + "（" + p.diff.name + "）", 1.4);
+    UI.startDragon(p.level, p.diff, { gauntlet: true });
+  };
+
+  UI.endGauntlet = function (win, level, diff) {
+    const g = UI.gauntlet;
+    $("btnEndRoom").style.display = "none";
+    B.gauntletRun = false;
+    P.battleEnd(win, "dragon");
+    const meH = B.hero(0);
+    if (meH) P.stat("kills", meH.kills || 0);
+    const stageNo = g ? Math.min(g.stage + 1, GAUNTLET_N) : 1;
+
+    if (!win) {
+      Audio2.lose();
+      $("endTitle").textContent = "死战中断";
+      $("endSub").innerHTML = "倒在第 <b>" + stageNo + " / " + GAUNTLET_N + " 关</b>：" + level.name +
+        "（" + diff.name + "）<br><span style='color:#8fa0c8'>" + level.tip + "</span>";
+      UI.gauntlet = null;
+      UI.show("ovEnd");
+      return;
+    }
+
+    Audio2.win();
+    g.stage++;
+    if (g.stage >= GAUNTLET_N) {
+      P.addCoins(50);
+      P.stat("dailyWins", 1);
+      P.checkAch(); P.save();
+      $("endTitle").textContent = "死战通关";
+      $("endSub").innerHTML = "连破 <b>" + GAUNTLET_N + " 关</b>，最后一战击败了 <b>" + level.name + "</b>（" + diff.name + "）<br>" +
+        "获得 <b style='color:#ffd98a'><i class='coin'></i> 50 金币</b><br>" +
+        "<span style='color:#8fa0c8'>当前金币：" + P.d.coins + "</span>";
+      UI.gauntlet = null;
+      UI.show("ovEnd");
+      return;
+    }
+
+    $("endTitle").textContent = "第 " + stageNo + " 关通过";
+    $("endSub").innerHTML = "击败了 <b>" + level.name + "</b>（" + diff.name + "）<br>" +
+      "接下来是第 <b>" + (g.stage + 1) + " / " + GAUNTLET_N + " 关</b>，先选一个 Buff";
+    UI.offerGauntletPerk();
+  };
+
+  /* 死战闯关的 Buff 三选一：与词条共用一套效果，选完直接进下一关 */
+  UI.offerGauntletPerk = function () {
+    const g = UI.gauntlet;
+    if (!g) return;
+    const h2 = document.querySelector("#ovPerk h2");
+    const sub = document.querySelector("#ovPerk .sub");
+    if (h2) h2.textContent = "第 " + (g.stage + 1) + " / " + GAUNTLET_N + " 关 · 选择 Buff";
+    if (sub) sub.textContent = "本次死战内叠加生效；不选则直接进入下一关";
+    const pool = (LD.PERKS || []).filter(x => UI.runPerks.indexOf(x.id) < 0);
+    const choices = pickRandom(pool, 3);
+    $("perkGrid").innerHTML = choices.map((pk, i) =>
+      '<div class="card" data-gperk="' + i + '"><div class="t">' + pk.icon + " " + pk.name +
+      '</div><div class="d">' + pk.desc + '</div></div>').join("");
+    $("perkGrid").querySelectorAll("[data-gperk]").forEach(el => {
+      el.onclick = () => {
+        Audio2.ui();
+        const pk = choices[+el.dataset.gperk];
+        UI.runPerks.push(pk.id);
+        g.buffs.push(pk.id);
+        UI.toast("获得 Buff：" + pk.name, 1);
+        UI.gauntletStage();
+      };
+    });
+    UI.show("ovPerk");
+  };
+
+  /* 词条页「跳过」在死战里表示直接进下一关 */
+  UI.perkSkip = function () {
+    if (UI.gauntlet) { UI.gauntletStage(); return; }
+    UI.show("ovLevels");
   };
 
   /* 返回房间：结束当前对局，但回到准备界面（联机保持房间与连接） */
@@ -586,6 +1182,8 @@
     if (B.state !== "idle" && B.state !== "over") B.state = "over";
     B.fighters = []; B.projs = []; B.zones = [];
     LD.FX.clear(); LD.Cine.active = false;
+    /* v2.7：这里不清暂停，下一局会永远停在倒计时「2」——旧版最常被报的卡读条 bug */
+    B.paused = false;
     if (B.mode === "net") { UI.show("ovWait"); UI.renderNetRoom(); UI.toast("已返回房间，等房主重新开始"); }
     else { UI.show("ovDuelSetup"); UI.renderRoom(); }
   };
@@ -593,11 +1191,12 @@
   /* ==========================================================
    *  联机
    * ========================================================== */
-  UI.startNetBattle = function (roster, rule, dragonDiff) {
+  UI.startNetBattle = function (roster, rule, dragonDiff, mods, matchT, mapCfg) {
     const N = LD.Net;
     LD.Net.buildNetBattle({
       isHost: N.isHost, mySide: N.mySide, roster: roster || null,
-      rule: rule || "brawl", dragonDiff: dragonDiff || "normal"
+      rule: rule || "brawl", dragonDiff: dragonDiff || "normal", mods: mods || [],
+      matchT: matchT || 120, mapCfg: mapCfg || null
     });
     B.onEnd = win => UI.endNet(win);
     UI.enterGame();
@@ -615,6 +1214,7 @@
     N.on("created", code => {
       N.peersIn.length = 0; N.roster = {};
       UI.netRoom.rule = "brawl"; UI.netRoom.teams = {}; UI.netRoom.bots = []; UI.netRoom.players = [];
+      UI.netRoom.mods = []; UI.netRoom.matchT = 120;
       UI.show("ovWait");
       UI.renderNetRoom();
       UI.toast("房间已创建，房号 " + code + "，把房号告诉朋友吧");
@@ -641,7 +1241,8 @@
       UI.toast("有玩家离开了");
       if (B.mode === "net" && B.state !== "over" && B.state !== "idle") { B.state = "over"; UI.endNet(false); }
     });
-    N.on("start", d => { UI.startNetBattle(d && d.roster, d && d.rule, d && d.dragonDiff); });
+    N.on("start", d => { UI.startNetBattle(d && d.roster, d && d.rule, d && d.dragonDiff, d && d.mods,
+      (d && (d.matchT || d.warmupT)) || 120, d && d.mapCfg); });
     N.on("again", () => { if (LD.Net.isHost) UI.netHostStart(); });
     N.on("matchEnd", mw => { if (!LD.Net.isHost && B.mode === "net") { B.matchWinner = mw; UI.endNet(mw === LD.Net.mySide); } });
   };
@@ -667,6 +1268,8 @@
 
     go("sDrag", () => UI.show("ovLevels"));
     go("sDuel", () => { UI.show("ovDuelSetup"); UI.renderRoom(); });
+    go("sGauntlet", () => UI.startGauntlet());
+    go("mAch", () => { UI.renderAch(); UI.show("ovAch"); });
 
     go("btnCreate", () => { LD.Net.connect(); LD.Net.create(); });
     go("btnGoJoin", () => { LD.Net.connect(); UI.show("ovJoin"); const ci = $("codeInput"); if (ci) { ci.value = ""; ci.focus(); } });
@@ -695,7 +1298,16 @@
     go("btnEndRoom", () => UI.backToRoom());
     go("btnEndMenu", () => UI.quitGame());
     go("btnQuit", () => UI.openPause());
-    go("btnPauseResume", () => UI.show("game"));
+    go("btnArmyShop", () => UI.openArmy());
+    /* v2.7 丧尸危机：战斗界面上的商店入口 + 商店关闭按钮（手机端以前没法关） */
+    go("btnShopHud", () => { if (B.rule === "tower") UI.openTower(); else UI.openArmy(); });
+    go("towerClose", () => UI.show("game"));
+    go("towerCloseBtn", () => UI.show("game"));
+    go("armyClose", () => UI.closeArmy());
+    go("armyCloseBtn", () => UI.closeArmy());
+    /* 通关后的词条面板：跳过按钮以前没有绑事件，点上去毫无反应（人会被卡在这一页） */
+    go("btnPerkSkip", () => { UI.runPerks.push("__skip__"); UI.perkSkip(); });
+    go("btnPauseResume", () => UI.resumeGame());
     go("btnPauseRoom", () => UI.backToRoom());
     go("btnPauseMenu", () => UI.quitGame());
     go("btnMute", () => { Audio2.muted = !Audio2.muted; $("btnMute").textContent = Audio2.muted ? "🔇 静音" : "🔊 音效"; });
@@ -715,7 +1327,7 @@
     $("codeInput").addEventListener("input", e => { e.target.value = e.target.value.replace(/\D/g, "").slice(0, 4); });
     $("codeInput").addEventListener("keydown", e => { if (e.key === "Enter") $("btnJoin").onclick(); });
 
-    $("menuVer").textContent = "v" + LD.VERSION + " · 一人一剑，向死而生";
+    $("menuVer").textContent = "v" + LD.VERSION + " · 听雨的声音";
     $("hudVer").textContent = "v" + LD.VERSION;
     this.show("ovMenu");
   };

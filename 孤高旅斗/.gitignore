@@ -3,6 +3,15 @@ dist/
 build/
 *.spec
 
+# 皮肤抠图中间产物（AI 迭代图 / 校准图 / 源图备份；只保留 parts/*.png 与 preview_full.png）
+assets/skins/*/*.png
+assets/skins/*/*.bak
+!assets/skins/*/preview_full.png
+
+# 调试快照
+.playwright-cli/
+e.dataset.rule
+
 # Python
 __pycache__/
 *.pyc

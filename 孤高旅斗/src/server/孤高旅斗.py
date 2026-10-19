@@ -457,6 +457,22 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
             return
+        if path == "/api/lanip":
+            # 给房主界面用：把「朋友该输入哪个网址」直接回给客户端，
+            # 省得房主要翻后台控制台抄地址（localhost 那个地址发给朋友是连不上的）
+            # 注意：Python 3.13 的 socketserver 不再有 server_port 属性，端口要从 server_address 取
+            try:
+                port = self.server.server_address[1]
+            except Exception:      # noqa: BLE001
+                port = getattr(self.server, "server_port", None)
+            body = json.dumps({"ips": lan_ips(), "port": port, "ok": True}).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
         self.send_response(404)
         body = "404 找不到该路径".encode("utf-8")
         self.send_header("Content-Type", "text/plain; charset=utf-8")
@@ -741,6 +757,11 @@ def main():
         except (IndexError, ValueError):
             port = BASE_PORT
     server_only = "--server" in args
+    if not server_only and os.name != "nt":
+        # Linux / macOS 没有 pywebview 桌面壳（也不该开窗口），自动退化为纯服务器模式，
+        # 免得在 VPS 上跑出「No module named webview」
+        log("  ℹ️  非 Windows 环境：自动进入纯服务器模式（等价 --server）")
+        server_only = True
 
     html = resource_path(GAME_FILE)
     if not os.path.exists(html):

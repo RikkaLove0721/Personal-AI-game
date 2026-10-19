@@ -186,6 +186,10 @@ function check(l, c, e) { if (c) { pass++; console.log("  ✔ " + l + (e ? "  ["
     step(H, 1); step(G, 1);
     if (f % 16 === 0) await flush();
   }
+  /* v2.6 大地图后角色不再快速撞墙停下：先松开全部方向键，让双方静止、插值收敛，再断言 */
+  key(H, "KeyD", false); key(H, "KeyA", false);
+  key(G, "KeyA", false); key(G, "KeyD", false);
+  for (let f = 0; f < 60; f++) { step(H, 1); step(G, 1); if (f % 16 === 0) await flush(); }
   await pump(6);
   step(H, 4); step(G, 4); await pump(4);
 

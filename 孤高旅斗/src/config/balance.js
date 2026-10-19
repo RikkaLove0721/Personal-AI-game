@@ -112,10 +112,10 @@ window.LD_BALANCE = {
     bloodSlash: { cd: 8.0, dmg: 26, selfCost: 12, heal: 18 },                  // 嗜血斩
     voidSlash:  { cd: 1.0, dmg: 15, charge: 0.5,                               // 虚空爆裂斩（每段 15）
                   proj: { speed: 400, r: 124, life: 3.0 } },
-    bloodRage:  { dur: 6.0, lifesteal: 0.5 },                                  // 血怒（大招）
+    bloodRage:  { dur: 6.0, lifesteal: 0.5, dmgM: 0.75 },                      // 血怒（大招：伤害 -25%）
     thousandSwords: { cd: 1.0, dmg: 10, dur: 4.0, interval: 0.28,              // 千剑杀（每把 10）
                       proj: { speed: 840, r: 12, life: 1.6 } },
-    he:         { cd: 8.0, dmg: 20, kbDist: 400 },                             // 赫（击飞 400，无撞墙惩罚）
+    he:         { cd: 8.0, dmg: 15, kbDist: 400 },                             // 赫（击飞 400，撞墙额外 15）
     fireAura:   { cd: 7.0, dur: 4.0, tick: 0.3, tickDmg: 6, auraR: 110, moveMul: 0.85 },  // 火男（0.3s -6，开启期间自身移速 ×0.85）
     stealth:    { cd: 8.0, dur: 4.0, flashAt: 2.0, flashDur: 0.4, shield: 14, shieldT: 2.0 },  // 隐匿（结束后 2s 吸 14 盾）
     hbomb:      { cd: 8.0, dmg: 34, selfDmg: 20, fuse: 4.0, boomR: 150,        // 高压炸弹（34 伤，自伤 20）
@@ -126,10 +126,10 @@ window.LD_BALANCE = {
                   proj: { speed: 620, r: 11, life: 1.25 } },
     prison:     { dur: 4.0, zoneR: 180, formT: 0.8 },                          // 绝望囚牢（范围缩小，0.8s 成形，无吸附）
     eatDust:    { back: 3.0 },                                                 // 败者食尘（大招：回血 + 回到 3s 前的位置）
-    waterOrbs:  { dur: 5.0, dmg: 10, tick: 0.45, absorbMax: 12,                // 水之呼吸（每球可吸收 12 伤害，吸满即碎）
+    waterOrbs:  { dur: 7.0, dmg: 10, tick: 0.45, absorbMax: 12,                // 水之呼吸（每球可吸收 12 伤害，吸满即碎）
                   orbR: 24, orbitR: 78, spd: 2.6, hitPad: 32 },                // 球半径 24、判定再补 32（判定放宽）
     kingDrop:   { dmg: 50, rise: 1.0, boomR: 170, stun: 1.0 },                 // 王从天降（大招：二段落地 50 伤 + 1s 眩晕，飞起期间自身定身）
-    shuriken:   { cd: 1.0, dmg: 12, tick: 0.35, speed: 250, r: 54, life: 4.5,  // 螺旋手里剑（勇者大招：中速巨球 + 吸引 + 每段 12 伤）
-                  pull: 130, pullR: 175 }
+    shuriken:   { cd: 1.0, dmg: 12, tick: 0.35, speed: 250, r: 54, life: 4.5,  // 螺旋手里剑（勇者大招：中速巨球 + 强吸引 + 每段 12 伤）
+                  pull: 180, pullR: 225, boomDist: 520, boomR: 170, boomDmg: 25 }   // 飞出 520 距离后中范围爆炸再补 25 伤
   }
 };

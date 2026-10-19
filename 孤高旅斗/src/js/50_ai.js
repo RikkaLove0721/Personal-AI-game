@@ -19,18 +19,41 @@
       desc: "蓄力后在全场落下多道火柱。" }, LD.DRAGON.ult)
   );
 
+  /* -------- v3.1 僵尸专属技能（kind:"boss" 不进商店、不吃能量，靠 CD 出手） --------
+   * 僵尸不再抽取勇者技能池，固定只有这两个技能。 */
+  LD.SKILLS.push(
+    { id: "z_lunge", kind: "boss", name: "突刺", icon: "🦴", price: 0,
+      tags: ["僵尸", "突刺"], cd: 6.5, dmg: 7, dash: 130, dashT: 0.28,
+      hits: 3, gap: 0.07, reach: 46, kb: 55,
+      desc: "僵尸向前小突进，沿途连续撕抓三段，每段 7 点伤害。" },
+    { id: "z_bite", kind: "boss", name: "撕咬", icon: "🦷", price: 0,
+      tags: ["僵尸", "控制"], cd: 7.5, dmg: 8, range: 82, half: 1.0, root: 2.0, windup: 0.18,
+      desc: "咬住前方敌人，造成 8 点伤害并定身 2 秒。" }
+  );
+
   /* -------- v2.5 人形 BOSS 技能注册（kind:"boss" 不进商店、不吃能量） -------- */
   const BOSS_SKILL_IDS = {
     ninja: { basic: "n_shuriken", skill1: "n_clone", skill2: "n_raid", ult: "n_ult" },
-    gun:   { basic: "g_shot",     skill1: "g_bomb",  skill2: "g_burst", ult: "g_ghost" }
+    gun:   { basic: "g_shot",     skill1: "g_bomb",  skill2: "g_burst", ult: "g_ghost" },
+    bee:     { basic: "b_needle", skill1: "b_hatch",  skill2: "b_sweep",   ult: "b_swarm" },
+    frost:   { basic: "f_cone",   skill1: "f_quake",  skill2: "f_field",   ult: "f_zero" },
+    twin:    { basic: "t_slash",  skill1: "t_cross",  skill2: null,        ult: "t_duo" },
+    gambler: { basic: "gm_dice",  skill1: "gm_card",  skill2: "gm_cheat",  ult: "gm_roulette" },
+    tesla:   { basic: "ts_zap",   skill1: "ts_polar", skill2: "ts_shield", ult: "ts_storm" }
   };
   Object.keys(BOSS_SKILL_IDS).forEach(key => {
     const cfg = LD.BOSS && LD.BOSS[key];
     if (!cfg) return;
     const ICONS = { n_shuriken: "✴️", n_clone: "👤", n_raid: "⚡", n_ult: "🌀",
-                    g_shot: "🔫", g_bomb: "🧨", g_burst: "💥", g_ghost: "👤" };
+                    g_shot: "🔫", g_bomb: "🧨", g_burst: "💥", g_ghost: "👤",
+                    b_needle: "🐝", b_hatch: "🥚", b_sweep: "💫", b_swarm: "🐝",
+                    f_cone: "❄️", f_quake: "💥", f_field: "🌨", f_zero: "🥶",
+                    t_slash: "⚔️", t_cross: "⚡", t_duo: "⚔️",
+                    gm_dice: "🎲", gm_card: "🃏", gm_cheat: "🔄", gm_roulette: "🎯",
+                    ts_zap: "🌩️", ts_polar: "🧲", ts_shield: "🛡", ts_storm: "⛈" };
     Object.keys(BOSS_SKILL_IDS[key]).forEach(slot => {
       const id = BOSS_SKILL_IDS[key][slot];
+      if (!id || !cfg[slot]) return;               // v2.6：双子/镜影没有的槽位直接跳过
       LD.SKILLS.push(Object.assign({ id, kind: "boss", icon: ICONS[id] || "⭐", price: 0,
         tags: ["BOSS"].concat(slot === "ult" ? ["大招"] : []),
         desc: cfg[slot] ? cfg[slot].name : id }, cfg[slot]));
@@ -72,6 +95,9 @@
     AI.mkBot(f, diff.key === "hard" ? "hard" : "normal");
     f.isBoss = true;
     f.rateM = 1 / diff.rateM;        // CD 越短 = 出手越频繁（困难 1.6 → CD ×0.625）
+    /* v2.6 镜影：整体 CD 为玩家配装的 1.3 倍（它的技能就是玩家的技能，太强会没法打） */
+    const mcfg = LD.BOSS && LD.BOSS[f.bossKind];
+    if (mcfg && mcfg.cdMul) f.rateM *= mcfg.cdMul;
     f.dmgM = diff.dmgM;
     const key = f.bossKind;
     const cfg = LD.BOSS && LD.BOSS[key];
@@ -103,6 +129,84 @@
     return f;
   };
 
+  /* ----------------------------------------------------------
+   *  v3.7 塔防：人机推塔
+   *  目标是一个建筑（防御塔 / 水晶）。近战贴到边缘打，远程站 190px 外输出；
+   *  残血先回自家泉水。返回 true 表示这一帧交给了推塔逻辑。
+   * ---------------------------------------------------------- */
+  /** v3.9 局部绕障：朝 (dx,dy) 走如果前方被别的障碍挡住，就往侧面偏一点。
+   *  跳过 skip（当前要打的建筑），否则 AI 会被自己的目标斥力顶住、永远贴不上去。 */
+  AI.steer = function (f, dx, dy, skip) {
+    const len = Math.hypot(dx, dy) || 0;
+    if (!B.terrain || len < 0.01) return { x: dx, y: dy };
+    const T = LD.Terrain, props = B.terrain.props;
+    const base = Math.atan2(dy, dx);
+    const br = (f.r || 15) + 4;
+    /* 0) 身体已经卡在障碍里（被车压住 / 被击退进去）：先顺着最短的边走出去，
+     *    否则朝任何方向的探测点都还在方块内，会一直原地顶。 */
+    let out = null, outPen = Infinity;
+    for (let i = 0; i < props.length; i++) {
+      const o = props[i];
+      if (o === skip || o === f.rideCar || o.dead || !o.blockMove) continue;
+      const hit = T.pushOut(o, f.x, f.y, f.r || 15);
+      if (hit && hit.pen < outPen) { outPen = hit.pen; out = hit; }
+    }
+    if (out) return { x: out.nx * len, y: out.ny * len };
+    const free = (a, d) => {
+      const x = f.x + Math.cos(a) * d, y = f.y + Math.sin(a) * d;
+      for (let i = 0; i < props.length; i++) {
+        const o = props[i];
+        if (o === skip || o === f.rideCar || o.dead || !o.blockMove) continue;
+        if (Math.abs(x - o.x) < (o.w || 40) / 2 + br && Math.abs(y - o.y) < (o.h || 40) / 2 + br) return false;
+      }
+      return true;
+    };
+    const near = 40 + (f.r || 15) * 2;
+    for (const off of [0, 0.55, -0.55, 1.1, -1.1, 1.6, -1.6, 2.2, -2.2, 2.8, -2.8]) {
+      const a = base + off;
+      if (free(a, near * 0.4) && free(a, near * 0.72) && free(a, near)) return { x: Math.cos(a) * len, y: Math.sin(a) * len };
+    }
+    return { x: dx, y: dy };
+  };
+
+  AI.pushTower = function (f, p, ctrl, dt) {
+    if (!p || p.dead) return false;
+    ctrl.mx = ctrl.my = 0;
+    ctrl.press = {};
+    /* 残血回家（塔防基地有回血圈） */
+    if (f.hp < f.maxHp * 0.32 && !(f.hp < 0)) {
+      const base = B.towerBase ? B.towerBase(f.team === 1 ? 1 : 0) : null;
+      if (base) {
+        const bx = base.x - f.x, by = base.y - f.y, bd = Math.hypot(bx, by) || 1;
+        f.aimProp = null;
+        if (bd > 40) {
+          const st = AI.steer(f, bx / bd, by / bd, null);
+          ctrl.mx = st.x; ctrl.my = st.y;
+        }
+        return true;
+      }
+    }
+    const basic = LD.skill(f.loadout.basic);
+    const ranged = !!(basic && (basic.proj || basic.speed));
+    const dx = p.x - f.x, dy = p.y - f.y;
+    const d = Math.hypot(dx, dy) || 1;
+    f.aimProp = p;
+    const size = Math.max(p.w || 60, p.h || 60) * 0.5;
+    const stop = size + (ranged ? 200 : 52);
+    if (d > stop) {
+      const st = AI.steer(f, dx / d, dy / d, p);        // 绕过挡在路上的车 / 另一座塔
+      ctrl.mx = st.x; ctrl.my = st.y;
+    } else if (d < stop - 26) { ctrl.mx = -dx / d * 0.6; ctrl.my = -dy / d * 0.6; }
+    /* 有 CD 就放：普攻优先，技能跟上 */
+    const atkRange = ranged ? 460 : 100;
+    if (d < atkRange + size) {
+      if (f.cd.basic <= 0) ctrl.press.basic = true;
+      if (f.loadout.skill1 && f.cd.skill1 <= 0 && d < 420 + size) ctrl.press.skill1 = true;
+      else if (f.loadout.skill2 && f.cd.skill2 <= 0 && d < 420 + size) ctrl.press.skill2 = true;
+    }
+    return true;
+  };
+
   AI.tickHero = function (f, dt) {
     if (!f.bot || f.dead || LD.Cine.active) { if (f.ctrl) { f.ctrl.mx = f.ctrl.my = 0; f.ctrl.press = {}; } return; }
     const b = f.bot, cf = b.conf, ctrl = f.ctrl;
@@ -110,12 +214,29 @@
      * 每隔 1~1.8 秒在「距离最近」和「血量最多」之间重新挑选，不再固定锁一个人 */
     let foe = null;
     if (B.rule === "overlord" && !f.overlord) foe = B.fighters.find(o => o.overlord && !o.dead) || null;
+    /* v2.7 丧尸危机 / 「僵尸」修饰符：僵尸保命优先，仇恨转向离自己最近的玩家，
+     * 而不是僵尸同类（僵尸之间本来就不互殴，这里明确让它们盯玩家，而不是乱打）。 */
+    if (!foe && f.isZombie) {
+      if (!b.foe || b.foe.dead || b.foe.isZombie || (b.retargetT -= dt) <= 0) {
+        b.retargetT = rnd(1.0, 1.8);
+        const cands = B.fighters.filter(o => o !== f && !o.dead && !o.isZombie && !o.isClone && o.kind === "hero" && B.aiCanSee(f, o));
+        if (cands.length) {
+          const dd = o => (o.x - f.x) * (o.x - f.x) + (o.y - f.y) * (o.y - f.y);
+          let near = cands[0];
+          cands.forEach(o => { if (dd(o) < dd(near)) near = o; });
+          b.foe = near;
+        } else b.foe = null;
+      }
+      foe = b.foe;
+    }
     if (!foe) {
       if (!b.foe || b.foe.dead || B.sameTeam(f, b.foe) || (b.retargetT -= dt) <= 0) {
         b.retargetT = rnd(1.0, 1.8);
-        const cands = B.fighters.filter(o => o !== f && !o.dead && !B.sameTeam(f, o));
+        const cands = B.fighters.filter(o => o !== f && !o.dead && !B.sameTeam(f, o) && B.aiCanSee(f, o));
         if (cands.length) {
-          const dd = o => (o.x - f.x) * (o.x - f.x) + (o.y - f.y) * (o.y - f.y);
+          /* v3.4：被察觉的躲藏者（柜子 / 草丛）仇恨更高 —— 等效距离打折，优先去找 */
+          const hate = o => (o.hideProp || o.bushHide) ? ((LD.INTERACT && LD.INTERACT.spotAggro) || 0.55) : 1;
+          const dd = o => ((o.x - f.x) * (o.x - f.x) + (o.y - f.y) * (o.y - f.y)) * hate(o);
           let near = cands[0], fat = cands[0];
           cands.forEach(o => { if (dd(o) < dd(near)) near = o; if (o.hp > fat.hp) fat = o; });
           b.foe = Math.random() < 0.5 ? near : fat;
@@ -125,11 +246,161 @@
     }
     if (foe && !B.sameTeam(f, foe)) f.lock = foe.side;    // 让 AI 也用索敌（追踪类技能会朝他瞄准）
     ctrl.press = {};
-    if (!foe) return;
+    /* ==========================================================
+     *  v3.3 交互欲望（AI）：
+     *    - 躲在柜子里：等 2.5~3 秒就出来（敌人贴脸则提前出来）
+     *    - 在车上：朝敌人撞；坦克会开炮；没油 / 残血 / 坐太久就下车
+     *    - 平时：残血且周围安全 → 找柜子；血少或敌人太远 → 找车；
+     *            手里有泥土且敌人在射程内 → 扔；附近有泥土 → 捡
+     * ========================================================== */
+    if (f.hideProp) {
+      b.hideT = (b.hideT || 0) + dt;
+      ctrl.mx = ctrl.my = 0;
+      const foeNear = foe && Math.hypot(foe.x - f.x, foe.y - f.y) < 210;
+      if (b.hideT > (foeNear ? 1.1 : 2.8)) { ctrl.press.interact = true; b.hideT = 0; }
+      return;
+    }
+    if (f.rideCar) {
+      const car = f.rideCar;
+      b.rideT = (b.rideT || 0) + dt;
+      /* v3.9 车被别的车 / 墙卡住超过 1.2 秒就下车，否则 AI 会顶着障碍开一整局 */
+      b.rideStuck = (b.rideStuck || 0) + dt;
+      if (b.rideStuck > 1.2) {
+        if (Math.hypot(car.x - (b._rideX == null ? car.x : b._rideX), car.y - (b._rideY == null ? car.y : b._rideY)) < 5) {
+          ctrl.press.interact = true;
+          b.rideT = 0;
+        }
+        b.rideStuck = 0; b._rideX = car.x; b._rideY = car.y;
+      }
+      if (foe && !foe.dead) {
+        const cdx = foe.x - car.x, cdy = foe.y - car.y, cdd = Math.hypot(cdx, cdy) || 1;
+        ctrl.mx = cdx / cdd; ctrl.my = cdy / cdd;
+        if (car.vtype === "tank" && cdd < 520 && Math.random() < 0.55) ctrl.press.basic = true;
+      } else {
+        ctrl.mx = ctrl.my = 0;
+      }
+      /* 没油 / 快死了 / 坐太久 / 没有敌人 → 下车 */
+      if ((car.fuel || 0) <= 0 || f.hp < f.maxHp * 0.28 || b.rideT > 14 || !foe) {
+        ctrl.press.interact = true;
+        b.rideT = 0;
+      }
+      return;
+    }
+    /* 金币优先级：150px 内有币就先捡，别为了远处的车 / 柜子绕路
+     * （否则丧尸危机里 AI 会跑去开车，永远攒不到钱买东西） */
+    /* v3.2 局内金币：AI 要主动去捡，否则永远攒不到钱、也就用不上局内商店。
+     * 末日模式只在庇护所内捡（墙外红圈掉血比几枚币值钱）。
+     * 放在「没有敌人就返回」之前：两波僵尸之间 AI 也会顺手把币捡了。 */
+    f.coinTarget = null;
+    if (!f.isZombie && (B.rule === "auction" || B.rule === "doomsday") && (B.coins || []).length) {
+      const csh = B.rule === "doomsday" ? B.shelter : null;
+      const fd = foe ? Math.hypot(foe.x - f.x, foe.y - f.y) : Infinity;
+      let best = null, bd = 320;
+      B.coins.forEach(c => {
+        if (csh && Math.hypot(c.x - csh.x, c.y - csh.y) > csh.r - 30) return;
+        const dd = Math.hypot(c.x - f.x, c.y - f.y);
+        if (dd < bd) { bd = dd; best = c; }
+      });
+      if (best && fd < 210 && bd > 140) best = null;   // 脚下有敌人时不为远处的币脱离战斗
+      f.coinTarget = best;
+    }
+    const coinNear = !!(f.coinTarget && Math.hypot(f.coinTarget.x - f.x, f.coinTarget.y - f.y) < 170);
+    {
+      const nearFoe = foe ? Math.hypot(foe.x - f.x, foe.y - f.y) : Infinity;
+      f.useTarget = null;
+      if (!f.isZombie && !coinNear) {
+        /* 1) 残血且附近没有敌人 → 找柜子躲起来 */
+        if (f.hp < f.maxHp * 0.4 && nearFoe > 200 && B.terrain) {
+          let best = null, bd = 340;
+          B.terrain.props.forEach(o => {
+            if (o.kind !== "locker" || o.dead || o.occupant) return;
+            const dd = Math.hypot(o.x - f.x, o.y - f.y);
+            if (dd < bd) { bd = dd; best = o; }
+          });
+          if (best) f.useTarget = { type: "locker", prop: best };
+        }
+        /* 2) 血量不高或敌人很远 → 找一辆有油的车 */
+        if (!f.useTarget && (f.hp < f.maxHp * 0.62 || nearFoe > 330) && B.terrain) {
+          let best = null, bd = 470;
+          B.terrain.props.forEach(o => {
+            if (o.kind !== "car" || o.dead || o.driver || (o.fuel || 0) <= 0) return;
+            const dd = Math.hypot(o.x - f.x, o.y - f.y);
+            /* 坦克对 AI 更有吸引力（能开炮） */
+            const score = dd - (o.vtype === "tank" ? 90 : 0);
+            if (score < bd) { bd = score; best = o; }
+          });
+          if (best) f.useTarget = { type: "car", prop: best };
+        }
+        /* 3) 附近有泥土且敌人在中距离 → 去捡 */
+        if (!f.useTarget && !f.carryMud && nearFoe < 560 && B.terrain) {
+          let best = null, bd = 250;
+          B.terrain.props.forEach(o => {
+            if (o.kind !== "mud" || o.dead || o.carried || o.cargo) return;
+            const dd = Math.hypot(o.x - f.x, o.y - f.y);
+            if (dd < bd) { bd = dd; best = o; }
+          });
+          if (best) f.useTarget = { type: "mud", prop: best };
+        }
+        /* 已经在交互范围内 → 直接按 P */
+        if (f.useTarget) {
+          const it = B.interactTarget(f);
+          if (it && it.prop === f.useTarget.prop) ctrl.press.interact = true;
+        }
+        /* 手里有泥土：敌人在射程内就朝他的方向扔 */
+        if (f.carryMud && foe && nearFoe < 430) {
+          const tdx = foe.x - f.x, tdy = foe.y - f.y, td = Math.hypot(tdx, tdy) || 1;
+          f.facing = { x: tdx / td, y: tdy / td };
+          ctrl.press.interact = true;
+        }
+      }
+    }
+    if (!foe) {
+      /* 场上暂时没有敌人（末日两波空档）：有交互目标 / 金币就去拿，别站着发呆 */
+      if (f.useTarget) {
+        const tx = f.useTarget.prop.x - f.x, ty = f.useTarget.prop.y - f.y, td = Math.hypot(tx, ty) || 1;
+        ctrl.mx = tx / td; ctrl.my = ty / td;
+      } else if (f.coinTarget) {
+        const cx = f.coinTarget.x - f.x, cy = f.coinTarget.y - f.y, cd = Math.hypot(cx, cy) || 1;
+        ctrl.mx = cx / cd; ctrl.my = cy / cd;
+      } else { ctrl.mx = ctrl.my = 0; }
+      return;
+    }
 
     const dx = foe.x - f.x, dy = foe.y - f.y;
     const d = Math.hypot(dx, dy) || 1;
     const ux = dx / d, uy = dy / d;
+
+    /* v3.0 视线检测：被障碍挡住时记下挡路的那个（节流 0.18s，避免每帧扫线段） */
+    b._losT = (b._losT || 0) - dt;
+    if (b._losT <= 0) {
+      b._losT = 0.18;
+      b._los = B.terrain ? LD.Terrain.losHit(B.terrain, f.x, f.y, foe.x, foe.y, 24) : null;
+    }
+    /* v3.5：目标躲在柜子里时，柜子本身就挡视线——AI 已经察觉（2 秒 / 被锁定）就该照打不误，
+     * 否则它会一直「绕障」而永远不动手。视线里的其他障碍仍然生效。 */
+    /* v3.6：目标坐在车里时，挡在视线上的就是他那辆车——不能当成「被墙挡住」，
+     * 否则人机会绕着车皮兜圈、迟迟不动手（看起来像「很久才想起要打车」）。 */
+    const blocked = !!b._los && b._los !== foe.rideCar && !(foe.hideProp && B.aiCanSee(f, foe));
+    /* 目标在车上：贴上去打，普攻 / 技能 CD 一好就放，尽快把人从车上打下来 */
+    const foeCar = !!foe.rideCar;
+
+    /* ==========================================================
+     *  v3.7 塔防对战：身边没有敌人时优先推塔 / 拆水晶
+     *  只在「最近的敌人超过 260px」时执行，避免和正常对拼逻辑打架。
+     * ========================================================== */
+    if (B.rule === "tower" && B.enemyStructure) {
+      const ord = B.enemyStructure(f.team === 1 ? 1 : 0, f.x, f.y, 2000);
+      if (ord) {
+        const hd = foe && foe.kind === "hero" ? Math.hypot(foe.x - f.x, foe.y - f.y) : Infinity;
+        const md = foe && foe.kind === "laneMinion" ? Math.hypot(foe.x - f.x, foe.y - f.y) : Infinity;
+        const atTower = ord.d < 430;
+        /* v3.8 塔下优先推塔：只要没有敌方英雄贴身（150 内）就先拆塔；
+         * 赶路时只要没有被英雄（300 内）或小兵（140 内）挡路，也直奔下一座塔。 */
+        if ((atTower && hd > 150) || (!atTower && hd > 300 && md > 140)) {
+          if (AI.pushTower(f, ord, ctrl, dt)) return;
+        }
+      }
+    }
 
     // ---- 木桩：完全不动 ----
     if (cf.aggr <= 0) { ctrl.mx = ctrl.my = 0; return; }
@@ -140,6 +411,14 @@
     const basic = LD.skill(f.loadout.basic);
     const ranged = !!(basic && (basic.proj || basic.speed));
     b.desired = (ranged ? 235 : 62) * cf.range;
+    /* v3.6：车上目标不再讲「远程保持距离」——远程站在 235 只会对着车皮放空枪，
+     * 直接压到 110 内，普攻与中距离技能都能落到人身上。 */
+    if (foeCar) b.desired = 110;
+    /* v2.7 追猎时刻：生存者全程保持距离、被接近就反向逃跑；猎人是纯粹的进攻方 */
+    if (f.huntRole === "runner") b.desired = 420;
+    if (f.huntRole === "hunter") b.desired = 120;
+    /* v3.1 僵尸是纯近身怪：贴近到撕咬距离，残血也不后撤 */
+    if (f.isZombie) b.desired = 44;
 
     // ---- 躲避来袭弹药 ----
     let dodgeX = 0, dodgeY = 0, threat = 0;
@@ -157,9 +436,9 @@
       dodgeX += px * side * 1.4; dodgeY += py * side * 1.4;
     });
 
-    // ---- 天外来物：挑选要捡的掉落物（每帧更新，供移动优先级使用） ----
+    // ---- 天外来物 / 缩圈乱斗：挑选要捡的掉落物（每帧更新，供移动优先级使用） ----
     f.giftTarget = null;
-    if (B.rule === "gifts" && (B.gifts || []).length) {
+    if (B.giftRule() && (B.gifts || []).length) {
       const wantSkill = !f.loadout.skill1 || !f.loadout.skill2;
       const wantUlt = !f.loadout.ult;
       const cands = B.gifts.filter(g => {
@@ -171,6 +450,17 @@
       cands.forEach(g => { const dd = Math.hypot(g.x - f.x, g.y - f.y); if (dd < bd) { bd = dd; best = g; } });
       f.giftTarget = best;
     }
+    /* v2.7 血量偏低时优先去吃血包 */
+    f.healTarget = null;
+    if ((B.heals || []).length && f.hp < f.maxHp * 0.62) {
+      let best = null, bd = Infinity;
+      B.heals.forEach(h => {
+        if (!h.landed) return;
+        const dd = Math.hypot(h.x - f.x, h.y - f.y);
+        if (dd < bd) { bd = dd; best = h; }
+      });
+      if (best && bd < 620) f.healTarget = best;
+    }
 
     // ---- 移动 ----
     let mx = 0, my = 0;
@@ -178,12 +468,24 @@
     if (stone) {                       // 能量石在场：优先冲过去抢
       const sx = stone.x - f.x, sy = stone.y - f.y, sd = Math.hypot(sx, sy) || 1;
       mx += sx / sd * 1.6; my += sy / sd * 1.6;
-    } else if (B.rule === "gifts" && f.giftTarget) {   // 天外来物：优先去捡掉落物
+    } else if (B.giftRule() && f.giftTarget) {   // 天外来物 / 缩圈乱斗：优先去捡掉落物（圈外也敢去）
       const g = f.giftTarget;
       if (g.landed || !f.loadout.skill1 || !f.loadout.skill2 || !f.loadout.ult) {
         const gx = g.x - f.x, gy = g.y - f.y, gd = Math.hypot(gx, gy) || 1;
         if (gd > 26) { mx += gx / gd * 1.6; my += gy / gd * 1.6; }
       }
+      /* v3.3：走到掉落物旁按 P 拾取（两格满了自动替换最早获得的那个） */
+      if (g.landed && (g.noPick || 0) <= 0 && Math.hypot(g.x - f.x, g.y - f.y) < f.r + 44) ctrl.press.interact = true;
+    } else if (f.useTarget) {                           // v3.3 交互目标（柜子 / 车 / 泥土）
+      const tp = f.useTarget.prop;
+      const tx = tp.x - f.x, ty = tp.y - f.y, td = Math.hypot(tx, ty) || 1;
+      if (td > (tp.kind === "car" ? 56 : 30)) { mx += tx / td * 1.6; my += ty / td * 1.6; }
+    } else if (f.healTarget) {                          // v2.7 残血先补：冲去血包
+      const hx = f.healTarget.x - f.x, hy = f.healTarget.y - f.y, hd = Math.hypot(hx, hy) || 1;
+      mx += hx / hd * 1.7; my += hy / hd * 1.7;
+    } else if (f.coinTarget) {                          // v3.2 局内金币：顺路先捡
+      const cx2 = f.coinTarget.x - f.x, cy2 = f.coinTarget.y - f.y, cd2 = Math.hypot(cx2, cy2) || 1;
+      if (cd2 > 18) { mx += cx2 / cd2 * 1.5; my += cy2 / cd2 * 1.5; }
     } else if (d > b.desired + 34) { mx += ux; my += uy; }
     else if (d < b.desired - 46) { mx -= ux; my -= uy; }
     else {
@@ -192,10 +494,87 @@
       mx += -uy * b.strafe * 0.85; my += ux * b.strafe * 0.85;
     }
     // 远离边界
-    const M = 80;
-    if (f.x < M) mx += 1; if (f.x > C.W - M) mx -= 1;
-    if (f.y < C.H * 0.36) my += 1; if (f.y > C.H - 60) my -= 1;
+    const M = 80, W = B.world || { w: C.W, h: C.H, pt: 0 };
+    if (f.x < M) mx += 1; if (f.x > W.w - M) mx -= 1;
+    if (f.y < W.pt + 20) my += 1; if (f.y > W.h - 60) my -= 1;
+    /* v2.7 缩圈 / 追猎：AI 会主动往安全区里跑，不在毒里站着挨打 */
+    const zoneRing = (B.rule === "ring" && B.rings) ? B.rings.filter(c => !c.dead)
+      : ((B.rule === "hunt" && B.huntRing) ? [B.huntRing] : null);
+    if (zoneRing && zoneRing.length) {
+      let best = null, bd = Infinity;
+      zoneRing.forEach(c => { const dd = Math.hypot(c.x - f.x, c.y - f.y); if (dd < bd) { bd = dd; best = c; } });
+      const safeR = Math.max(60, (best.r || 200) - 90);
+      /* v2.7 缩圈：脚下有要捡的掉落物 / 血包时豁免避毒——冒着出圈的风险去捡 */
+      const brave = B.rule === "ring" && (f.giftTarget || f.healTarget);
+      if (!brave && bd > safeR && bd > 1) { mx += (best.x - f.x) / bd * 2.0; my += (best.y - f.y) / bd * 2.0; }
+    }
     if (threat && cf.dodge > 0) { mx += dodgeX * cf.dodge * 1.6; my += dodgeY * cf.dodge * 1.6; }
+    /* v3.0 地形绕行：柱子 / 箱子 / 围栏附近加一个斥力，避免 AI 顶着障碍原地打转 */
+    if (B.terrain) {
+      const av = LD.Terrain.avoid(B.terrain, f.x, f.y, 72, B.rule === "tower" ? f.aimProp : null);
+      mx += av.x * 1.15; my += av.y * 1.15;
+    }
+    /* v3.5 吹风机：被风吹着的时候沿气流垂直方向脱离，别顶着风原地抖 */
+    if (f.windT > 0 && B.terrain && LD.Terrain.windAt) {
+      const wd = LD.Terrain.windAt(B.terrain, f.x, f.y);
+      if (wd) {
+        const wl = Math.hypot(wd.x, wd.y) || 1;
+        const side = b.strafe || 1;
+        mx += (-wd.y / wl) * side * 1.5;
+        my += (wd.x / wl) * side * 1.5;
+      }
+    }
+    /* v3.0 视线被挡：不硬顶，绕到障碍侧面再接近（没有掉落物 / 血包这类更高优先级时） */
+    if (blocked && !stone && !f.giftTarget && !f.healTarget) {
+      const o = b._los;
+      const cross = dx * (o.y - f.y) - dy * (o.x - f.x);
+      const px = cross > 0 ? uy : -uy;
+      const py = cross > 0 ? -ux : ux;
+      const off = Math.max(o.w, o.h) / 2 + 84;
+      const tdx = o.x + px * off - f.x, tdy = o.y + py * off - f.y;
+      const td = Math.hypot(tdx, tdy) || 1;
+      mx = tdx / td * 1.5 + ux * 0.5;
+      my = tdy / td * 1.5 + uy * 0.5;
+    }
+    /* v3.2 世界末日：僵尸必须从左右门洞闯入；玩家（AI）不在红圈外逗留。
+     * 放在最后：要压过「绕障 / 视线被挡」的通用转向，否则会贴着外墙来回走。 */
+    if (B.rule === "doomsday" && B.shelter) {
+      const sh = B.shelter;
+      const dSh = Math.hypot(f.x - sh.x, f.y - sh.y);
+      /* v3.2 修复：不能直接朝门洞点走——门洞点在墙环上，斜着接近时是切线，
+       * 到了门口方向立刻反指墙外，英雄会在门口来回抖（僵尸半径小才勉强挤进去）。
+       * doomAim 给的是「门外对位点 → 门内穿门点」两段目标。 */
+      const aim = B.doomAim(f);
+      if (aim && dSh > sh.r - 40) {
+        const ax = aim.x - f.x, ay = aim.y - f.y, ad = Math.hypot(ax, ay) || 1;
+        mx = ax / ad * 1.8; my = ay / ad * 1.8;
+      } else if (!f.isZombie) {
+        const foeOut = foe && Math.hypot(foe.x - sh.x, foe.y - sh.y) > sh.r + 10;
+        if (dSh > sh.r - 90 && foeOut) {       // 守在门内，不追到红圈里
+          const cx = sh.x - f.x, cy = sh.y - f.y, cd = Math.hypot(cx, cy) || 1;
+          mx += cx / cd * 1.2; my += cy / cd * 1.2;
+        }
+      }
+    }
+    /* v3.8 塔防：卡进障碍时侧向脱困（地图中间有随机设施，贴墙原地抖很常见） */
+    if (B.rule === "tower") {
+      const want = Math.hypot(mx, my) > 0.1;
+      b._stuckT = (b._stuckT || 0) + dt;
+      if (b._stuckT > 0.8) {
+        const moved = Math.hypot(f.x - (b._lastX == null ? f.x : b._lastX), f.y - (b._lastY == null ? f.y : b._lastY));
+        if (want && moved < 8) {
+          b._unstickT = 0.7;
+          b._unstickDir = Math.random() < 0.5 ? 1 : -1;
+        }
+        b._stuckT = 0; b._lastX = f.x; b._lastY = f.y;
+      }
+      if ((b._unstickT || 0) > 0) {
+        b._unstickT -= dt;
+        const px = -my, py = mx;                 // 垂直方向侧移
+        mx += px * b._unstickDir * 1.6;
+        my += py * b._unstickDir * 1.6;
+      }
+    }
     const n = Math.hypot(mx, my);
     if (n > 0.05) { mx /= n; my /= n; } else { mx = my = 0; }
     ctrl.mx = mx; ctrl.my = my;
@@ -209,35 +588,49 @@
       return;
     }
     b.think = cf.react * rnd(0.7, 1.3);
+    /* v3.6：车上目标压缩反应间隔（普通难度 0.34s → 0.1s），有 CD 好就马上出手 */
+    if (foeCar) b.think = Math.min(b.think, 0.1);
 
     // ---- 进攻决策 ----
     const press = (slot) => { ctrl.press[slot] = true; };
 
-    // 天外来物：站在掉落物上且槽位已满 → 按键置换（顺手也会把旧技能打出去，置换有 0.3s 延迟）
+    // 天外来物 / 缩圈乱斗：站在掉落物上且槽位已满 → 按键置换（顺手也会把旧技能打出去，置换有 0.3s 延迟）
     b.giftCd = Math.max(0, (b.giftCd || 0) - (b.think || 0));
     const pend = f.giftPending;
-    if (B.rule === "gifts" && b.giftCd <= 0 && pend && (pend.skill || pend.ult) && !f.giftSwap) {
+    if (B.giftRule() && b.giftCd <= 0 && pend && (pend.skill || pend.ult) && !f.giftSwap) {
       if (pend.ult) press("ult");
       else press(Math.random() < 0.5 ? "skill1" : "skill2");
       b.giftCd = 8;
       return;
     }
 
-    // 大招：BOSS 走 CD 制（boss 技能不耗能量）；勇者仍需能量满
-    if (f.loadout.ult && f.cd.ult <= 0 && (f.isBoss
-      ? (d < 560 && Math.random() < 0.5)
-      : (f.energy >= f.maxEnergy && d < 520 && Math.random() < 0.85))) { press("ult"); return; }
+    // 大招：BOSS 走 CD 制（boss 技能不耗能量）；勇者仍需能量满。
+    // v3.0：视线被挡且不在近身范围时不放大招（打在柱子上白费）
+    if (f.loadout.ult && f.cd.ult <= 0 && (!blocked || d < 190) && (foeCar
+      ? (d < 620 && (f.isBoss || f.energy >= f.maxEnergy))
+      : (f.isBoss
+        ? (d < 560 && Math.random() < 0.5)
+        : (f.energy >= f.maxEnergy && d < 520 && Math.random() < 0.85)))) { press("ult"); return; }
 
     // 普攻（快枪手：全程持续开枪，不受距离限制）
+    // v3.0：远程普攻在视线被挡时不出手（省 CD，先绕障）；近战普攻不受影响
     const atkRange = f.bossKind === "gun" ? 4000 : (ranged ? 470 : 84);
-    if (d < atkRange && f.cd.basic <= 0 && Math.random() < 0.92) press("basic");
+    /* v3.1：僵尸没有普攻，只有突刺 / 撕咬两个技能 */
+    /* v3.6：目标在车上时不再掷骰子省 CD，CD 一好就打——车体吃弹会把驾驶员震下车 */
+    if (!f.isZombie && d < atkRange && (!blocked || !ranged) && f.cd.basic <= 0 &&
+        (foeCar || Math.random() < 0.92)) press("basic");
 
     // 技能（按身份分条件）
+    /* v3.0：不需要视线的技能白名单（自身增益 / 反制类照常放） */
+    const LOS_FREE = { meditate: 1, rockShield: 1, n_clone: 1, b_hatch: 1, gm_card: 1,
+      gm_cheat: 1, ts_shield: 1, ts_polar: 1, parry: 1, substitute: 1 };
     const useSkill = (slot) => {
       const id = f.loadout[slot];
       if (!id) return false;
       const s = LD.skill(id);
       if (!s || f.cd[slot] > 0 || f.slot[slot].on) return false;
+      /* v3.0 视线被挡且距离不近：远程 / 弹道类技能先不出手，等绕过去再打 */
+      if (blocked && d > 150 && !LOS_FREE[id]) return false;
       switch (id) {
         case "parry":
           const incoming = threat > 0 && d < 220;
@@ -251,6 +644,14 @@
           return false;
         case "rockShield": if (f.hp < f.maxHp * 0.78 && d < 280) { press(slot); return true; } return false;
         case "dragonPalm": if (d < 420) { press(slot); return true; } return false;
+        /* ---- v3.1 新技能 ---- */
+        case "chain":      if (d < 240) { press(slot); return true; } return false;   // 钢链：中距离直线
+        case "cargo":      if (d > 130 && d < 520) { press(slot); return true; } return false;
+        case "fish":       if (d < 430) { press(slot); return true; } return false;   // 咸鱼：顺手吸能
+        case "assault":    if (d < 580) { press(slot); return true; } return false;   // 突击枪：远距离连射
+        /* ---- v3.1 僵尸专属 ---- */
+        case "z_lunge":    if (d > 96 && d < 190) { press(slot); return true; } return false;  // 突刺：中距小突进
+        case "z_bite":     if (d < 78) { press(slot); return true; } return false;             // 撕咬：贴脸定身
         case "meatRush":   if (d < 330 && d > 90) { press(slot); return true; } return false;
         case "blink":      if (d > 110 && d < 500) { press(slot); return true; } return false;
         case "substitute": if (d < 150) { press(slot); return true; } return false;
@@ -261,6 +662,19 @@
         case "n_raid":     if (d > 110 && d < 520) { press(slot); return true; } return false;
         case "g_bomb":     if (d > 130) { press(slot); return true; } return false;
         case "g_burst":    if (d < 620) { press(slot); return true; } return false;
+        /* ---- v2.6 新 BOSS 技能 ---- */
+        case "b_hatch":    press(slot); return true;                                    // 孵化：CD 好就召工蜂
+        case "b_sweep":    if (d < 240) { press(slot); return true; } return false;
+        case "f_quake":    if (d < 170) { press(slot); return true; } return false;     // 霜压：贴身范围技
+        case "f_field":    if (d < 260) { press(slot); return true; } return false;     // 寒霜领域：封锁走位
+        case "f_zero":     if (d < 480) { press(slot); return true; } return false;     // 绝对零度
+        case "t_cross":    if (d > 100 && d < 420) { press(slot); return true; } return false;
+        case "gm_card":    press(slot); return true;                                    // 抽牌：CD 好就抽
+        case "gm_cheat":   if (B.projs.some(p => p.side !== f.side && p.dmg > 0)) { press(slot); return true; } return false;
+        case "gm_roulette": if (d < 520) { press(slot); return true; } return false;
+        case "ts_polar":   if (B.projs.some(p => p.side !== f.side && p.dmg > 0 && Math.hypot(p.vx, p.vy) > 200)) { press(slot); return true; } return false;
+        case "ts_shield":  if (f.hp < f.maxHp * 0.85) { press(slot); return true; } return false;
+        case "ts_storm":   if (d < 560) { press(slot); return true; } return false;
         default:           if (d < 300) { press(slot); return true; } return false;
       }
     };
@@ -294,6 +708,8 @@
     if (busy) return;
 
     const d = Math.hypot(foe.x - f.x, foe.y - f.y);
+    /* v3.0：火球是飞行物，被柱子挡住就喷不到人——先绕，不浪费 CD */
+    const blocked = B.terrain ? !!LD.Terrain.losHit(B.terrain, f.x, f.y, foe.x, foe.y, 30) : false;
 
     // 大招：CD 好 且 距离适中 → 播大招演出后落下火柱（v2.1 大幅降低释放欲望）
     if (f.cd.ult <= 0 && d < 560) {
@@ -304,8 +720,8 @@
     if (f.cd.skill1 <= 0 && d < 420) {
       if (Math.random() < dt * (1.15 + f.rageStage * 0.35)) { B.trySlot(f, "skill1", f.ctrl); return; }
     }
-    // 火球：远程压制
-    if (f.cd.basic <= 0 && d < 700) {
+    // 火球：远程压制（视线被挡时不出手）
+    if (f.cd.basic <= 0 && d < 700 && !blocked) {
       if (Math.random() < dt * (2.0 + f.rageStage * 0.6)) B.trySlot(f, "basic", f.ctrl);
     }
   };

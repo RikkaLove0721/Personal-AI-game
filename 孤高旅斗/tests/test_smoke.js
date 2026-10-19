@@ -107,7 +107,9 @@ check("点击一次 +10 金币", P.d.coins === c0 + 10, c0 + " → " + P.d.coins
 console.log("\n=== 3. 皮肤商店（部件购买 / 穿戴） ===");
 LD.Profile.d.coins = 200;
 const headItems = LD.partsBy("head"), upperItems = LD.partsBy("upper"), lowerItems = LD.partsBy("lower");
-check("头部 14 款模型", new Set(headItems.map(h => h.model)).size === 14, [...new Set(headItems.map(h => h.model))].join("/"));
+check("头部 14 款程序化模型（奶蛙图片头单独计）",
+  new Set(headItems.filter(h => h.model).map(h => h.model)).size === 14 && headItems.some(h => h.img),
+  [...new Set(headItems.filter(h => h.model).map(h => h.model))].join("/"));
 check("头部含机器人/年轻男子/粉发少女/江湖斗篷侠/高帽企业家",
   ["robot", "boy", "girl", "jianghu", "tophat"].every(m => headItems.some(h => h.model === m)));
 check("v2.3 新头部：熊猫/忍者/皇帝/猫/狗/龙/石头人/黄金/白发老者",
@@ -147,6 +149,13 @@ UI.startDragon(LD.LEVELS[0], LD.DIFF.normal);
 check("战斗开始", B.mode === "dragon" && B.state === "countdown", B.state);
 check("巨龙血量按难度缩放", B.fighters[1].maxHp === Math.round(LD.DRAGON.hp * 1), B.fighters[1].maxHp);
 check("巨龙配装为火球/爪击/爆裂火焰", B.fighters[1].loadout.basic === "d_fireball" && B.fighters[1].loadout.ult === "d_ult");
+/* v2.7 起所有地图统一 1200x1200，随机出生点可能离巨龙很远，
+ * 会让「巨龙 8 秒内主动出手」这条断言偶发失败。涉及位置/弹道的断言先固定双方坐标。 */
+{
+  const me0 = B.fighters[0], dr0 = B.fighters[1];
+  me0.x = B.world.w / 2; me0.y = B.world.h / 2;
+  dr0.x = B.world.w / 2 + 300; dr0.y = B.world.h / 2;
+}
 // 跑 8 秒随机操作
 const KEYS = ["KeyW", "KeyA", "KeyS", "KeyD"];
 for (let f = 0; f < 480; f++) {

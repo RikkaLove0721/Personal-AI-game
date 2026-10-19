@@ -2,7 +2,13 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<!-- 双端自适应：电脑打开是键鼠、手机/平板打开自动出触屏摇杆与按钮 -->
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#080b16">
+<meta name="format-detection" content="telephone=no">
 <title>孤高旅斗 v__VERSION__</title>
 <style>
 :root{
@@ -32,6 +38,13 @@ canvas{display:block;width:960px;height:600px;background:#05070f}
 .tbtn{pointer-events:auto;cursor:pointer;border:1px solid var(--line);background:rgba(20,28,52,.75);
   color:var(--txt);border-radius:8px;padding:5px 11px;font-size:12px;transition:.15s}
 .tbtn:hover{background:rgba(40,56,100,.9);border-color:rgba(120,160,255,.5)}
+/* v2.7 丧尸危机：战斗界面右上角的局内商店入口（手机端也能看到/点到） */
+.shopbtn{position:absolute;top:76px;right:12px;z-index:8;font-size:13px;padding:7px 13px;
+  border-color:rgba(251,191,36,.6);color:#ffd98a;background:rgba(40,30,10,.8)}
+.shopbtn:hover{background:rgba(70,52,14,.95);border-color:rgba(251,191,36,.9)}
+/* v3.7 塔防：右侧血条压扁后按钮往下挪，避免压住血条 */
+.shopbtn.tower{top:142px}
+body.mobile .shopbtn{top:auto;bottom:calc(100% - 66px);right:300px;font-size:15px;padding:9px 14px}
 
 .bars{position:absolute;top:50px;left:12px;width:300px;display:flex;flex-direction:column;gap:5px}
 .barrow{display:flex;align-items:center;gap:7px}
@@ -51,7 +64,24 @@ canvas{display:block;width:960px;height:600px;background:#05070f}
 
 .enemyHud{position:absolute;top:50px;right:12px;width:290px;display:flex;flex-direction:column;gap:5px;align-items:flex-end}
 .enemyHud .barrow{width:100%}
+/* v3.7 塔防 6 人局：右侧血条压扁，别糊住战场 */
+.enemyHud.compact{width:196px;gap:2px}
+.enemyHud.compact .tag{display:none}
+.enemyHud.compact .bartrack{height:9px}
+.enemyHud.compact .bartxt,.enemyHud.compact .barlab{font-size:8px}
 .tag{font-size:10px;color:var(--dim)}
+/* v2.7 自己的名牌（含成就称号）：换成醒目的金紫色，一眼能从敌人血条里认出自己 */
+.tag.me{font-size:12px;font-weight:800;color:#ffd98a;letter-spacing:.5px;
+  text-shadow:0 0 10px rgba(251,191,36,.55),0 1px 3px #000}
+.tag .ttl{color:#c4b5fd;text-shadow:0 0 8px rgba(196,181,253,.6)}
+
+/* v2.7 模式信息条：模式名 + 计时 / 安全圈 / 得分 */
+.modeHud{position:absolute;top:48px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:3px;
+  pointer-events:none;text-align:center}
+.modeHud .mt{font-size:12.5px;font-weight:800;letter-spacing:1px;color:#cfe0ff;text-shadow:0 1px 3px #000}
+.modeHud .ms{font-size:11px;color:#9fb3dd;text-shadow:0 1px 3px #000}
+.modeHud .big{font-size:19px;font-weight:900;color:var(--gold);text-shadow:0 0 14px rgba(251,191,36,.5)}
+.modeHud .warn{color:#fb7185}
 
 /* 技能槽 */
 .slots{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);display:flex;gap:10px}
@@ -67,6 +97,19 @@ canvas{display:block;width:960px;height:600px;background:#05070f}
 .slot.ready{border-color:rgba(34,211,238,.55);box-shadow:0 0 16px rgba(34,211,238,.25) inset}
 .slot.ultready{border-color:rgba(251,191,36,.9);box-shadow:0 0 18px rgba(251,191,36,.35)}
 .slot .en{position:absolute;bottom:0;left:0;right:0;height:3px;background:rgba(251,191,36,.85);transform-origin:left}
+/* v3.8 交互键 P 框 + 击杀/死亡 */
+.slot.act{width:104px}
+.slot.act .cd{inset:auto 5px 6px auto;width:34px;height:17px;border-radius:9px;font-size:10.5px;
+  background:rgba(4,7,16,.85);border:1px solid rgba(251,191,36,.45);color:#ffd98a}
+.slot.act .nm{max-width:96px;font-size:10px;color:#cfe0ff}
+.slot.act.ready .nm{color:#7ff0c4}
+.kd{font-size:10px;color:var(--dim);margin-top:2px;letter-spacing:.5px}
+/* v3.8 塔防商店：20 件商品，压成 3 列小卡，价格和描述都要露出来 */
+#towerGrid{grid-template-columns:repeat(5,1fr);align-content:start;gap:5px}
+#towerGrid .card{min-height:62px;padding:5px 8px;overflow:visible}
+#towerGrid .card .t{font-size:11px;margin-bottom:1px;letter-spacing:0}
+#towerGrid .card .d{font-size:9.5px;line-height:1.32}
+#towerGrid .card>div:last-child{font-size:11px;margin-top:4px!important}
 
 /* ============ 覆盖层 ============ */
 /* 菜单背景：构建时 __MENU_BG__ 替换为 assets/menu-bg.jpg 的 data URI，
@@ -118,7 +161,7 @@ h2{font-size:22px;letter-spacing:3px;margin-bottom:4px}
 .coinbar{position:absolute;top:14px;right:16px;display:flex;align-items:center;gap:7px;font-weight:800;
   background:rgba(251,191,36,.13);border:1px solid rgba(251,191,36,.4);color:#ffd98a;padding:6px 13px;border-radius:20px;font-size:13px}
 /* 纯 CSS 金币：不依赖系统表情字体（Windows 10 老版没有 <i class="coin"></i>这个字形，会显示成方框） */
-.coin{display:inline-block;width:13px;height:13px;border-radius:50%;
+.coin{display:inline-block;width:13px;height:13px;border-radius:50%;vertical-align:-2px;
   background:radial-gradient(circle at 34% 30%, #fff3c4 0%, #fbbf24 46%, #b45309 100%);
   box-shadow:0 0 0 1px rgba(180,83,9,.75), inset 0 -1px 1px rgba(120,53,15,.55);flex:0 0 auto}
 .coin::after{content:"";display:block;width:5px;height:5px;margin:4px auto 0;border-radius:50%;
@@ -136,6 +179,13 @@ h2{font-size:22px;letter-spacing:3px;margin-bottom:4px}
    flex 居中 + 滚动会让顶部内容永远滚不到（技能栏被顶出屏幕后切不回普攻 / 大招页） */
 #ovSkin,#ovSkill,#ovLoad{justify-content:flex-start}
 #ovSkin>h2,#ovSkill>h2,#ovLoad>h2{margin-top:30px}
+/* 关卡列表 / 成就 / 词条 / 轮盘同样会超出屏高：一律顶端对齐。
+   旧版 #ovLevels 是 flex 居中 + overflow-y:auto，顶部内容永远滚不到，
+   于是第 1-3 关（熔核巨龙 / 神秘黑侠客 / 西部快枪手）看起来像「被删掉了」。 */
+#ovLevels,#ovAch,#ovPerk,#ovArmy,#ovTower{justify-content:flex-start}
+/* v2.7 军备商店不暂停：背景压到 50% 透明，边逛商店边看战局 */
+#ovArmy{background:rgba(6,9,18,.5)}
+#ovLevels>h2,#ovAch>h2,#ovPerk>h2,#ovArmy>h2,#ovTower>h2{margin-top:30px}
 .back:hover{color:var(--txt);border-color:rgba(120,160,255,.5)}
 
 .shop{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;width:100%;max-width:800px}
@@ -147,7 +197,12 @@ h2{font-size:22px;letter-spacing:3px;margin-bottom:4px}
 .item .nm{font-size:11px;margin-top:4px;font-weight:700}
 .item .pr{font-size:10.5px;color:#ffd98a;margin-top:3px}
 .item.can .pr{color:#7ff0c4}
-.item .st{position:absolute;top:5px;right:6px;font-size:9px;color:#7ff0c4}
+.item .st{position:absolute;top:5px;left:6px;font-size:9px;color:#7ff0c4}
+.sinfo{position:absolute;top:4px;right:4px;width:20px;height:20px;padding:0;border-radius:50%;cursor:pointer;
+  background:rgba(120,160,255,.14);border:1px solid rgba(120,160,255,.4);color:#9fb6ff;font-size:11px;
+  line-height:16px;text-align:center;transition:.15s}
+.sinfo:hover{background:rgba(120,160,255,.3);color:#dbe5ff}
+.sinfo:active{transform:scale(.92);background:rgba(120,160,255,.42)}
 .item .st.eq{color:var(--gold)}
 
 .tabs{display:flex;gap:8px;margin-bottom:12px}
@@ -185,6 +240,12 @@ canvas.pv{width:64px;height:80px;display:block}
 @keyframes tin{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:none}}
 .addrbox{font-family:ui-monospace,Consolas,monospace;font-size:15px;background:rgba(6,10,22,.9);
   border:1px solid var(--line);border-radius:10px;padding:11px 18px;color:#7fe6f7;letter-spacing:.5px;max-width:100%;overflow-x:auto}
+/* 房间界面：本机可用网址列表（直接显示 + 逐个复制） */
+.addrwrap{border:1px dashed var(--line);border-radius:12px;padding:10px 14px;margin:6px 0 10px;background:rgba(8,14,28,.5)}
+.addrlist{display:flex;flex-direction:column;gap:6px;max-height:132px;overflow-y:auto;margin-top:8px}
+.addritem{display:flex;align-items:center;gap:8px}
+.addritem .addrbox{flex:1;padding:7px 14px;font-size:14px}
+.addritem .btn.sm{padding:5px 12px;flex:none}
 .codebox{font-family:ui-monospace,Consolas,monospace;font-size:44px;font-weight:900;letter-spacing:12px;
   color:var(--gold);text-shadow:0 0 26px rgba(251,191,36,.5);padding-left:12px}
 .input{background:rgba(6,10,22,.9);border:1px solid var(--line);border-radius:10px;color:var(--txt);
@@ -220,6 +281,45 @@ canvas.pv{width:64px;height:80px;display:block}
 .lvtabs{display:flex;gap:3px}
 .lv{font-size:10px;padding:2px 7px;border-radius:7px;background:rgba(8,14,28,.85);border:1px solid var(--line);color:var(--txt);cursor:pointer}
 .lv.sel{border-color:var(--gold);color:var(--gold)}
+.lv.lvbig{font-size:12.5px;padding:5px 16px;border-radius:9px;margin:0 3px}
+/* v3.0 地图配置 */
+.mapbox{margin:6px 0 8px;width:100%;max-width:660px;background:rgba(10,16,32,.5);
+  border:1px solid rgba(120,160,255,.16);border-radius:10px;padding:8px 10px}
+.maprow{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin:2px 0 6px}
+.mapchip{font-size:11.5px;padding:4px 10px;border-radius:8px;background:rgba(8,14,28,.85);
+  border:1px solid var(--line);color:var(--txt);cursor:pointer;transition:.15s}
+.mapchip:hover{border-color:rgba(120,160,255,.45)}
+.mapchip.sel{border-color:var(--gold);color:var(--gold);box-shadow:0 0 0 1px rgba(251,191,36,.25) inset}
+.mapsliders{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:3px 18px;margin:2px 0 4px}
+.msrow{display:flex;align-items:center;gap:8px;font-size:11px;color:#9fb3dd;cursor:pointer}
+.msrow span{width:58px;flex:none;text-align:right}
+.msrow input[type=range]{flex:1;min-width:60px;accent-color:#7fe6c4;height:4px;cursor:pointer}
+.msrow b{width:16px;text-align:right;color:#e8eeff;font-size:11px}
+/* v3.1 房间简化：设置按钮 + 小弹窗 */
+.setrow{display:flex;gap:10px;justify-content:center;margin:6px 0 10px;flex-wrap:wrap}
+.setbtn{font-size:12px;padding:6px 16px;border-radius:9px;background:rgba(8,14,28,.85);
+  border:1px solid var(--line);color:var(--txt);cursor:pointer;transition:.15s;letter-spacing:1px}
+.setbtn:hover{border-color:rgba(120,160,255,.5);background:rgba(30,44,84,.85)}
+.mmodal{position:fixed;inset:0;z-index:70;display:flex;align-items:center;justify-content:center;
+  background:rgba(2,6,16,.62);backdrop-filter:blur(2px)}
+.mmodal.hide{display:none}
+.mmodal .mbox{background:rgba(12,18,38,.97);border:1px solid rgba(120,160,255,.32);border-radius:14px;
+  padding:14px 18px 16px;max-width:640px;width:92%;max-height:82vh;overflow:auto;position:relative;
+  box-shadow:0 10px 40px rgba(0,0,0,.55)}
+.mmodal .mhead{font-size:13.5px;letter-spacing:2px;color:#7fe6f7;margin-bottom:8px;text-align:center}
+.mmodal .mclose{position:absolute;top:8px;right:12px;cursor:pointer;color:var(--dim);font-size:16px;padding:2px 6px}
+.mmodal .mclose:hover{color:#fff}
+/* 主标题：旷野之息风格（纯白平面字 + 破碎感滤镜 + 大师剑立于「孤」上） */
+h1.ztitle{position:relative;display:inline-block;margin:0;padding:64px 26px 10px;line-height:1.15}
+h1.ztitle .zsword{position:absolute;top:-54px;left:16px;width:76px;height:208px;z-index:0;
+  filter:drop-shadow(0 3px 6px rgba(0,0,0,.55))}
+h1.ztitle .ztwrap{position:relative;z-index:2;display:inline-block;
+  font-family:"Palatino Linotype","STZhongsong","KaiTi","SimSun",serif;
+  font-size:56px;letter-spacing:10px;font-weight:700;line-height:1.15;
+  filter:url(#chipTitle) drop-shadow(0 2px 6px rgba(0,0,0,.55))}
+h1.ztitle .zt{position:relative;z-index:1;color:#f6f8fc}
+body.mobile h1.ztitle .ztwrap{font-size:38px;letter-spacing:7px}
+body.mobile h1.ztitle .zsword{width:48px;height:132px;top:-26px;left:21px}
 .skgrid{display:flex;align-items:center;gap:3px 7px;flex-wrap:wrap;justify-content:center}
 .ski{display:inline-flex;align-items:center;gap:3px;white-space:nowrap}
 .tk{font-size:9.5px;color:#8fa0c8}
@@ -238,6 +338,103 @@ canvas.pv{width:64px;height:80px;display:block}
 .btnrow{display:flex;gap:14px;align-items:center}
 /* 房间底部的「返回」按钮跟随布局排，不悬浮到左上角与标题重叠 */
 .roomfoot .back{position:static}
+/* ============================================================
+ *  手机版适配（vMobile）
+ *  1) 安全区：避开 iOS 刘海 / 底部横条
+ *  2) 触屏控件层：左摇杆 + 右技能按钮
+ *  3) 触摸热区：可点元素至少 44px（仅在粗指针设备生效）
+ *  4) 竖屏引导
+ * ============================================================ */
+html,body{touch-action:none;overscroll-behavior:none;-webkit-touch-callout:none}
+#app{touch-action:none}
+body{
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+/* ---- 触屏控件层 ---- */
+#touchLayer{position:fixed;inset:0;z-index:30;pointer-events:none;display:none}
+#touchLayer.on{display:block}
+#stickZone{position:absolute;left:0;top:0;bottom:0;width:46%;pointer-events:auto;touch-action:none}
+#stickBase{position:absolute;width:124px;height:124px;margin:-62px 0 0 -62px;border-radius:50%;
+  border:2px solid rgba(120,160,255,.5);background:rgba(18,24,44,.30);
+  opacity:0;transition:opacity .12s;pointer-events:none}
+#stickBase.on{opacity:1}
+#stickKnob{position:absolute;left:50%;top:50%;width:56px;height:56px;margin:-28px 0 0 -28px;border-radius:50%;
+  background:radial-gradient(circle at 40% 35%,rgba(170,205,255,.95),rgba(58,96,186,.85));
+  box-shadow:0 0 18px rgba(34,211,238,.45)}
+#btnZone{position:absolute;right:0;bottom:0;width:56%;height:100%;pointer-events:none}
+.tbtn2{position:absolute;pointer-events:auto;touch-action:none;border-radius:50%;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  background:radial-gradient(circle at 40% 30%,rgba(52,72,132,.94),rgba(18,26,50,.94));
+  border:2px solid rgba(120,160,255,.5);color:#e8eeff;font-weight:700;
+  opacity:.72;box-shadow:0 6px 18px rgba(0,0,0,.55);user-select:none;transition:transform .06s,opacity .12s}
+.tbtn2.act{opacity:1;transform:scale(.93);border-color:var(--cyan);box-shadow:0 0 22px rgba(34,211,238,.6)}
+.tbtn2.dis{opacity:.40;filter:grayscale(.65)}
+.tbk{font-size:18px;line-height:1;pointer-events:none}
+.tbn{font-size:10px;margin-top:2px;color:#bcd0ff;font-weight:600;pointer-events:none}
+.tcd{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-size:22px;color:#fff;text-shadow:0 2px 6px #000;pointer-events:none}
+.tbtn2.big .tbk{font-size:25px}
+/* 大招：金色描边（王者荣耀式视觉层级） */
+.tbtn2.ult{border-color:rgba(251,191,36,.75);box-shadow:0 6px 18px rgba(0,0,0,.55),0 0 16px rgba(251,191,36,.28)}
+.tbtn2.ult .tbn{color:#ffd98a}
+/* v2.7 索敌键：青蓝描边（与技能键区分），无冷却遮罩 */
+.tbtn2.lk{border-color:rgba(34,211,238,.75);background:radial-gradient(circle at 40% 30%,rgba(20,72,92,.94),rgba(10,28,40,.94))}
+.tbtn2.lk .tbk{color:#7fe6f7}
+.tbtn2.lk .tbn{color:#7fe6f7}
+/* v3.3 交互键：绿色描边；附近有可交互物时呼吸高亮 */
+.tbtn2.it{border-color:rgba(52,211,153,.7);background:radial-gradient(circle at 40% 30%,rgba(18,72,58,.94),rgba(10,30,26,.94))}
+.tbtn2.it .tbk{color:#6ee7b7}
+.tbtn2.it .tbn{color:#6ee7b7}
+.tbtn2.it.ready{opacity:1;border-color:#34d399;box-shadow:0 0 20px rgba(52,211,153,.55);animation:tPulse .9s ease-in-out infinite}
+@keyframes tPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+.tpad{position:absolute;left:14px;top:14px;width:46px;height:46px;border-radius:12px;
+  pointer-events:auto;touch-action:none;font-size:20px;line-height:1;
+  border:1px solid var(--line);background:rgba(20,28,52,.8);color:var(--txt);opacity:.8}
+.tpad:active{opacity:1;border-color:var(--cyan)}
+
+/* ---- 手机版 HUD 补偿：app 被整体缩小约 0.65，字号/血条反向放大保证可读 ---- */
+body.mobile .logo{font-size:19px}
+body.mobile .ver{font-size:13px;padding:2px 9px}
+body.mobile .bars{top:44px;left:10px;width:330px;gap:7px}
+body.mobile .barlab{font-size:14px;width:46px}
+body.mobile .bartrack{height:19px;border-radius:10px}
+body.mobile .bartxt{font-size:13px}
+/* 底部技能栏与右侧触屏按钮重复，手机上隐藏（右侧按钮自带技能名与 CD） */
+body.mobile .slots{display:none}
+
+/* ---- 平板（body.pad）：画面本身放大 ≈1.6 倍，手机那套 HUD 放大会显得过大，逐条抵消 ---- */
+body.pad .logo{font-size:14px}
+body.pad .ver{font-size:10px;padding:1px 7px}
+body.pad .bars{top:50px;left:12px;width:300px;gap:5px}
+body.pad .barlab{font-size:10px;width:34px}
+body.pad .bartrack{height:13px;border-radius:7px}
+body.pad .bartxt{font-size:9px}
+
+/* ---- 粗指针（手机）：放大触摸热区 ---- */
+@media (pointer:coarse){
+  .btn,.tbtn,.item{min-height:46px}
+  .btn{padding:12px 18px;font-size:15px}
+  .card{padding:14px}
+  .back{padding:10px 16px;font-size:16px}
+  .tbtn{padding:8px 14px;font-size:14px}
+  /* 菜单内容在小屏可滚动，避免顶部/底部点不到 */
+  .ov{overflow-y:auto;-webkit-overflow-scrolling:touch}
+  .ov::-webkit-scrollbar{width:0}
+}
+
+/* ---- 竖屏引导：请横屏游玩 ---- */
+#rotateTip{position:fixed;inset:0;z-index:99;display:none;
+  background:radial-gradient(600px 400px at 50% 40%,#1a2350,#080b16 70%);
+  color:#e8eeff;align-items:center;justify-content:center;flex-direction:column;gap:16px;text-align:center}
+@media (pointer:coarse) and (orientation:portrait){
+  #rotateTip{display:flex}
+}
+#rotateTip .ri{font-size:64px;animation:rot 1.8s ease-in-out infinite}
+@keyframes rot{0%,45%{transform:rotate(0)}70%,100%{transform:rotate(-90deg)}}
+#rotateTip .rt{font-size:17px;letter-spacing:1px}
+#rotateTip .rs{font-size:13px;color:#8fa0c8}
+
 </style>
 </head>
 <body>
@@ -251,17 +448,90 @@ canvas.pv{width:64px;height:80px;display:block}
       <button class="tbtn" id="btnQuit">⏸ 菜单</button>
     </div>
     <div class="bars" id="pBars"></div>
+    <div class="modeHud" id="modeHud"></div>
     <div class="enemyHud" id="eBars"></div>
     <div class="slots" id="slots"></div>
+    <!-- v2.7 丧尸危机：局内商店按钮直接搬到战斗界面（手机端不用暂停也能开商店） -->
+    <button class="tbtn shopbtn" id="btnShopHud" style="display:none">🛒 商店</button>
   </div>
   <div id="tip"></div>
   <div id="toast"></div>
 
+  <!-- 标题破碎感滤镜（湍流位移轻微侵蚀笔画边缘） -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <filter id="chipTitle" x="-10%" y="-10%" width="120%" height="120%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.10 0.13" numOctaves="2" seed="11" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="5" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </svg>
+
   <!-- 主菜单 -->
   <div class="ov" id="ovMenu">
     <div class="bgmSwitch" id="btnBgm" title="背景音乐开关（随机播放，低音量）">🎵 音乐开</div>
-    <h1>孤高旅斗</h1>
-    <div class="sub" id="menuVer">v__VERSION__ · 一人一剑，向死而生</div>
+    <h1 class="ztitle"><svg class="zsword" viewBox="0 0 60 164" aria-hidden="true">
+      <defs>
+        <linearGradient id="swBlade" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stop-color="#b4bac2"/><stop offset=".2" stop-color="#8d95a2"/>
+          <stop offset=".5" stop-color="#6d798c"/><stop offset=".8" stop-color="#8d95a2"/>
+          <stop offset="1" stop-color="#adb3bb"/>
+        </linearGradient>
+        <linearGradient id="swWing" x1="0" y1="1" x2="0" y2="0">
+          <stop offset="0" stop-color="#25396e"/><stop offset="1" stop-color="#55719f"/>
+        </linearGradient>
+        <linearGradient id="swGrip" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stop-color="#2a2436"/><stop offset="1" stop-color="#3b3448"/>
+        </linearGradient>
+      </defs>
+      <!-- 剑身：陈旧钢芯，刃口多处崩缺 -->
+      <polygon points="30,2 33.6,13 35.0,26 33.2,30 35.0,35 35.4,50 33.6,55 35.2,61 35.6,78 34.4,84 34.9,90 30,93 25.4,90 24.8,84 25.6,77 24.2,72 25.8,66 24.4,61 26.0,55 24.6,50 26.2,44 25.0,38 26.4,31 25.2,26 26.7,13"
+        fill="url(#swBlade)" stroke="#232a36" stroke-width="1.1" stroke-linejoin="round"/>
+      <!-- 残存高光（断续，旧化后失去整体光泽） -->
+      <polygon points="29.6,6 30.8,16 30.4,50 29.2,50 29.2,16" fill="rgba(255,255,255,.22)"/>
+      <polygon points="29.6,58 30.8,58 30.6,74 29.4,74" fill="rgba(255,255,255,.14)"/>
+      <!-- 血槽与裂纹 -->
+      <path d="M30 9 L30 89" stroke="rgba(22,28,40,.4)" stroke-width="1.5" fill="none"/>
+      <path d="M31.8 19 L30.5 33 L32.2 45" stroke="#2b3242" stroke-width=".9" fill="none" opacity=".9"/>
+      <path d="M32.2 45 L33.6 49" stroke="#2b3242" stroke-width=".7" fill="none" opacity=".8"/>
+      <path d="M28.3 40 L29.4 51 L27.9 59" stroke="#2b3242" stroke-width=".8" fill="none" opacity=".85"/>
+      <path d="M28.8 68 L30 76" stroke="#2b3242" stroke-width=".7" fill="none" opacity=".7"/>
+      <!-- 锈斑与暗色包浆 -->
+      <polygon points="32.6,21 34.4,23.5 33.2,26.5 31.4,24" fill="rgba(122,78,44,.34)"/>
+      <polygon points="26.2,35.5 28,38 26.6,41 25,38.5" fill="rgba(122,78,44,.30)"/>
+      <polygon points="33.6,62.5 35.2,65.5 33.6,68 32.2,65" fill="rgba(150,96,52,.28)"/>
+      <polygon points="27,71.5 28.6,74 27.2,76.5 25.8,74" fill="rgba(122,78,44,.30)"/>
+      <polygon points="31.8,43 33.2,45.5 31.6,47.5 30.6,45" fill="rgba(70,84,96,.45)"/>
+      <polygon points="28.4,80 30.2,82.5 28.6,85 27.2,82.5" fill="rgba(70,84,96,.40)"/>
+      <!-- 护手：上扬双翼，边缘缺损 + 划痕 -->
+      <path d="M28 97 C 20 97, 9 91, 4 72 C 7 77, 12 80, 16 79.5 C 13 82.5, 14 87, 18 89 C 15 92.5, 20 96, 28 97 Z"
+            fill="url(#swWing)" stroke="#1d2432" stroke-width="1.2" stroke-linejoin="round"/>
+      <path d="M32 97 C 40 97, 51 91, 56 72 C 53 77, 48 80, 44 79.5 C 47 82.5, 46 87, 42 89 C 45 92.5, 40 96, 32 97 Z"
+            fill="url(#swWing)" stroke="#1d2432" stroke-width="1.2" stroke-linejoin="round"/>
+      <path d="M8 77.5 L18 83.5" stroke="rgba(215,228,255,.30)" stroke-width=".8" fill="none"/>
+      <path d="M52 77.5 L42 83.5" stroke="rgba(215,228,255,.30)" stroke-width=".8" fill="none"/>
+      <polygon points="10,73.5 13.4,76.5 9.4,78" fill="rgba(18,24,38,.55)"/>
+      <polygon points="50,73.5 46.6,76.5 50.6,78" fill="rgba(18,24,38,.55)"/>
+      <polygon points="20.6,92.5 23,94.5 20.4,95.5" fill="rgba(18,24,38,.5)"/>
+      <polygon points="39.4,92.5 37,94.5 39.6,95.5" fill="rgba(18,24,38,.5)"/>
+      <!-- 中央块：掉漆 -->
+      <rect x="25.4" y="92" width="9.2" height="13" rx="2" fill="#33405c" stroke="#1d2432" stroke-width="1.1"/>
+      <rect x="27" y="94" width="2.6" height="4" rx="1" fill="rgba(122,78,44,.35)"/>
+      <!-- 紫宝石：失泽 + 裂纹 -->
+      <polygon points="30,98 35,105.5 30,113 25,105.5" fill="#5b3a99" stroke="#1d2432" stroke-width="1.1"/>
+      <polygon points="30,99.5 33.4,105.5 30,111.5 26.6,105.5" fill="#7d54c2" opacity=".8"/>
+      <path d="M27.4 103.4 L32.2 107.2" stroke="#241b3a" stroke-width=".9" fill="none" opacity=".9"/>
+      <!-- 剑柄：磨损缠绳，一处松脱 -->
+      <rect x="26.6" y="113" width="6.8" height="24" rx="2.4" fill="url(#swGrip)" stroke="#161220" stroke-width="1.1"/>
+      <path d="M26.6 118.5 L33.4 120.5 M26.6 124 L33.4 126 M26.6 129.5 L33.4 131.5 M26.6 135 L33.4 137"
+            stroke="#514466" stroke-width="1.4"/>
+      <rect x="26.6" y="121.5" width="6.8" height="2.2" fill="rgba(0,0,0,.38)"/>
+      <!-- 柄尾：磕碰缺口 + 失泽宝石 -->
+      <polygon points="25,137 35,137 33.4,146 26.6,146" fill="#221c33" stroke="#161220" stroke-width="1.1"/>
+      <polygon points="26.2,139.5 28.4,141 26.4,142.6" fill="rgba(0,0,0,.45)"/>
+      <circle cx="30" cy="151.5" r="4.6" fill="#5b3a99" stroke="#161220" stroke-width="1.1"/>
+      <circle cx="28.7" cy="150.3" r="1.3" fill="#9d78d9" opacity=".7"/>
+      <path d="M31 154.5 L33.2 152.6" stroke="#241b3a" stroke-width=".8" fill="none" opacity=".8"/>
+    </svg><span class="ztwrap"><span class="zt">孤高旅斗</span></span></h1>
+    <div class="sub" id="menuVer">v__VERSION__ · 听雨的声音</div>
     <div class="hr"></div>
     <div class="grid g3" style="max-width:760px">
       <div class="card" id="mSolo"><div class="t">🗺️ 单人游戏</div><div class="d">关卡征伐，闯关模式与勇者格斗</div></div>
@@ -270,6 +540,7 @@ canvas.pv{width:64px;height:80px;display:block}
       <div class="card" id="mSkin"><div class="t">🎨 皮肤商店</div><div class="d">头部 / 上身 / 下身，自由搭配</div></div>
       <div class="card" id="mSkill"><div class="t">⚔️ 技能商店</div><div class="d">购买与装配普攻、技能、大招</div></div>
       <div class="card" id="mLoad"><div class="t">🎽 我的配装</div><div class="d">查看当前外观与技能组合</div></div>
+      <div class="card" id="mAch"><div class="t">🏆 成就称号</div><div class="d">累计战绩、成就解锁与称号佩戴</div></div>
     </div>
   </div>
 
@@ -282,7 +553,11 @@ canvas.pv{width:64px;height:80px;display:block}
     <div class="hr"></div>
     <div class="grid g2" style="max-width:640px">
       <div class="card" id="sDrag"><div class="t">🗺️ 闯关模式</div><div class="d">关卡制讨伐战。普通 / 困难两档难度，通关得金币</div></div>
-      <div class="card" id="sDuel"><div class="t">🤖 勇者格斗</div><div class="d">角色卡房间：编排人机、选模式，乱斗 / 阵营 / 霸主</div></div>
+      <div class="card" id="sDuel"><div class="t">🤖 勇者格斗</div><div class="d">角色卡房间：编排人机、选模式，9 种对战规则</div></div>
+    </div>
+    <div class="hr"></div>
+    <div class="grid g2" style="max-width:640px">
+      <div class="card" id="sGauntlet"><div class="t">⚔ 死战闯关</div><div class="d" id="gauntletDesc">连打 6 关，每关之间选一个 Buff，通关 50 金币</div></div>
     </div>
   </div>
 
@@ -344,9 +619,10 @@ canvas.pv{width:64px;height:80px;display:block}
     <div class="back" data-back="ovMenu">‹ 返回</div>
     <div class="coinbar"><i class="coin"></i><span class="coinNum">0</span></div>
     <h2>皮肤商店</h2>
-    <div class="sub">Q 版三段式模型：头部 / 上身 / 下身，自由混搭，每件 6 金币</div>
+    <div class="sub">Q 版三段式模型：套装 / 头部 / 上身 / 下身，自由混搭</div>
     <div class="tabs" id="skinTabs">
-      <div class="tab on" data-part="head">头部</div>
+      <div class="tab on" data-part="suit">✨ 套装</div>
+      <div class="tab" data-part="head">头部</div>
       <div class="tab" data-part="upper">上身</div>
       <div class="tab" data-part="lower">下身</div>
     </div>
@@ -410,14 +686,71 @@ canvas.pv{width:64px;height:80px;display:block}
   <!-- 战斗中暂停面板：Esc 或右上角按钮呼出 -->
   <div class="ov hide" id="ovPause">
     <h2>暂停</h2>
-    <div class="sub">对局仍在进行（联机不会因此暂停）</div>
+    <div class="sub" id="pauseSub">本地对局已暂停（联机对局不会因此暂停）</div>
     <div class="hr"></div>
     <div class="row" style="flex-direction:column;gap:10px">
       <button class="btn primary" id="btnPauseResume">继续战斗</button>
+      <button class="btn" id="btnArmyShop" style="display:none">🛒 局内商店（丧尸危机）</button>
       <button class="btn" id="btnPauseRoom">‹ 返回房间（不退房）</button>
       <button class="btn ghost" id="btnPauseMenu">回主菜单</button>
     </div>
   </div>
+
+  <!-- v2.6 闯关词条 3 选 1 -->
+  <div class="ov hide" id="ovPerk">
+    <h2>选择一个词条</h2>
+    <div class="sub">词条只在本次闯关内生效，可以不断叠加</div>
+    <div class="hr"></div>
+    <div class="grid g3" id="perkGrid" style="max-width:700px"></div>
+    <div class="row" style="margin-top:14px;gap:10px">
+      <button class="btn" id="btnPerkSkip">跳过，直接休整</button>
+    </div>
+  </div>
+
+  <!-- v2.7 丧尸危机：局内商店（不暂停战斗，可随时开关） -->
+  <!-- v3.7 塔防局内装备（金币购买，被动唯一 / 主动最多 1 件） -->
+  <div class="ov hide" id="ovTower">
+    <div class="back" id="towerClose">✕ 关闭</div>
+    <h2>局内装备</h2>
+    <div class="sub">金币：<b id="towerCoins" style="color:#ffd98a">0</b> · 击杀小兵 / 英雄 / 助攻都给金币 · 被动装备每件只能买一次，主动装备最多携带 1 件（按 <b>P</b> 释放）</div>
+    <div class="hr"></div>
+    <div class="sub" id="towerHint" style="margin-bottom:10px"></div>
+    <div class="grid g3" id="towerGrid" style="max-width:900px;max-height:60vh;overflow:auto"></div>
+    <div style="margin-top:14px"><button class="btn" id="towerCloseBtn">✕ 返回战斗</button></div>
+  </div>
+
+  <div class="ov hide" id="ovArmy">
+    <div class="back" id="armyClose">✕ 关闭</div>
+    <h2>局内商店</h2>
+    <div class="sub">局内金币：<b id="armyCoins" style="color:#ffd98a">0</b>（只在当局有效，击杀僵尸/玩家掉落） · 点右上角「✕ 关闭」或按 B / Esc 返回战斗 · <b style="color:#fbbf24">商店不暂停战斗</b></div>
+    <div class="hr"></div>
+    <div class="sub" id="armyHint" style="margin-bottom:10px"></div>
+    <div class="grid g3" id="armyGrid" style="max-width:760px;max-height:44vh;overflow:auto"></div>
+    <div style="margin-top:14px"><button class="btn" id="armyCloseBtn">✕ 返回战斗</button></div>
+  </div>
+
+  <!-- v2.6 成就与称号（入口在主菜单） -->
+  <div class="ov hide" id="ovAch">
+    <div class="back" data-back="ovMenu">‹ 返回</div>
+    <div class="coinbar"><i class="coin"></i><span class="coinNum">0</span></div>
+    <h2>成就与称号</h2>
+    <div class="sub" id="achStats"></div>
+    <div class="hr"></div>
+    <h3 style="margin:4px 0 8px;font-size:15px">称号（点击佩戴）</h3>
+    <div class="grid g3" id="titleGrid" style="max-width:760px"></div>
+    <div class="hr"></div>
+    <h3 style="margin:4px 0 8px;font-size:15px">成就</h3>
+    <div class="grid g2" id="achGrid" style="max-width:760px"></div>
+  </div>
+</div>
+<!-- 手机版：触屏控件层（由 95_touch.js 填充；电脑上不显示） -->
+<div id="touchLayer"></div>
+
+<!-- 手机版：竖屏引导 -->
+<div id="rotateTip">
+  <div class="ri">📱</div>
+  <div class="rt">请横屏游玩</div>
+  <div class="rs">孤高旅斗是横版对战，横屏后操控区在屏幕两侧</div>
 </div>
 <script src="balance.js"></script><!-- 平衡配置（可选）：文件不存在时忽略，使用内置默认 -->
 <script>

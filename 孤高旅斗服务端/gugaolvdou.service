@@ -1,0 +1,27 @@
+# 孤高旅斗 · systemd 常驻服务模板
+# ------------------------------------------------------------
+# 安装步骤（把 /opt/gugaolvdou 换成你实际解包的目录）：
+#   1) sudo cp -r 孤高旅斗服务端 /opt/gugaolvdou
+#   2) sudo nano /etc/systemd/system/gugaolvdou.service   # 核对下面两行路径
+#   3) sudo systemctl daemon-reload
+#   4) sudo systemctl enable --now gugaolvdou             # 开机自启 + 立即启动
+#   5) systemctl status gugaolvdou                        # 查看状态
+#   journalctl -u gugaolvdou -f                           # 跟日志
+# ------------------------------------------------------------
+[Unit]
+Description=GuGaoLvDou game server (HTTP + WebSocket, pure stdlib)
+After=network.target
+
+[Service]
+Type=simple
+# ↓ 两处路径按实际情况修改
+WorkingDirectory=/opt/gugaolvdou
+ExecStart=/usr/bin/python3 /opt/gugaolvdou/server.py --server --port 8123
+Restart=always
+RestartSec=3
+# 存档 profile.json 写在包目录里，运行用户需要对目录有写权限
+# 例如：sudo chown -R www-data:www-data /opt/gugaolvdou
+User=www-data
+
+[Install]
+WantedBy=multi-user.target

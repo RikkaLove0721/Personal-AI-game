@@ -261,6 +261,14 @@ UI.startDuel();
 {
   const me = B.hero(0);
   B.state = "fight"; B.countdown = 0;
+  /* 把对手钉在地图角落并停掉 AI：这一段只验证激光自己的蓄力/取消，
+   * 否则人机偶尔一发控制（定身 / 眩晕）会把蓄力拖过 110 帧窗口，断言偶发失败 */
+  B.fighters.forEach(f => {
+    if (f === me) return;
+    f.isBot = false; f.bot = null;
+    f.ctrl = { mx: 0, my: 0, hold: {}, press: {} };
+    f.x = 60; f.y = 60;
+  });
 
   // 1）蓄力中双击方向键 → 取消
   tap(S, "KeyK"); step(S, 1);
@@ -272,6 +280,9 @@ UI.startDuel();
   check("取消蓄力不会把人瞬移走", Math.abs(me.x - xCancel) < 1, "Δx=" + Math.abs(me.x - xCancel).toFixed(2));
 
   // 2）不取消 → 正常蓄力完成并发射
+  /* 先把双击计时清掉：上一段刚连按过 D，280ms 内的再次按下会被判成双击闪避，
+   * 而闪避会取消激光蓄力（测试会时灵时不灵）。 */
+  UI.clearCtrl(); key(S, "KeyD", false);
   me.cd.skill1 = 0;
   tap(S, "KeyK"); step(S, 1);
   check("再次进入蓄力", me.slot.skill1.phase === "laserCharge", me.slot.skill1.phase);
@@ -437,7 +448,7 @@ console.log("\n=== 10. 角色卡房间 ===");
  * 11. 三种模式人人可玩 / 界面接线
  * ============================================================ */
 console.log("\n=== 11. 模式接线 ===");
-check("规则表含 4 种模式（v2.5 新增天外来物）", LD.RULES.length === 4 && ["brawl", "team", "overlord", "gifts"].every(id => LD.ruleInfo(id).id === id));
+check("规则表含 11 种模式（v3.2 世界末日 / v3.7 塔防对战）", LD.RULES.length === 11 && ["brawl", "team", "overlord", "gifts", "ring", "auction", "doomsday", "relay", "hunt", "warmup", "tower"].every(id => LD.ruleInfo(id).id === id));
 check("阵营配色 4 队", LD.TEAM_COLORS.length === 4 && LD.TEAM_NAMES.length === 4, LD.TEAM_NAMES.join("/"));
 check("自定义房间入口已接入角色卡", typeof UI.renderRoom === "function" && typeof UI.roomStart === "function");
 check("多人准备阶段渲染函数就绪", typeof UI.renderNetRoom === "function" && typeof UI.applyNetRoom === "function" && typeof UI.netHostStart === "function");
@@ -541,20 +552,17 @@ console.log("\n=== 12. v2.1 修复与新技能 ===");
   check("苍：附带 1 秒减速", f[1].slowT > 0.8, "slowT=" + f[1].slowT.toFixed(2));
 }
 
-// 赫：范围强击飞（定向 400 距离）+ 20 伤，无撞墙惩罚（v2.3 削弱）
+// 赫：范围强击飞（定向 400 距离）+ 15 伤，撞墙额外 15（v3.1 规则）
 {
   const f = mkBattle("brawl", null, 2, { skill1: "he" });
   const me = f[0], foe = f[1];
   foe.ctrl = null; foe.bot = null;
   foe.x = me.x + 90; foe.y = me.y;
   B.trySlot(me, "skill1", { mx: 0, my: 0, hold: {}, press: {} });
-  check("赫：造成 20 点伤害", foe.maxHp - foe.hp === 20, "dmg=" + (foe.maxHp - foe.hp));
+  check("赫：造成 15 点伤害", foe.maxHp - foe.hp === 15, "dmg=" + (foe.maxHp - foe.hp));
   check("赫：敌人被定向击飞（剩余距离 ≈400）", foe.knockLeft > 300 && foe.knockLeft <= 450, "left=" + Math.round(foe.knockLeft));
-  const hp0 = foe.hp;
-  for (let i = 0; i < 40; i++) step(S, 1);       // 击飞途中即使撞到边界也不再追加伤害
-  check("赫：撞墙不再扣血 / 眩晕（v2.3 取消）", foe.maxHp - foe.hp === 20 && foe.stun === 0,
-    "dmg=" + (foe.maxHp - foe.hp) + " stun=" + foe.stun.toFixed(2));
-  check("赫：击飞正常结束", foe.knockLeft === 0);
+  for (let i = 0; i < 40; i++) step(S, 1);       // 击飞途中撞墙会追加 15（v3.1 墙体规则）
+  check("赫：击飞正常结束", foe.knockLeft === 0, "left=" + foe.knockLeft);
 }
 
 // 回旋镖：去程 20 / 回程 26，回手才进 CD
@@ -809,8 +817,8 @@ console.log("\n=== 13. v2.2：新技能与阵营设置 ===");
 console.log("\n=== 14. v2.3：平衡调整 / 随机出生 / 胜者特写 / 新头部 ===");
 
 // 静态数值确认
-check("赫：击飞 400，无撞墙惩罚", LD.skill("he").kbDist === 400 && LD.skill("he").wallDmg == null,
-  "kbDist=" + LD.skill("he").kbDist);
+check("赫：击飞 400，撞墙额外 15 伤害", LD.skill("he").kbDist === 400 && LD.skill("he").wallDmg === 15,
+  "kbDist=" + LD.skill("he").kbDist + " wallDmg=" + LD.skill("he").wallDmg);
 check("钩索：拖回 400 / 眩晕 0.8 / 图标可显示", LD.skill("hook").pullDist === 400 && LD.skill("hook").stun === 0.8 && LD.skill("hook").icon === "🧲",
   LD.skill("hook").icon);
 check("位移斩：350 距离 / CD 4s", LD.skill("dashSlash").dash === 350 && LD.skill("dashSlash").cd === 4,
@@ -1068,8 +1076,8 @@ check("手枪：CD 从 5s 降到 3s", LD.skill("pistol").cd === 3, LD.skill("pis
  * ============================================================ */
 console.log("\n=== v2.5.1 关卡与难度 ===");
 {
-  check("关卡共 3 关，BOSS 依次 dragon/ninja/gun",
-    LD.LEVELS.length === 3 && LD.LEVELS.map(l => l.boss).join(",") === "dragon,ninja,gun",
+  check("关卡共 9 关，前 3 关依次 dragon/ninja/gun",
+    LD.LEVELS.length === 9 && LD.LEVELS.slice(0, 3).map(l => l.boss).join(",") === "dragon,ninja,gun",
     LD.LEVELS.map(l => l.boss).join(","));
   check("困难模式血量 = 普通 2 倍", LD.DIFF.hard.hpM === 2.0, LD.DIFF.hard.hpM);
   check("困难模式出手频率提高（rateM 1.6）", LD.DIFF.hard.rateM === 1.6, LD.DIFF.hard.rateM);
@@ -1189,11 +1197,14 @@ console.log("\n=== v2.5.3 快枪手：炸弹 / 十响 / 隐身 ===");
     "stealthT=" + (boss.stealthT || 0).toFixed(1));
 }
 
-console.log("\n=== v2.5.4 天外来物 ===");
+console.log("\n=== v2.5.4 天外来物（v3.3 改为 O 键拾取）===");
 {
   const fs2 = mkBattle("gifts", null, 2, { basic: "slash", skill1: "dashSlash", skill2: "hook", ult: "bloodRage" });
   const me = fs2[0], foe = fs2[1];
-  /* 屏幕定格(FX.stop)期间世界完全冻结（dt=0），固定帧数等不到结果 —— 统一用「步进到条件成立」的等待 */
+  /* 按一次 O：写 ctrl.press.interact 后推进一帧（战斗循环消费后会自动清掉） */
+  const tapO = (who) => { who.ctrl.press.interact = true; step(S, 1); };
+  /* 交互 CD 0.35s + 拾取锁 0.8s：两次拾取之间至少等 1 秒 */
+  const cool = () => step(S, 62);
   const waitPick = (cond, cap) => { for (let i = 0; i < (cap || 60) && !cond(); i++) step(S, 1); };
   check("天外来物：开局清空技能与大招，只留普攻",
     me.loadout.basic === "slash" && me.loadout.skill1 === null && me.loadout.skill2 === null && me.loadout.ult === null &&
@@ -1209,65 +1220,47 @@ console.log("\n=== v2.5.4 天外来物 ===");
   const g1 = B.gifts.find(g => g.kind === "skill");
   check("天外来物：降落中不可拾取（2s 落地）", g1 && !g1.landed);
 
-  // 拾取：先 K 后 L
+  // v3.3：走过去不再自动装备，必须按 O
   g1.landed = true; g1.id = "windBlade"; g1.x = me.x; g1.y = me.y;
-  waitPick(() => me.loadout.skill1 === "windBlade");
-  check("天外来物：碰到掉落物自动装入 K 槽", me.loadout.skill1 === "windBlade", String(me.loadout.skill1));
+  step(S, 30);
+  check("天外来物：站在掉落物上不会自动拾取", me.loadout.skill1 === null, String(me.loadout.skill1));
+  tapO(me);
+  check("天外来物：按 O 拾取装入 K 槽", me.loadout.skill1 === "windBlade", String(me.loadout.skill1));
+
+  cool();
   B.spawnGift("skill", "hook", me.x, me.y, true);
-  waitPick(() => me.loadout.skill2 === "hook");
+  tapO(me);
   check("天外来物：第二个技能装入 L 槽", me.loadout.skill2 === "hook", String(me.loadout.skill2));
 
-  // 槽位已满：触碰挂 pending，按 K 先照常出手、0.3s 后置换，旧技能留在原地
-  const g3 = B.spawnGift("skill", "windBlade", me.x, me.y, true);   // 与 K 槽同名方便断言置换
-  g3.id = "laserWave";
-  me.cd.skill1 = 0;
-  waitPick(() => !!(me.giftPending && me.giftPending.skill && me.giftPending.skill.g === g3));
-  check("天外来物：满槽触碰进入待置换状态", !!me.giftPending && !!me.giftPending.skill && me.giftPending.skill.g === g3,
-    JSON.stringify(!!(me.giftPending && me.giftPending.skill)));
-  me.cd.skill1 = 0; me.cd.skill2 = 0;
-  me.ctrl.press.skill1 = true;                                      // 按 K
-  me.ctrl.hold.skill1 = true;
-  for (let i = 0; i < 30 && !me.giftSwap; i++) step(S, 1);
-  me.ctrl.press.skill1 = false; me.ctrl.hold.skill1 = false;
-  check("天外来物：按 K 后先照常出手（置换挂起 0.3s）", !!me.giftSwap && me.giftSwap.drop === g3, String(!!me.giftSwap));
-  for (let i = 0; i < 180 && me.loadout.skill1 !== "laserWave"; i++) step(S, 1);   // 0.3s 置换（含定格等待）
-  check("天外来物：0.3s 后新技能装入 K 槽", me.loadout.skill1 === "laserWave", String(me.loadout.skill1));
+  // 两格都满：再捡一个 → 替换「最早获得」的 K 槽，旧技能留在原地
+  cool();
+  const g3 = B.spawnGift("skill", "laserWave", me.x, me.y, true);
+  tapO(me);
+  check("天外来物：满槽时替换最早获得的技能（K）",
+    me.loadout.skill1 === "laserWave" && me.loadout.skill2 === "hook",
+    String(me.loadout.skill1) + "/" + String(me.loadout.skill2));
   check("天外来物：被换下的技能以掉落物留在原地",
-    B.gifts.some(g => g.id === "windBlade" && g.x === g3.x && g.y === g3.y),
-    B.gifts.map(g => g.id).join(","));
+    B.gifts.some(g => g.kind === "skill" && g.id === "windBlade"), B.gifts.map(g => g.kind + ":" + g.id).join(","));
+  check("天外来物：换下的掉落物不会立刻被同一个人再捡起（noPick）",
+    (B.gifts.find(g => g.id === "windBlade") || {}).noPick > 0);
 
-  // 大招：满槽触碰 → 按 O 置换（先清场 + 停掉自然刷落，避免别的掉落物来抢 pending）
+  // 连续按 O：拾取锁内不再触发，避免一次拾取反复替换
+  const before1 = me.loadout.skill1, before2 = me.loadout.skill2;
+  tapO(me); tapO(me);
+  check("天外来物：拾取锁内连按 O 不会反复替换",
+    me.loadout.skill1 === before1 && me.loadout.skill2 === before2,
+    String(me.loadout.skill1) + "/" + String(me.loadout.skill2));
+
+  // 大招：已有大招时按 O 拾取 → 直接替换，旧大招留在原地
   B.gifts.length = 0; B.giftT = 999; B.giftUltT = 999;
-  me.loadout.ult = "bloodRage";                                     // 造出「已有大招」的满槽状态
-  B.spawnGift("skill", "windBlade", me.x, me.y, true);              // 地上同时放一个技能掉落物
-  const gu = B.spawnGift("ult", "thousandSwords", me.x, me.y, true);
-  waitPick(() => !!(me.giftPending && me.giftPending.ult));
-  check("天外来物：已有大招时触碰挂 pending",
-    !!me.giftPending && !!me.giftPending.ult && me.giftPending.ult.kind === "ult",
-    JSON.stringify(!!(me.giftPending && me.giftPending.ult)));
-  check("天外来物：站在技能掉落物上也能同时挂大招 pending",
-    !!me.giftPending && !!me.giftPending.skill,
-    "skill=" + !!(me.giftPending && me.giftPending.skill));
-  me.cd.ult = 0; me.energy = me.maxEnergy;
-  me.ctrl.press.ult = true; me.ctrl.hold.ult = true;
-  for (let i = 0; i < 30 && !me.giftSwap; i++) step(S, 1);
-  me.ctrl.press.ult = false; me.ctrl.hold.ult = false;
-  check("天外来物：按 O 后大招置换挂起（先照常开大）", !!me.giftSwap && me.giftSwap.slot === "ult", String(!!me.giftSwap));
-  for (let i = 0; i < 240 && me.loadout.ult !== "thousandSwords"; i++) step(S, 1);  // 大招演出期间世界冻结，置换倒计时也暂停
-  check("天外来物：演出结束后大招完成置换", me.loadout.ult === "thousandSwords", String(me.loadout.ult));
-  check("天外来物：被换下的大招留在原地（可被别人捡）", B.gifts.some(g => g.kind === "ult" && g.id === "bloodRage"),
+  me.loadout.ult = "bloodRage";
+  cool();
+  B.spawnGift("ult", "thousandSwords", me.x, me.y, true);
+  tapO(me);
+  check("天外来物：按 O 拾取大招并替换当前大招", me.loadout.ult === "thousandSwords", String(me.loadout.ult));
+  check("天外来物：被换下的大招留在原地（可被别人捡）",
+    B.gifts.some(g => g.kind === "ult" && g.id === "bloodRage"),
     B.gifts.map(g => g.kind + ":" + g.id).join(","));
-
-  // 回归：同类旧的待置换失效（掉落物被回收 / 被捡走）后，新掉落物要能立刻挂上
-  B.gifts.length = 0;
-  const dOld = B.spawnGift("skill", "windBlade", me.x, me.y, true);
-  waitPick(() => !!(me.giftPending && me.giftPending.skill && me.giftPending.skill.g === dOld));
-  B.gifts.length = 0;                                 // 旧掉落物被系统收回
-  const dNew = B.spawnGift("skill", "hook", me.x, me.y, true);   // 同类型的新掉落物就在脚下
-  waitPick(() => !!(me.giftPending && me.giftPending.skill && me.giftPending.skill.g === dNew));
-  check("天外来物：同类旧待置换失效后，脚下的新掉落物能立刻挂上",
-    !!me.giftPending && !!me.giftPending.skill && me.giftPending.skill.g === dNew,
-    me.giftPending && me.giftPending.skill ? String(me.giftPending.skill.g.id) : "无");
 
   // 场上上限：技能 3 / 大招 2，超限最旧的消失
   B.gifts.length = 0;
@@ -1287,9 +1280,14 @@ console.log("\n=== v2.5.4 天外来物 ===");
   const bot = aiBattle[1];
   LD.AI.mkBot(bot, "normal");
   B.gifts.length = 0;
-  const drop = B.spawnGift("skill", "windBlade", bot.x, bot.y, true);
-  step(S, 3);
-  check("天外来物：AI 会捡起掉落物装入空槽", bot.loadout.skill1 === "windBlade" || bot.loadout.skill2 === "windBlade",
+  B.spawnGift("skill", "windBlade", bot.x, bot.y, true);
+  for (let i = 0; i < 180 && !bot.loadout.skill1 && !bot.loadout.skill2; i++) {
+    bot.bot.think = 0;
+    LD.AI.tickHero(bot, 1 / 60);
+    step(S, 1);
+  }
+  check("天外来物：AI 会走到掉落物旁按 O 拾取并装入空槽",
+    bot.loadout.skill1 === "windBlade" || bot.loadout.skill2 === "windBlade",
     "skill1=" + bot.loadout.skill1 + " skill2=" + bot.loadout.skill2);
 }
 

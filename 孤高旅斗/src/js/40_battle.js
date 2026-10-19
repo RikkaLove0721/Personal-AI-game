@@ -11,6 +11,11 @@
 
   const B = LD.Battle = {
     W: C.W, H: C.H,
+    /* v2.6 世界与摄像机：world 是逻辑世界尺寸（可大于画布视口），cam 是视口左上角的世界坐标。
+     * v2.7：所有模式统一大地图（尺寸见 LD.WORLD，当前 1200 x 1200），人物固定在屏幕中心，
+     * 只有靠近世界边界时视口才被 clamp 住，人物才会在屏幕上偏移。 */
+    world: { w: (LD.WORLD && LD.WORLD.w) || 1600, h: (LD.WORLD && LD.WORLD.h) || 1600, pt: (LD.WORLD && LD.WORLD.pt) || 120 },
+    cam: { x: 0, y: 0 },
     mode: "dragon",       // dragon | duel | net
     diff: LD.DIFF.normal,
     level: null,
@@ -50,6 +55,7 @@
       shield: 0, shieldT: 0,
       blind: 0,                    // 视野被遮挡剩余秒数（粪击）
       slowT: 0,                    // 减速剩余秒数（冰痕 / 苍）
+      gateSlowT: 0,                // 世界末日门洞减速圈剩余秒数（只对僵尸生效）
       stealthT: 0,                 // 隐匿剩余秒数（>0 = 隐身）
       silenceT: 0,                 // 被囚牢禁言剩余判定（圈内持续刷新）
       knockLeft: 0, knockA: 0, knockWall: false,   // 赫的定向击飞（剩余距离/方向/撞墙惩罚）
@@ -76,7 +82,7 @@
     const D = LD.DRAGON;
     return {
       kind: "dragon", side: 1, id: 1,
-      x: C.W * 0.70, y: C.H * 0.54, r: D.r,
+      x: B.world.w * 0.70, y: B.world.h * 0.50, r: D.r,
       facing: { x: -1, y: 0 },
       hp: Math.round(D.hp * diff.hpM), maxHp: Math.round(D.hp * diff.hpM),
       look: null, energy: 0, maxEnergy: 150, enGainT: 0, dmgDealt: 0, dmgTaken: 0, kills: 0,   // 与玩家一致：大招需攒满 150；enGainT 让巨龙也能命中/受击回能
@@ -99,22 +105,78 @@
     if (!cfg) return this.mkDragon(opts);          // 未知 key 兜底回巨龙
     let diff = opts.diff || LD.DIFF.normal;
     if (typeof diff === "string") diff = LD.DIFF[diff] || LD.DIFF.normal;
+    /* v2.6 镜影：开战时整套复制玩家的配装（含普攻 / 技能 / 大招），CD 一律为玩家的 1.3 倍 */
+    let loadout = cfg.loadout || { basic: "n_shuriken", skill1: "n_clone", skill2: "n_raid", ult: "n_ult" };
+    if (key === "mirror" && opts.copyFrom && opts.copyFrom.loadout)
+      loadout = Object.assign({}, opts.copyFrom.loadout);
     const hp = Math.round(cfg.hp * diff.hpM);
-    const f = this.mkHero(1, {
-      x: opts.x != null ? opts.x : C.W * 0.70, y: opts.y != null ? opts.y : C.H * 0.54,
-      look: cfg.look, loadout: cfg.loadout || { basic: "n_shuriken", skill1: "n_clone", skill2: "n_raid", ult: "n_ult" },
+    const f = this.mkHero(opts.side != null ? opts.side : 1, {
+      x: opts.x != null ? opts.x : B.world.w * 0.70, y: opts.y != null ? opts.y : B.world.h * 0.50,
+      look: cfg.look, loadout,
       name: cfg.name
     });
     f.bossKind = key;
     f.isBoss = true;
-    f.side = 1; f.id = 1;
+    f.side = opts.side != null ? opts.side : 1; f.id = f.side;
     f.r = 18;                                      // 比勇者略大一圈，有 BOSS 气场
     f.hp = hp; f.maxHp = hp;
     f.speedMul = cfg.speedMul || 1;
     f.team = 1;                                    // 与自己召唤的分身同阵营（互不伤害、索敌跳过）
     f.cd.ult = (cfg.ult && cfg.ult.ultFirst) || 10;
+    f.ultCdMin = cfg.ultCdMin || 0;                // v2.7 镜影：大招 CD 下限（防疯狂开大）
     if (LD.AI && LD.AI.setupBoss) LD.AI.setupBoss(f, diff);
     return f;
+  };
+
+  /* v2.6 关卡 BOSS 工厂：普通关卡返回 [boss]，双子剑客返回两个共享血量的个体。
+   * copyFrom 供镜影复制玩家配装。 */
+  B.mkBossForLevel = function (key, diff, copyFrom) {
+    if (key === "twin") {
+      const a = this.mkBoss("twin", { diff, side: 1 });
+      const b = this.mkBoss("twin", { diff, side: 2 });
+      a.twinLink = b; b.twinLink = a;
+      a.isTwin = true; b.isTwin = true;
+      this.twinMark = 1; this.twinSwapT = 8;
+      return [a, b];
+    }
+    return [this.mkBoss(key, { diff, copyFrom })];
+  };
+
+  /* ----------------------------------------------------------
+   * v2.7 僵尸：军备竞赛 / 「僵尸」修饰符使用的杂兵玩家。
+   * v3.1 起不再抽取勇者技能池：固定「突刺 + 撕咬」两个专属技能，
+   * 没有普攻、大招和闪避；100 点血，移速为普通角色的 110%，不属任何阵营，
+   * 对所有人敌对。side 从 10 开始编号，永不与玩家座位冲突。
+   * ---------------------------------------------------------- */
+  B.mkZombie = function (x, y) {
+    const Z = LD.ZOMBIE || {};
+    const zs = Z.skills || {};
+    const hero = this.mkHero(10 + (this.zombieSeq = (this.zombieSeq || 0) + 1), {
+      x: x != null ? x : rand(80, this.world.w - 80),
+      y: y != null ? y : rand(this.world.pt + 40, this.world.h - 80),
+      look: Z.look || null,
+      loadout: { basic: null, skill1: zs.skill1 || "z_lunge", skill2: zs.skill2 || "z_bite", ult: null },
+      name: "僵尸"
+    });
+    hero.isZombie = true;
+    hero.r = 16;
+    hero.hp = hero.maxHp = Z.hp || 100;
+    hero.team = 8;                       // 统一的「僵尸阵营」：僵尸之间不互殴
+    hero.speedMul = Z.speedMul || 1.1;
+    LD.AI.mkBot(hero, "normal");
+    hero.bot.conf.dodge = 0;             // v3.1：僵尸不会闪避
+    hero.name = "僵尸";
+    return hero;
+  };
+  /* 联机客机侧：只用于把房主快照里的僵尸占位出来（位置与状态由快照覆盖） */
+  B.mkZombieShell = function () {
+    const z = this.mkZombie(0, 0);
+    z.isRemoteZombie = true;
+    return z;
+  };
+  /** 场上真人（不含僵尸 / 分身 / 杂兵 / 板凳） */
+  B.humans = function (onlyAlive) {
+    return this.fighters.filter(f => f.kind === "hero" && !f.isZombie && !f.isClone && !f.bench && (!onlyAlive || !f.dead));
   };
 
   /* ==========================================================
@@ -122,22 +184,91 @@
    * ========================================================== */
   B.setup = function (cfg) {
     this.mode = cfg.mode;
-    this.rule = cfg.rule || "brawl";     // brawl 乱斗 | team 阵营 | overlord 霸主争霸
+    this.rule = cfg.rule || "brawl";     // brawl 乱斗 | team 阵营 | overlord 霸主争霸 | gifts 天外来物
+                                          // | ring 缩圈 | auction 军备竞赛 | relay 车轮战 | hunt 追猎时刻
     this.diff = cfg.diff || LD.DIFF.normal;
     this.level = cfg.level || null;
     this.theme = cfg.theme || {};
     this.isHost = cfg.isHost !== false;
     this.mySide = cfg.mySide || 0;
     this.fighters = cfg.fighters;
-    this.fighters.forEach(f => { f.id = f.side; if (f.team == null) f.team = -1; });
+    this.fighters.forEach(f => {
+      f.id = f.side; if (f.team == null) f.team = -1; f._huntBase = null;
+      /* v2.7 军备商店的「本局有效」基线：血量上限 / 移速，resetRound 时还原 */
+      f._baseMaxHp = f.maxHp; f._baseSpd = f.speedMul != null ? f.speedMul : 1; f.spdBuys = 0;
+    });
     if (cfg.teams) cfg.teams.forEach((t, i) => { if (this.fighters[i]) this.fighters[i].team = t; });
+    /* v3.2 世界末日：所有玩家同一阵容（互不伤害），一起对抗僵尸 */
+    if (this.rule === "doomsday") this.fighters.forEach(f => { f.team = 0; });
     this.projs = []; this.zones = []; this.ev = []; this.stone = null;
-    this.gifts = []; this.giftT = 0; this.giftUltT = 0;
+    this.gifts = []; this.giftT = 0; this.giftUltT = 0; this.giftHealT = 0;
+    this.heals = []; this.healT = 0;
+    this.coins = [];
+    this.pickups = [];          // v3.1 补给箱掉落的血包 / 能量包 / 移速包
+    this.zombieSeq = 0; this.zombieT = 0;
+    this.ring = null; this.rings = null; this.ringT = 0; this.ringKillN = 0;
+    this.huntRing = null; this.hunterSide = -1;
+    /* v2.7 关键修复：上一局残留的暂停必须清掉。
+     * 旧版 backToRoom（暂停面板 → 返回房间）不会复位 B.paused，
+     * 于是下一局 B.update 一直早退、倒计时永远停在「2」——就是「卡在读条 2」的真凶。 */
+    this.paused = false;
+    /* v2.7 大地图：所有模式统一尺寸（LD.WORLD，当前 1200 x 1200），各模式仍可经 cfg.world 覆盖 */
+    const dw = cfg.world || {};
+    const W0 = LD.WORLD || { w: 1600, h: 1600, pt: 120 };
+    this.world = { w: dw.w || W0.w, h: dw.h || W0.h, pt: dw.pt != null ? dw.pt : W0.pt };
+    /* v3.7 塔防对战：固定窄长地图，忽略房间的地图配置 */
+    if (this.rule === "tower" && LD.TOWER && LD.TOWER.world) {
+      const tw = LD.TOWER.world;
+      this.world = { w: tw.w, h: tw.h, pt: tw.pt };
+    }
+    this.cam = { x: 0, y: 0 };
+    /* v3.0 地形：房间带 mapCfg；闯关自动读关卡预置；都不传时保持空场地（兼容旧调用与无头测试） */
+    let mapCfg = cfg.mapCfg || null;
+    if (!mapCfg && cfg.level) mapCfg = LD.Terrain.bossCfg(cfg.level);
+    /* v3.2 世界末日：固定一张灰烬空地，中心再砌石墙庇护所（不进随机设施） */
+    if (!mapCfg && this.rule === "doomsday") {
+      mapCfg = LD.mapCfg({ preset: "arena", seed: 43210, ground: "ash", patches: ["stone"],
+        counts: { solid: 0, breakable: 0, pushable: 0, fence: 0, bush: 0, water: 0,
+                  barrel: 0, car: 0, tire: 0, supply: 0, barricade: 0, room: 0 } });
+    }
+    this.mapCfg = mapCfg;
+    if (this.rule === "tower" && LD.Terrain.buildTowerMap) {
+      /* v3.7 塔防：对称地图 + 双方水晶 / 防御塔，不走随机设施生成器 */
+      this.mapCfg = LD.mapCfg({ preset: "arena", seed: 20261019, ground: "stone", patches: ["sand"] });
+      this.terrain = LD.Terrain.buildTowerMap(this.world);
+      mapCfg = this.mapCfg;
+    } else {
+      this.terrain = mapCfg ? LD.Terrain.build(mapCfg, this.world,
+        (cfg.fighters || []).filter(f => f.x > 0 && f.y > 0).map(f => ({ x: f.x, y: f.y, r: 76 }))) : null;
+    }
+    if (mapCfg) this.terrainMapCfg = mapCfg;
+    this.shelter = null;
+    if (this.rule === "doomsday" && this.terrain) this.shelter = LD.Terrain.buildShelter(this.terrain, this.world);
+    /* v2.6 / v2.7 规则修饰符（可叠加）：
+     * lowgrav 低重力 / speed 高速 / heal 回复 / zombie 僵尸 / wheel 技能轮盘 */
+    this.mods = (cfg.mods || []).slice();
+    this.wheelT = 0;
     this.t = 0; this.score = this.fighters.map(() => 0); this.round = 1; this.matchWinner = -1; this.roundWinner = -1;
+    /* 对局时间：房间统一选项；兼容旧房间消息的 warmupT 字段 */
+    this.matchT = cfg.matchT || cfg.warmupT || ((LD.MATCH && LD.MATCH.def) || 120);
+    this.warmupT = this.matchT;
+    this.wScore = this.fighters.map(() => 0);
     this.countdown = this.mode === "dragon" ? 1.6 : 2.0;
     this.state = "countdown";
-    LD.Cine.active = false;      // 清掉可能残留的大招演出
+    LD.Cine.active = false;      // 先清掉可能残留的大招演出，再放猎人特写这种开场演出
     FX.clear();
+    /* v2.7 修饰符数值落地：高速（移速 +35%、CD -30%）。
+     * 必须排在追猎抽签之前：猎人 CD 减半要在「高速」的结果上再乘，而不是被它覆盖。 */
+    if (this.mods.indexOf("speed") >= 0) this.fighters.forEach(f => { f.rateM = (f.rateM || 1) * 0.7; });
+    /* v2.7 追猎时刻：随机抽一名玩家当猎人。抽签只在房主端（或单机）进行——
+     * 联机客机的猎人身份等房主快照下发，避免两边各抽一个。 */
+    if (this.rule === "hunt" && cfg.isHost !== false) this.initHunt();
+    /* v2.6 车轮战：擂台两端之外的全部坐板凳 */
+    if (this.rule === "relay") this.initRelay();
+    /* v2.7 缩圈乱斗：地图上只有几个大安全圈，其余全是毒 */
+    if (this.rule === "ring") this.initRing();
+    /* v3.7 塔防：分队 / 等级 / 金币 / 禁大招 */
+    if (this.rule === "tower" && this.initTower) this.initTower();
     return this;
   };
 
@@ -153,6 +284,8 @@
     let best = null, bd = Infinity;
     this.fighters.forEach(o => {
       if (o === f || o.dead) return;
+      /* v3.4：柜子 / 草丛藏过 2 秒同样会被察觉；隐匿技能照旧完全看不见 */
+      if (!this.hiddenVisible(o)) return;
       if (this.sameTeam(f, o)) return;
       const d = (o.x - f.x) * (o.x - f.x) + (o.y - f.y) * (o.y - f.y);
       if (d < bd) { bd = d; best = o; }
@@ -171,7 +304,7 @@
   B.aimFoe = function (f) { return this.lockTarget(f) || this.foeOf(f); };
   /* V 键：在存活敌人之间循环切换索敌目标 */
   B.cycleLock = function (f, dir) {
-    const foes = this.fighters.filter(o => o !== f && !o.dead && !this.sameTeam(f, o)).sort((a, b) => a.side - b.side);
+    const foes = this.fighters.filter(o => o !== f && !o.dead && this.hiddenVisible(o) && !this.sameTeam(f, o)).sort((a, b) => a.side - b.side);
     if (!foes.length) { f.lock = -1; return null; }
     const d = dir < 0 ? -1 : 1;
     let i = foes.findIndex(o => o.side === f.lock);
@@ -183,30 +316,59 @@
   B.alive = function (side) { const f = this.fighters.find(o => o.side === side); return f && !f.dead; };
 
   B.resetRound = function (keepScore) {
+    if (this.terrain) LD.Terrain.reset(this.terrain);
+    this.pickups = [];
     /* 开局位置随机：勇者出生点在场地中下部随机抽取，彼此保持最小间距（巨龙保留原出生点） */
-    for (let i = this.fighters.length - 1; i >= 0; i--)   // 上一局的分身不带入新一局
-      if (this.fighters[i].isClone) this.fighters.splice(i, 1);
+    for (let i = this.fighters.length - 1; i >= 0; i--)   // 上一局的分身 / 杂兵 / 僵尸不带入新一局
+      if (this.fighters[i].isClone || this.fighters[i].kind === "minion" || this.fighters[i].isZombie)
+        this.fighters.splice(i, 1);
     const placed = [];
+    const ins = this.rule === "doomsday" ? this.shelter : null;
     this.fighters.forEach(f => {
-      if (f.kind === "hero") {
-        let bx = C.W * 0.5, by = C.H * 0.6;
-        for (let tries = 0; tries < 40; tries++) {
-          const tx = C.W * (0.12 + Math.random() * 0.76);
-          const ty = C.H * (0.42 + Math.random() * 0.46);
-          if (placed.every(p => Math.hypot(p.x - tx, p.y - ty) > 170)) { bx = tx; by = ty; break; }
+      if (f.kind === "hero" && !f.bench) {
+        let bx, by;
+        if (ins) {
+          /* 世界末日：全员出生在庇护所内部，围着中心散开 */
+          bx = ins.x; by = ins.y;
+          for (let tries = 0; tries < 60; tries++) {
+            const a2 = Math.random() * TAU, rr = 70 + Math.random() * Math.max(50, ins.r - 120);
+            const tx = ins.x + Math.cos(a2) * rr, ty = ins.y + Math.sin(a2) * rr;
+            const free = !this.terrain || LD.Terrain.clearAt(this.terrain, tx, ty, 26);
+            if (free && placed.every(p => Math.hypot(p.x - tx, p.y - ty) > 110)) { bx = tx; by = ty; break; }
+          }
+        } else {
+          bx = B.world.w * 0.5; by = B.world.h * 0.62;
+          for (let tries = 0; tries < 40; tries++) {
+            const tx = B.world.w * (0.10 + Math.random() * 0.80);
+            const ty = B.world.h * (0.20 + Math.random() * 0.66);
+            const free = !this.terrain || LD.Terrain.clearAt(this.terrain, tx, ty, 30);
+            if (free && placed.every(p => Math.hypot(p.x - tx, p.y - ty) > 170)) { bx = tx; by = ty; break; }
+          }
         }
         placed.push({ x: bx, y: by });
         f.x = bx; f.y = by;
       }
+      if (f.bench) return;   // 车轮战板凳：保持离场状态，等轮到再上场
+      /* v2.7 军备商店加成只在当局有效：新一局还原血量上限 / 移速 */
+      f.maxHp = f._baseMaxHp != null ? f._baseMaxHp : f.maxHp;
+      f.speedMul = f._baseSpd != null ? f._baseSpd : (f.speedMul != null ? f.speedMul : 1);
+      f.spdBuys = 0;
       f.hp = f.maxHp; f.dead = false; f.stun = 0; f.root = 0; f.invuln = 0;
       f.vx = 0; f.vy = 0; f.moving = false;
-      f.shield = 0; f.shieldT = 0; f.hitFlash = 0; f.blind = 0; f.slowT = 0;
+      f.shield = 0; f.shieldT = 0; f.hitFlash = 0; f.blind = 0; f.slowT = 0; f.gateSlowT = 0;
       f.stealthT = 0; f.silenceT = 0; f.knockLeft = 0; f.knockWall = false;
+      f.bushHide = false; f.inBush = false; f.bushFlash = 0; f.pushT = 0; f.speedBoostT = 0;
       f.stealthKeep = false; f._ghostNoFlash = false;
       f.giftPending = { skill: null, ult: null }; f.giftSwap = null; f.giftTarget = null;
+      /* v3.3 交互：车辆 / 柜子 / 泥土 / 技能获得顺序 */
+      f.rideCar = null; f.hideProp = null; f.carryMud = null;
+      f.carTarget = null; f.hideT = 0; f.interactCd = 0; f.giftLock = 0;
+      f.hideTimer = 0; f.hideSpotted = false; f.bushTimer = 0; f._stealthFlash = false;
+      f.skillGot = { skill1: 0, skill2: 0 };
       f.kingMark = null; f.hpHist = [{ t: this.t || 0, hp: f.hp }];
       f.buff = { rage: 0, thousand: 0, rush: 0 };
       f.meditate = 0; f.parryT = 0; f.atkAnim = 0;
+      f.respawnT = 0;                                     // v2.7 乱斗热身：复活计时
       if (f.kind === "hero") f.energy = 0;
       if (f.cd) {
         f.cd.basic = 0; f.cd.skill1 = 0; f.cd.skill2 = 0; f.cd.dodge = 0;
@@ -220,25 +382,48 @@
       if (f.kind === "dragon") { f.mode = "idle"; f.modeT = 0; f.charge = 0; f.telegraph = null; f.rageStage = 0; }
       if (this.rule === "overlord") f.overlord = false;   // 霸主标记每回合重置
     });
+    /* v3.7 塔防：所有人回自家基地，不随机撒点 */
+    if (this.rule === "tower" && this.placeTowerHeroes) this.placeTowerHeroes();
     this.projs = []; this.zones = [];
-    this.stone = null;                                  // 能量石（霸主争霸）
-    this.gifts = [];                                    // 天外来物掉落物
-    // 天外来物：开局清空技能与大招，只留普攻；重置掉落计时
-    if (this.rule === "gifts") {
-      const G = LD.GIFTS || {};
-      this.giftT = G.firstSkill != null ? G.firstSkill : 3;
-      this.giftUltT = G.firstUlt != null ? G.firstUlt : 8;
+    this.stone = null;                                  // 能量石（霸主争霸）    this.gifts = [];                                    // 天外来物 / 缩圈乱斗掉落物
+    this.heals = [];                                    // v2.7 血包
+    this.coins = [];
+    this.zombieT = this.rule === "doomsday"
+      ? Math.max((LD.DOOMSDAY && LD.DOOMSDAY.sprayMin) || 0.55, ((LD.DOOMSDAY && LD.DOOMSDAY.sprayBase) || 2.6) / Math.max(1, this.humans(true).length))
+      : ((LD.ZOMBIE && LD.ZOMBIE.first) || 7);
+    this.doomTick = 0;
+    this.zombieSeq = 0;
+    /* v3.3 物资刷新修饰符：30 秒一轮 */
+    this.refreshT = (LD.INTERACT && LD.INTERACT.refreshEvery) || 30;
+    // 天外来物 / 缩圈乱斗：开局清空技能与大招，只留普攻；重置掉落计时
+    if (this.giftRule()) {
+      const gc = this.giftCfg();
+      this.giftT = gc.firstSkill;
+      this.giftUltT = gc.firstUlt;
       this.fighters.forEach(f => {
-        if (f.kind !== "hero") return;
+        if (f.kind !== "hero" || f.isZombie) return;
         f.loadout = { basic: f.loadout.basic, skill1: null, skill2: null, ult: null };
         f.giftPending = { skill: null, ult: null }; f.giftSwap = null;
         ["skill1", "skill2", "ult"].forEach(k => { if (f.slot) f.slot[k] = { on: false, phase: "", t: 0, d: {} }; });
       });
+    } else {
+      this.giftT = 3; this.giftUltT = 8;
     }
+    this.healT = (LD.HEALS && LD.HEALS.first) || 4;
+    /* 缩圈乱斗：每回合重新撒安全圈并把所有人挪进圈内 */
+    if (this.rule === "ring") this.initRing();
+    /* v2.7 追猎时刻：每回合重新抽猎人 + 重置大毒圈（客机等房主快照，不自行抽签） */
+    if (this.rule === "hunt" && this.isHost) this.initHunt();
     this.dragonCorpseT = 0;
-    this.roundT = (this.mode === "dragon" || this.rule === "overlord") ? 0 : 75;   // 每回合重置限时
+    /* v2.6 / v2.7 各规则回合限时：
+     * 追猎 90 秒（时间到生存者胜）；缩圈无限时（毒圈就是时钟）；
+     * 丧尸危机不限时（打到只剩一人）；车轮战单场固定 60 秒；
+     * 经典乱斗 / 阵营 / 追猎 / 乱斗热身统一按房间选的「对局时间」限时。 */
+    this.roundT = (this.mode === "dragon" || this.rule === "overlord" || this.rule === "ring" || this.rule === "auction" || this.rule === "tower") ? 0
+      : this.rule === "relay" ? 60
+      : this.matchT;
     this.countdown = 2.0; this.state = "countdown"; this.roundWinner = -1;
-    if (!keepScore) { this.score = this.fighters.map(() => 0); this.round = 1; }
+    if (!keepScore) { this.score = this.fighters.map(() => 0); this.round = 1; this.wScore = this.fighters.map(() => 0); }
     FX.clear();
   };
 
@@ -249,6 +434,12 @@
     const s = f.slot[slot];
     s.on = false; s.phase = ""; s.t = 0; s.d = {};
     if (cd != null) {
+      if (slot === "ult" && f.perkUltM) cd = Math.round(cd * f.perkUltM * 100) / 100;   // v2.6 词条：大招 CD -25%
+      /* v3.7 塔防：冷却怀表（cdM < 1） */
+      if (f.cdM && f.cdM !== 1) cd = Math.round(cd * f.cdM * 100) / 100;
+      /* v2.7 镜影：它套装的是玩家的大招（cd 字段只是占位），走 CD 制必须兜住下限，
+       * 否则每次出手 CD 只有 1 秒多，会疯狂开大。 */
+      if (slot === "ult" && f.ultCdMin) cd = Math.max(cd, f.ultCdMin);
       f.cd[slot] = cd;
       // 普攻与闪避共享 CD：普攻出手也会锁住闪避。
       // 格挡虽然归入普攻分类，但它的反制 CD 不该连带锁死闪避，故用 opt.noShare 跳过。
@@ -275,15 +466,19 @@
       absorb: o.absorb || 0, absorbed: 0, tick: o.tick || 0, tickMax: o.tickMax || 0,
       hits: {}, data: o.data || {}, homing: o.homing || 0, scale: o.scale || 1,
       root: o.root || 0, stun: o.stun || 0, blind: o.blind || 0, trail: !!o.trail, spin: 0, kindTag: o.kindTag || "skill",
-      boomerang: !!o.boomerang
+      boomerang: !!o.boomerang,
+      /* v3.1：大招弹道默认穿墙；显式传 passWall:false 的（黄金弹力炮）例外 */
+      passWall: o.passWall != null ? !!o.passWall : (o.kindTag === "ult")
     };
     this.projs.push(p);
     return p;
   };
 
   B.melee = function (f, o) {
+    /* v3.0：先把正前方的箱子 / 方块砸一遍（即使没有敌人也要生效） */
+    const hitTerrain = this.terrain ? LD.Terrain.melee(this.terrain, f, o.reach, o.half, o.dmg) : 0;
     const foe = this.foeOf(f);
-    if (!foe || foe.dead) return 0;
+    if (!foe || foe.dead) return hitTerrain;
     const dx = foe.x - f.x, dy = foe.y - f.y;
     const d = Math.hypot(dx, dy);
     if (d > o.reach + foe.r + f.r) return 0;
@@ -292,7 +487,7 @@
     let da = Math.abs(((ang - fa + Math.PI * 3) % TAU) - Math.PI);
     if (da > (o.half || 1.0)) return 0;
     this.damage(f, foe, o.dmg, { type: o.type || "basic", kb: o.kb, stun: o.stun, from: f, basic: !!o.basic });
-    return 1;
+    return 1 + hitTerrain;
   };
 
   /* ==========================================================
@@ -309,6 +504,29 @@
       return 0;
     }
     if (tgt.invuln > 0) { this.ev.push(["t", tgt.x, tgt.y - 40, "闪", "#9fb3dd"]); return 0; }
+    /* v3.8 塔防：魔法斗篷 12% 完全躲避 */
+    if (tgt.dodgeChance && Math.random() < tgt.dodgeChance) {
+      FX.float(tgt.x, tgt.y - 56, "闪避", "#c4b5fd", 14);
+      this.ev.push(["t", tgt.x, tgt.y - 56, "闪避", "#c4b5fd"]);
+      return 0;
+    }
+    /* v2.6 词条：力量（伤害 +20%）；毒圈等无来源伤害不吃加成 */
+    if (src && src.perkDmg && src.perkDmg !== 1) amt = Math.round(amt * src.perkDmg);
+    /* v3.7 塔防：等级 / 力量护腕的伤害加成 */
+    if (src && src.dmgBonus) amt = Math.round(amt * (1 + src.dmgBonus));
+    /* v2.7 追猎时刻：猎人伤害随存活幸存者数提升（1 + 20% × 存活人数） */
+    if (src && src.huntDmgM && src.huntDmgM !== 1) amt = Math.round(amt * src.huntDmgM);
+    /* v2.7 血怒：大招期间自身造成的伤害减少 25% */
+    if (src && src.buff && src.buff.rage > 0) {
+      const bsk = LD.skill("bloodRage");
+      const m = (bsk && bsk.dmgM != null) ? bsk.dmgM : 0.75;
+      if (m !== 1) amt = Math.round(amt * m);
+    }
+    /* v2.6 双子剑客：真身标记——打在非真身上的伤害只结算 30% */
+    if (tgt.isTwin && this.twinMark != null && this.twinMark !== tgt.side) {
+      amt = Math.max(1, Math.round(amt * 0.3));
+      FX.float(tgt.x + rand(-8, 8), tgt.y - 46, "假身 30%", "#9fb3dd", 12);
+    }
 
     // ---- 格挡判定（挡普攻 2 秒 CD；挡技能 / 大招 8 秒 CD） ----
     if (tgt.kind === "hero" && tgt.parryT > 0 && o.parryable !== false) {
@@ -318,6 +536,8 @@
     let dmg = amt;
     let crit = false;
     if (src && src.kind === "hero" && o.type !== "dot" && Math.random() < C.critRate) { crit = true; dmg = Math.round(dmg * C.critMul); }
+    /* v3.8 塔防：钢甲——飞行物伤害 -20% */
+    if (o.proj && tgt.projDR) dmg = Math.max(1, Math.round(dmg * (1 - tgt.projDR)));
 
     // ---- 护盾吸收 ----
     if (tgt.shield > 0) {
@@ -328,18 +548,28 @@
       if (dmg <= 0) { FX.float(tgt.x, tgt.y - 42, "格挡 " + use, "#fcd34d", 13); return 0; }
     }
 
+    const hpBefore = tgt.hp;
+    /* v3.7 塔防：荆棘护甲的减伤 */
+    if (tgt.dr) dmg = Math.max(1, Math.round(dmg * (1 - tgt.dr)));
     tgt.hp = Math.max(0, tgt.hp - dmg);
     tgt.hitFlash = 0.16;
     tgt.dmgTaken += dmg;
+    /* v3.2 世界末日：对僵尸造成的实际伤害计入得分（溢出伤害不算） */
+    if (this.rule === "doomsday" && src && src.kind === "hero" && !src.isZombie && tgt.isZombie) {
+      const si = this.fighters.indexOf(src);
+      if (si >= 0) this.wScore[si] = (this.wScore[si] || 0) + Math.round(Math.min(dmg, hpBefore) * (((LD.DOOMSDAY || {}).scoreDmg) || 1));
+    }
+    /* v2.6 双子剑客：共享血量池——任意一方受伤，另一方同步 */
+    if (tgt.isTwin && tgt.twinLink && !tgt.twinLink.dead) tgt.twinLink.hp = tgt.hp;
     if (tgt.kind === "hero") tgt.blinkAmt = 0.1;
 
     // 受击回能
-    if (tgt.enGainT !== undefined && tgt.enGainT <= 0) { tgt.energy = Math.min(tgt.maxEnergy, tgt.energy + C.energy.onHurt); tgt.enGainT = 0.25; }
+    if (tgt.enGainT !== undefined && tgt.enGainT <= 0) { tgt.energy = Math.min(tgt.maxEnergy, tgt.energy + C.energy.onHurt * (tgt.energyMul || 1)); tgt.enGainT = 0.25; }
     // 命中回能 / 吸血
     if (src) {
       src.dmgDealt += dmg;
       if (src.enGainT !== undefined) {
-        if (src.enGainT <= 0) { src.energy = Math.min(src.maxEnergy, src.energy + C.energy.onHit); src.enGainT = 0.25; }
+        if (src.enGainT <= 0) { src.energy = Math.min(src.maxEnergy, src.energy + C.energy.onHit * (src.energyMul || 1)); src.enGainT = 0.25; }
         if (src.buff && src.buff.rage > 0) {
           const heal = Math.round(dmg * 0.5);
           if (heal > 0) { src.hp = Math.min(src.maxHp, src.hp + heal); FX.float(src.x, src.y - 50, "+" + heal, "#f472b6", 13); }
@@ -354,18 +584,23 @@
       { speed: isBig ? 330 : 220, dir: o.hitDir == null ? null : o.hitDir });
     FX.ring(tgt.x, tgt.y - 24, isBig ? 70 : 34, isBig ? "rgba(251,146,60,.9)" : "rgba(255,255,255,.8)", isBig ? 5 : 3, 0.32);
     FX.float(tgt.x + rand(-8, 8), tgt.y - 46, (crit ? "暴击 " : "") + Math.round(dmg), crit ? "#fbbf24" : (isBig ? "#fb923c" : "#fff"), crit ? 20 : 15);
-    FX.hitstop(isBig ? C.hitstop.ult : C.hitstop.hit);
-    FX.shake(isBig ? C.shake.ult : (crit ? C.shake.parry : C.shake.hit));
+    /* v3.8 兵线混战时小兵太多：打小兵不顿帧、不震屏，避免整局抖个不停 */
+    const quiet = tgt.kind === "laneMinion";
+    if (!quiet) {
+      FX.hitstop(isBig ? C.hitstop.ult : C.hitstop.hit);
+      FX.shake(isBig ? C.shake.ult : (crit ? C.shake.parry : C.shake.hit));
+    }
     this.ev.push(["h", tgt.x, tgt.y - 46, (crit ? "暴击 " : "") + Math.round(dmg), crit ? "#fbbf24" : "#fff"]);
 
-    if (o.stun) this.applyStun(tgt, o.stun);
+    if (tgt.kind === "hero") tgt.lastHurtAt = this.t;   // v3.8 续航宝石 / 还魂曲计时
+    if (o.stun && !tgt.ccImmune) this.applyStun(tgt, o.stun);
     if (o.blind && tgt.kind === "hero") {
       tgt.blind = Math.max(tgt.blind || 0, o.blind);
       FX.float(tgt.x, tgt.y - 66, "致盲 " + o.blind + "s", "#a16207", 15);
       this.ev.push(["b", tgt.x, tgt.y - 66, "致盲 " + o.blind + "s", "#a16207"]);
     }
-    if (o.kb) this.knock(tgt, o.from || src, o.kb);
-    else if (o.kbDist) this.knockDist(tgt, o.from || src, o.kbDist, o.wallHit);
+    if (o.kb && !tgt.ccImmune) this.knock(tgt, o.from || src, o.kb);
+    else if (o.kbDist && !tgt.ccImmune) this.knockDist(tgt, o.from || src, o.kbDist, o.wallHit);
     if (tgt.hp <= 0) this.kill(tgt, src);
 
     // 被击打断冥想
@@ -421,13 +656,26 @@
     const s = LD.skill(f.loadout.skill1) && LD.skill(f.loadout.skill1).shield ? LD.skill(f.loadout.skill1) : LD.skill(f.loadout.skill2);
     const r = (s && s.breakR) || 78, dmg = (s && s.dmg) || 16;
     if (foe && !foe.dead && dist(f, foe) <= r + foe.r) this.damage(f, foe, dmg, { type: "skill", kb: 240, from: f, hitDir: Math.atan2(foe.y - f.y, foe.x - f.x) });
+    /* v2.6 磁暴坦克：电磁护盾破碎时向四周放电 */
+    if (f.shieldBoom) {
+      const boom = f.shieldBoom;
+      f.shieldBoom = null;
+      FX.ring(f.x, f.y - 26, boom.R, "rgba(196,181,253,.95)", 8, 0.55);
+      FX.burst(f.x, f.y - 26, 30, ["#c4b5fd", "#fff"], { speed: 340 });
+      FX.shake(11);
+      this.fighters.forEach(t => {
+        if (t === f || t.dead || this.sameTeam(f, t)) return;
+        if (Math.hypot(t.x - f.x, (t.y - 20) - f.y) <= boom.R + t.r)
+          this.damage(f, t, boom.dmg, { type: "skill", kb: 260, from: f });
+      });
+    }
   };
 
   B.applyStun = function (f, t) { if (f.kind === "dragon") return; f.stun = Math.max(f.stun, t); };
   B.knock = function (f, from, force) {
     if (!from || f.kind === "dragon") return;
     const a = Math.atan2(f.y - from.y, f.x - from.x);
-    f.vx += Math.cos(a) * force; f.vy += Math.sin(a) * force;
+    f.vx += Math.cos(a) * force * (this.mod && this.mod('lowgrav') ? 1.6 : 1); f.vy += Math.sin(a) * force * (this.mod && this.mod('lowgrav') ? 1.6 : 1);
   };
 
   /* 定向击飞（赫）：按固定距离位移，撞到墙体（边界 / 绝望囚牢圈壁）会额外受伤 */
@@ -443,10 +691,29 @@
     if (f.knockLeft <= 0) return false;
     const spd = 2300;
     const step = Math.min(f.knockLeft, spd * dt);
-    f.x += Math.cos(f.knockA) * step;
-    f.y += Math.sin(f.knockA) * step;
+    const nx = f.x + Math.cos(f.knockA) * step;
+    const ny = f.y + Math.sin(f.knockA) * step;
+    /* v3.1 墙体概念：地图边界与任何挡人障碍（含可破坏物）都算墙 */
+    if (this.hitWallAt(f, nx, ny)) {
+      /* 先结算撞墙伤害：wallHit 需要 knockLeft > 0 才生效 */
+      if (f.knockWall) this.wallHit(f); else f.knockLeft = 0;
+      return true;
+    }
+    f.x = nx; f.y = ny;
     f.knockLeft -= step;
-    return false;   // 撞墙由位置钳制后的 wallCheck 统一判定
+    return false;
+  };
+
+  /* 某个圆形位置是否撞到墙（边界 / 地形障碍） */
+  B.hitWallAt = function (f, x, y) {
+    if (x < 34 || x > B.world.w - 34 || y < B.world.pt + 22 || y > B.world.h - 34) return true;
+    if (!this.terrain) return false;
+    for (let i = 0; i < this.terrain.props.length; i++) {
+      const o = this.terrain.props[i];
+      if (!o.blockMove || o.dead) continue;
+      if (LD.Terrain.pushOut(o, x, y, f.r)) return true;
+    }
+    return false;
   };
 
   /* 击飞撞墙判定：位置已被钳到边界或囚牢圈壁时调用 */
@@ -454,7 +721,7 @@
     if (f.knockLeft <= 0 || !f.knockWall) return false;
     f.knockLeft = 0;
     f.knockWall = false;
-    const dmg = LD.skill("he") ? LD.skill("he").wallDmg : 10;
+    const dmg = LD.skill("he") ? (LD.skill("he").wallDmg || 15) : 15;
     const stun = LD.skill("he") ? LD.skill("he").wallStun : 0.4;
     this.damage(null, f, dmg, { type: "dot", kb: 0 });
     f.stun = Math.max(f.stun, stun);
@@ -467,19 +734,107 @@
 
   B.heal = function (f, amt) { f.hp = Math.min(f.maxHp, f.hp + amt); };
 
+  /* v3.5 丧尸尸体上限：场上最多保留 maxCorpses 具，超出的按死亡时间从老到新消失。
+   * 只做「不再绘制」（corpseGone），不从 fighters 里移除 —— 计分数组按索引对齐，
+   * 中途 splice 会把所有人的分数错位。 */
+  B.trimZombieCorpses = function () {
+    const max = (LD.ZOMBIE && LD.ZOMBIE.maxCorpses) || 10;
+    const dead = [];
+    for (let i = 0; i < this.fighters.length; i++) {
+      const f = this.fighters[i];
+      if (f.isZombie && f.dead && !f.corpseGone) dead.push({ f: f, i: i });
+    }
+    if (dead.length <= max) return 0;
+    dead.sort((a, b) => ((a.f.deadAt || 0) - (b.f.deadAt || 0)) || (a.i - b.i));
+    const n = dead.length - max;
+    for (let k = 0; k < n; k++) dead[k].f.corpseGone = true;
+    return n;
+  };
+
   B.kill = function (f, by) {
     if (f.dead) return;
     f.dead = true;
+    f.deadAt = this.t;
+    /* v2.6 双子剑客：共享血量池，一人倒下另一人同时倒下 */
+    if (f.isTwin && f.twinLink && !f.twinLink.dead) this.kill(f.twinLink, by);
     FX.burst(f.x, f.y - 26, 40, ["#fff", "#fb7185", "#fbbf24"], { speed: 360, life: 0.9 });
     FX.ring(f.x, f.y - 26, 120, "rgba(255,255,255,.9)", 6, 0.6);
     FX.shake(16);
     if (by && by.kind === "hero") by.kills++;
+    if (by && !by.isZombie && f.isZombie && LD.Profile && LD.Profile.stat) LD.Profile.stat("zombieKills", 1);
     this.ev.push(["k", f.x, f.y - 26]);
     // 分身：被打散只是消失，不参与任何结算（不会触发回合胜负）
     if (f.isClone) { f.cloneT = Math.min(f.cloneT != null ? f.cloneT : 0, 0.9); return; }
+    // 杂兵：只标记死亡（updateMinions 负责移除），不参与回合胜负结算
+    if (f.kind === "minion") { f.dead = true; return; }
+    // v2.7 僵尸：丧尸危机 / 世界末日吃局内金币；「僵尸」修饰符不掉金币
+    if (f.isZombie) {
+      const doom = this.rule === "doomsday";
+      if (this.rule === "auction" || doom) {
+        const coin = doom ? (((LD.DOOMSDAY || {}).coin) || 2) : ((LD.ZOMBIE && LD.ZOMBIE.coin) || 3);
+        this.spawnCoin(f.x, f.y, coin);
+      }
+      /* v3.2 世界末日：击杀僵尸额外加分 */
+      if (doom && by && by.kind === "hero" && !by.isZombie && !by.dead) {
+        const si = this.fighters.indexOf(by);
+        const pts = ((LD.DOOMSDAY || {}).scoreKill) || 10;
+        if (si >= 0) {
+          this.wScore[si] = (this.wScore[si] || 0) + pts;
+          FX.float(by.x, by.y - 86, "击杀 +" + pts + " 分", "#fcd34d", 16);
+        }
+      }
+      this.trimZombieCorpses();
+      return;
+    }
+    /* v3.2 世界末日：玩家阵亡即淘汰；只剩最后一名幸存者时立即结算 */
+    if (this.rule === "doomsday" && f.kind === "hero") {
+      const alive = this.humans(true);
+      const total = this.fighters.filter(x => x.kind === "hero" && !x.isZombie && !x.bench).length;
+      if (total > 1 && alive.length <= 1) {
+        const w = alive[0] || null;
+        const me = this.hero(this.mySide == null ? 0 : this.mySide);
+        this.matchWinner = w ? w.side : -1;
+        if (w) LD.Cine.start(w, "胜者：" + (w.name || ("玩家" + (w.side + 1))), "", "#fcd34d", "最后的幸存者");
+        this.finish(!!(me && w && w.side === me.side));
+      }
+      return;
+    }
+    // v2.6 丧尸危机：击杀玩家也掉局内金币
+    if (this.rule === "auction" && this.coins) this.spawnCoin(f.x, f.y, 3);
+    // v2.7 乱斗热身：不淘汰、不倒计时重开，随机位置复活，击杀者加分
+    if (this.rule === "warmup") {
+      if (by && by.side != null) {
+        const i = this.fighters.indexOf(by);
+        if (i >= 0) { this.wScore[i] = (this.wScore[i] || 0) + ((LD.WARMUP && LD.WARMUP.scoreKill) || 1); }
+        FX.float(by.x, by.y - 86, "得分 " + this.wScore[i], "#fcd34d", 17);
+      }
+      f.respawnT = (LD.WARMUP && LD.WARMUP.respawn) || 1.6;
+      return;
+    }
+    // v2.6 车轮战：败者下台、下一位上场
+    if (this.rule === "relay" && f.kind === "hero") { this.relayOnKill(f, by); return; }
+    // v2.7 追猎时刻：猎人阵亡 → 生存者立即获胜；生存者全灭 → 猎人获胜
+    if (this.rule === "hunt") {
+      const aliveRunners = this.fighters.filter(x => x.kind === "hero" && x.huntRole === "runner" && !x.dead && !x.bench);
+      const hunter = this.fighters.find(x => x.kind === "hero" && x.huntRole === "hunter");
+      const hunterDead = !hunter || hunter.dead;
+      /* v2.7 修复：旧版只要有人倒下就直接结算（杀 1 个生存者比赛就结束），
+       * 现在必须等到「猎人死」或「生存者全灭」才分胜负。 */
+      if (hunterDead || !aliveRunners.length) {
+        const meF = this.hero(this.mySide == null ? 0 : this.mySide);
+        const iAmRunner = meF && meF.huntRole === "runner";
+        this.matchWinner = hunterDead
+          ? (aliveRunners[0] ? aliveRunners[0].side : (hunter ? hunter.side : 0))
+          : (hunter ? hunter.side : 0);
+        this.finish(iAmRunner ? hunterDead : !hunterDead);
+      }
+      return;
+    }
     if (this.mode === "dragon") {
-      if (f.side === 0) this.finish(false);
-      else this.finish(true);
+      if (f.side === 0) { this.finish(false); return; }
+      /* v2.6 闯关可有多 BOSS（双子剑客）：场上还有存活的 BOSS 就继续打 */
+      const bossesLeft = this.fighters.filter(x => x.side !== 0 && !x.dead && !x.isClone && x.kind !== "minion" && !x.bench);
+      this.finish(bossesLeft.length === 0);
       return;
     }
     // 霸主争霸：巨龙被击败 → 爆出能量石（尸体 3 秒后消失）
@@ -493,9 +848,9 @@
     }
     // 霸主争霸：场上只剩一名存活勇者（巨龙不算）时回合结束
     if (this.rule === "overlord") {
-      const alive = this.fighters.filter(x => !x.dead && x.kind === "hero");
+      const alive = this.humans(true);
       if (this.state === "fight" && alive.length <= 1)
-        this.endRound(alive[0] ? alive[0].side : (by ? by.side : f.side));
+        this.endRound(alive[0] ? alive[0].side : (by && !by.isZombie ? by.side : f.side));
       return;
     }
     // 阵营模式：只要本方还有人活着就继续打
@@ -503,11 +858,11 @@
       if (this.state === "fight" && this.teamsAlive() <= 1) this.endRound(this.lastTeamSide());
       return;
     }
-    if (this.fighters.length <= 2) {
+    if (this.humans().length <= 2) {
       this.endRound(f.side === 0 ? 1 : 0);
     } else {
       /* 混战：只剩一人存活时结束回合；同归于尽则判击杀者获胜 */
-      const alive = this.fighters.filter(x => !x.dead);
+      const alive = this.humans(true);
       if (alive.length === 1) this.endRound(alive[0].side);
       else if (alive.length === 0) this.endRound(by ? by.side : f.side);
     }
@@ -516,11 +871,11 @@
   /* ---------------- 阵营模式辅助 ---------------- */
   B.teamsAlive = function () {
     const set = {};
-    this.fighters.forEach(f => { if (!f.dead && f.team >= 0) set[f.team] = 1; });
+    this.fighters.forEach(f => { if (!f.dead && f.team >= 0 && !f.isZombie && !f.isClone && f.kind === "hero") set[f.team] = 1; });
     return Object.keys(set).length;
   };
   B.lastTeamSide = function () {
-    const t = this.fighters.find(f => !f.dead && f.team >= 0);
+    const t = this.fighters.find(f => !f.dead && f.team >= 0 && !f.isZombie && f.kind === "hero");
     return t ? t.side : 0;
   };
 
@@ -543,15 +898,15 @@
       s.x += s.vx * dt; s.y += s.vy * dt;
       const damp = Math.exp(-2.2 * dt); s.vx *= damp; s.vy *= damp;
       FX.trail(s.x, s.y, "#fcd34d", 6, 0.3);
-      if (Math.hypot(s.vx, s.vy) < 40) { s.landed = true; s.vx = s.vy = 0; s.y = Math.max(s.y, C.H * 0.34); }
-      s.x = clamp(s.x, 40, C.W - 40);
-      s.y = clamp(s.y, C.H * 0.30, C.H - 46);
+      if (Math.hypot(s.vx, s.vy) < 40) { s.landed = true; s.vx = s.vy = 0; s.y = Math.max(s.y, B.world.pt); }
+      s.x = clamp(s.x, 40, B.world.w - 40);
+      s.y = clamp(s.y, B.world.pt, B.world.h - 46);
       return;
     }
     if (s.life % 0.1 < dt) FX.trail(s.x + rand(-10, 10), s.y - rand(6, 26), "#fcd34d", 4, 0.5);
     // 拾取判定
     for (const f of this.fighters) {
-      if (f.dead || f.kind !== "hero") continue;
+      if (f.dead || f.kind !== "hero" || f.isZombie) continue;
       if (Math.hypot(f.x - s.x, f.y - s.y) < f.r + 26) {
         this.becomeOverlord(f);
         this.stone = null;
@@ -572,19 +927,735 @@
   };
 
   /* ==========================================================
-   *  天外来物：随机降落技能 / 大招掉落物（v2.5）
+   *  v2.6 通用：修饰符 / 杂兵 / 缩圈 / 军备竞赛 / 车轮战 / 技能轮盘
+   * ========================================================== */
+  B.mod = function (id) { return !!(this.mods && this.mods.indexOf(id) >= 0); };
+
+  /* ---- 杂兵（蜂后的机械蜂等）：挂在 fighters 里复用索敌 / 弹道命中 / 阵营判断 ---- */
+  B.spawnMinion = function (kind, x, y, owner, opt) {
+    opt = opt || {};
+    const M = (LD.MINIONS && LD.MINIONS[kind]) || { hp: 14, speed: 175, dmg: 9, boomR: 46, r: 10, life: 12 };
+    const m = {
+      kind: "minion", mKind: kind, side: owner ? owner.side : 1, id: -1,
+      team: owner ? owner.team : 1, owner: owner || null,
+      x, y, r: M.r || 10, facing: { x: 1, y: 0 },
+      hp: M.hp, maxHp: M.hp, speed: M.speed || 175,
+      dmg: M.dmg, boomR: M.boomR || 46, lifeT: M.life || 12,
+      dead: false, hitFlash: 0, walkPhase: rand(0, 6), moving: false,
+      atkAnim: 0, atkDur: 0.2, isMinion: true
+    };
+    this.fighters.push(m);
+    FX.burst(x, y - 10, 10, ["#a3e635", "#fff"], { speed: 150 });
+    return m;
+  };
+  B.updateMinions = function (dt) {
+    for (let i = this.fighters.length - 1; i >= 0; i--) {
+      const m = this.fighters[i];
+      if (m.kind !== "minion") continue;
+      if (m.dead) { this.fighters.splice(i, 1); continue; }
+      m.lifeT -= dt;
+      m.hitFlash = Math.max(0, m.hitFlash - dt);
+      if (m.lifeT <= 0) { FX.burst(m.x, m.y - 10, 12, ["#94a3b8", "#fff"], { speed: 160 }); this.fighters.splice(i, 1); continue; }
+      const foe = this.foeOf(m);
+      m.moving = false;
+      if (foe) {
+        const dx = foe.x - m.x, dy = foe.y - m.y, d = Math.hypot(dx, dy) || 1;
+        m.facing = { x: dx / d, y: dy / d };
+        if (d > m.r + foe.r + 2) {
+          m.x += dx / d * m.speed * dt; m.y += dy / d * m.speed * dt;
+          m.walkPhase += dt * 16; m.moving = true;
+        } else {
+          /* 自爆：接触即引爆，对范围内敌人结算 */
+          this.minionBoom(m);
+          this.fighters.splice(i, 1);
+          continue;
+        }
+      }
+      m.x = clamp(m.x, 30, B.world.w - 30);
+      m.y = clamp(m.y, B.world.pt, B.world.h - 36);
+      if (m.lifeT % 0.12 < dt) FX.trail(m.x + rand(-6, 6), m.y - 12 + rand(-4, 4), "#a3e635", 3, 0.3);
+    }
+  };
+  B.minionBoom = function (m) {
+    FX.ring(m.x, m.y - 12, m.boomR, "rgba(163,230,53,.95)", 6, 0.4);
+    FX.burst(m.x, m.y - 12, 22, ["#a3e635", "#fff", "#fbbf24"], { speed: 300 });
+    FX.shake(8);
+    for (const f of this.fighters) {
+      if (f.dead || f.kind === "minion" || this.sameTeam(m, f)) continue;
+      if (Math.hypot(f.x - m.x, (f.y - 20) - m.y) <= m.boomR + f.r)
+        this.damage(m.owner || m, f, m.dmg, { type: "skill", kb: 180, from: m });
+    }
+  };
+
+  /* ---- 缩圈乱斗（v2.7 重做）
+   * 地图上撒若干个「安全圈」，圈外全是毒；安全圈会一个个消失、并持续收缩，
+   * 最终只剩一个小圈，把所有人逼到一起。 */
+  B.initRing = function () {
+    const R = LD.RING || {};
+    const w = this.world;
+    const n = R.n || 4, r0 = R.r0 || 330, gap = R.gap || 1.15;
+    const list = [];
+    for (let i = 0; i < n; i++) {
+      let bx = w.w / 2, by = (w.pt + w.h) / 2;
+      for (let k = 0; k < 240; k++) {
+        const tx = rand(r0 * 0.62, w.w - r0 * 0.62);
+        const ty = rand(w.pt + r0 * 0.62, w.h - r0 * 0.62);
+        if (list.every(c => Math.hypot(c.x - tx, c.y - ty) > r0 * gap)) { bx = tx; by = ty; break; }
+      }
+      list.push({ x: bx, y: by, r: r0, r0: r0, dead: false });
+    }
+    this.rings = list;
+    this.ringT = 0;
+    this.ringKillN = 0;
+    this.ringTick = 0;
+    this.rings.forEach(c => {
+      FX.ring(c.x, c.y, c.r, "rgba(52,211,153,.55)", 5, 0.9);
+    });
+    /* 所有人就近落在安全圈里，开局不至于站在毒里 */
+    this.placeInsideSafe();
+  };
+  /** 把一个坐标挪进最近的安全圈内部；没有安全圈时原样返回 */
+  B.safeSpot = function (x, y, pad) {
+    const list = (this.rings || []).filter(c => !c.dead);
+    if (!list.length) return { x, y };
+    let best = list[0], bd = Infinity;
+    list.forEach(c => {
+      const d = Math.hypot(c.x - x, c.y - y);
+      if (d < bd) { bd = d; best = c; }
+    });
+    const lim = Math.max(40, best.r - (pad || 70));
+    if (bd <= lim) return { x, y };                  // 已经在圈内
+    const a = Math.atan2(y - best.y, x - best.x);
+    return { x: best.x + Math.cos(a) * lim * rand(0.2, 0.9), y: best.y + Math.sin(a) * lim * rand(0.2, 0.9) };
+  };
+  B.placeInsideSafe = function () {
+    this.fighters.forEach(f => {
+      if (f.kind !== "hero" || f.isZombie || f.bench) return;
+      const p = this.safeSpot(f.x, f.y, 80);
+      f.x = clamp(p.x, 34, this.world.w - 34);
+      f.y = clamp(p.y, this.world.pt, this.world.h - 40);
+    });
+  };
+  /** 缩圈模式的掉落点：一半概率落在圈外（需要冒险去捡） */
+  B.ringDropSpot = function (riskP) {
+    const w = this.world;
+    for (let k = 0; k < 60; k++) {
+      const x = rand(80, w.w - 80), y = rand(w.pt + 60, w.h - 90);
+      const inSafe = (this.rings || []).some(c => !c.dead && Math.hypot(c.x - x, c.y - y) <= c.r * 0.92);
+      if (Math.random() < (riskP == null ? 0.55 : riskP)) { if (!inSafe) return { x, y }; }
+      else if (inSafe) return { x, y };
+    }
+    return { x: rand(80, w.w - 80), y: rand(w.pt + 60, w.h - 90) };
+  };
+  /** 坐标是否处于毒圈里（不在任何存活的安全圈内） */
+  B.inPoison = function (x, y) {
+    const list = (this.rings || []).filter(c => !c.dead);
+    if (!list.length) return false;
+    return !list.some(c => Math.hypot(c.x - x, c.y - y) <= c.r);
+  };
+  B.updateRing = function (dt) {
+    const R = LD.RING || {};
+    if (!this.rings) return;
+    this.ringT += dt;
+    const killAt = R.killAt || [];
+    while (this.ringKillN < killAt.length && this.ringT >= killAt[this.ringKillN]) {
+      this.ringKillN++;
+      const alive = this.rings.filter(c => !c.dead);
+      if (alive.length > 1) this.ringCollapse(alive[(Math.random() * alive.length) | 0]);
+    }
+    /* 持续收缩：开场 14 秒是完整的大圈，之后线性缩到初始半径的 48% */
+    const t0 = R.shrinkStart != null ? R.shrinkStart : 14;
+    const rate = R.shrinkRate != null ? R.shrinkRate : 0.0078;
+    const minMul = R.minMul != null ? R.minMul : 0.48;
+    const p = this.ringT <= t0 ? 1 : Math.max(minMul, 1 - (this.ringT - t0) * rate);
+    this.rings.forEach(c => { if (!c.dead) c.r = c.r0 * p; });
+    /* 圈外持续掉血 */
+    this.ringTick -= dt;
+    if (this.ringTick <= 0) {
+      this.ringTick = R.tick || 0.5;
+      const dmg = R.dmg != null ? R.dmg : 5;
+      for (const f of this.fighters) {
+        if (f.dead || f.kind !== "hero" || f.bench) continue;
+        if (this.inPoison(f.x, f.y)) {
+          this.damage(null, f, dmg, { type: "dot", kb: 0, noSrc: true });
+          if (f.hp > 0) FX.float(f.x, f.y - 60, "毒圈！", "#f87171", 13);
+        }
+      }
+    }
+    /* 兜底：最后一个小圈已经缩到最小、还拖太久的话按血量判胜，避免无限对局 */
+    const lim = R.limit != null ? R.limit : 165;
+    if (this.ringT > lim && this.state === "fight") {
+      const alive = this.humans(true);
+      let win = alive[0];
+      alive.forEach(x => { if (x.hp > (win ? win.hp : 0)) win = x; });
+      this.endRound(win ? win.side : 0);
+    }
+  };
+  /** 某个安全圈塌陷消失（画一圈收缩动画 + 文字提示） */
+  B.ringCollapse = function (c) {
+    c.dead = true;
+    FX.ring(c.x, c.y, c.r, "rgba(248,113,113,.9)", 7, 0.8);
+    FX.float(c.x, c.y - 40, "安全圈消失！", "#f87171", 20);
+    this.ev.push(["h", c.x, c.y - 40, "安全圈消失！", "#f87171"]);
+    const left = this.rings.filter(x => !x.dead).length;
+    FX.float(c.x, c.y + 40, "剩余安全圈 " + left, "#fcd34d", 15);
+  };
+
+  /* ---- 追猎时刻（v2.7 重做）：随机一名猎人 + 缓慢收缩的大毒圈 ---- */
+  B.initHunt = function () {
+    const H = LD.HUNT || {};
+    const cdMul = H.cdMul != null ? H.cdMul : 0.5;
+    const hs = this.fighters.filter(f => f.kind === "hero" && !f.isZombie && !f.bench);
+    if (!hs.length) return;
+    const hi = (Math.random() * hs.length) | 0;
+    hs.forEach((f, i) => {
+      /* 幂等：setup 与 resetRound 都会抽签，必须先在「基础 CD / 基础血量」上还原，
+       * 否则 CD 会一次次乘 0.5 越叠越低，当过猎人的玩家血量会永远留在 800。 */
+      if (f._huntBase == null) f._huntBase = f.rateM == null ? 1 : f.rateM;
+      if (f._huntBaseHp == null) f._huntBaseHp = f.maxHp;
+      if (i === hi) {
+        f.huntRole = "hunter"; f.team = 9; f.huntCrown = true;
+        f.maxHp = H.hp || 800; f.hp = f.maxHp;
+        f.rateM = f._huntBase * cdMul;                                  // 猎人全部 CD 减半
+        f.huntDmgM = 1;                                                 // v2.7：随存活人数动态提升，见 updateHunt
+      } else {
+        f.huntRole = "runner"; f.team = 0;                              // 生存者互相同队，保留自己选的技能
+        f.huntCrown = false;
+        f.rateM = f._huntBase;                                          // 上一轮当过猎人的，加成也要撤掉
+        f.maxHp = f._huntBaseHp; f.hp = Math.min(f.hp, f.maxHp);        // 血量同样还原
+      }
+    });
+    this.hunterSide = hs[hi].side;
+    this.roundT = H.roundT || 90;
+    const w = this.world;
+    this.huntRing = { x: w.w / 2, y: (w.pt + w.h) / 2, r: H.r0 || 740, tick: 0, minR: H.minR || 315 };
+    /* 猎人特写：与大招演出同款的镜头，让全场都看清谁是猎人 */
+    const hf = hs[hi];
+    LD.Cine.start(hf, "追猎时刻", "", "#fb7185", "本局猎人：" + (hf.name || ("玩家" + (hf.side + 1))));
+  };
+  B.updateHunt = function (dt) {
+    const H = LD.HUNT || {};
+    const R = this.huntRing;
+    if (!R) return;
+    /* v2.7 追猎时刻：猎人伤害随「存活幸存者数」提升，每多一人 +20%（3 人 = +60%）。
+     * 人数越少猎人越弱，给幸存者翻盘留出空间。 */
+    const aliveRunners = this.fighters.filter(f => f.kind === "hero" && f.huntRole === "runner" && !f.dead && !f.bench).length;
+    const hunter = this.fighters.find(f => f.kind === "hero" && f.huntRole === "hunter");
+    if (hunter && !hunter.dead) hunter.huntDmgM = 1 + aliveRunners * (H.dmgPerRunner != null ? H.dmgPerRunner : 0.20);
+    if (R.r > R.minR) R.r = Math.max(R.minR, R.r - (H.shrink || 6.2) * dt);
+    R.tick -= dt;
+    if (R.tick <= 0) {
+      R.tick = H.tick || 0.5;
+      const dmg = H.dmg != null ? H.dmg : 6;
+      for (const f of this.fighters) {
+        if (f.dead || f.kind !== "hero" || f.bench) continue;
+        if (Math.hypot(f.x - R.x, f.y - R.y) > R.r) {
+          this.damage(null, f, dmg, { type: "dot", kb: 0, noSrc: true });
+          if (f.hp > 0) FX.float(f.x, f.y - 60, "毒圈！", "#f87171", 13);
+        }
+      }
+    }
+  };
+
+  /* ---- 军备竞赛（v2.7）/ 世界末日（v3.2）：刷僵尸 ---- */
+  B.updateZombies = function (dt) {
+    if (!this.zombieOn()) return;
+    const Z = LD.ZOMBIE || {};
+    const D = LD.DOOMSDAY || {};
+    const alive = this.fighters.filter(f => f.isZombie && !f.dead).length;
+    const doom = this.rule === "doomsday";
+    const players = Math.max(1, this.humans(true).length);
+    this.zombieT -= dt;
+    if (this.zombieT > 0) return;
+    /* 世界末日：存活玩家越多刷得越快（间隔 = 基础 / 人数），同时放宽在场上限 */
+    this.zombieT = doom ? Math.max(D.sprayMin || 0.55, (D.sprayBase || 2.6) / players)
+      : (Z.every || 11);
+    const cap = doom ? (D.maxBase || 5) + players * (D.maxPer || 2) : (Z.max || 6);
+    if (alive >= cap) return;
+    let bx, by;
+    if (doom && this.shelter) {
+      const sh = this.shelter;
+      bx = null;
+      for (let k = 0; k < 40; k++) {
+        const a2 = Math.random() * TAU;
+        const dd = sh.r + rand(110, 360);
+        const x = clamp(sh.x + Math.cos(a2) * dd, 60, this.world.w - 60);
+        const y = clamp(sh.y + Math.sin(a2) * dd, this.world.pt + 40, this.world.h - 60);
+        if (Math.hypot(x - sh.x, y - sh.y) <= sh.r + 80) continue;      // 绝不刷在庇护所里
+        if (!this.terrain || LD.Terrain.clearAt(this.terrain, x, y, 26)) { bx = x; by = y; break; }
+      }
+      if (bx == null) {
+        const a2 = Math.random() * TAU;
+        bx = clamp(sh.x + Math.cos(a2) * (sh.r + 170), 60, this.world.w - 60);
+        by = clamp(sh.y + Math.sin(a2) * (sh.r + 170), this.world.pt + 40, this.world.h - 60);
+      }
+    } else {
+      const w = this.world;
+      bx = rand(80, w.w - 80); by = rand(w.pt + 60, w.h - 90);
+      for (let k = 0; k < 30; k++) {
+        const x = rand(80, w.w - 80), y = rand(w.pt + 60, w.h - 90);
+        const near = this.humans(true).some(f => Math.hypot(f.x - x, f.y - y) < 260);
+        if (!near) { bx = x; by = y; break; }
+      }
+    }
+    const z = this.mkZombie(bx, by);
+    this.fighters.push(z);          // 必须入列：否则僵尸只是被创建出来、永远不进战斗
+    FX.ring(bx, by - 26, 60, "rgba(163,230,53,.9)", 5, 0.5);
+    FX.float(bx, by - 70, "僵尸出现！", "#a3e635", 17);
+    this.ev.push(["h", bx, by - 70, "僵尸出现！", "#a3e635"]);
+    return z;
+  };
+  B.zombieOn = function () { return this.rule === "auction" || this.rule === "doomsday" || this.mod("zombie"); };
+
+  /* ---- v3.2 世界末日：庇护所外红圈持续掉血 ---- */
+  B.updateDoomsday = function (dt) {
+    if (!this.shelter) return;
+    const D = LD.DOOMSDAY || {};
+    this.doomTick = (this.doomTick == null ? (D.outTick || 0.6) : this.doomTick) - dt;
+    if (this.doomTick > 0) return;
+    this.doomTick = D.outTick || 0.6;
+    for (const f of this.fighters) {
+      if (f.dead || f.kind !== "hero" || f.isZombie || f.bench) continue;
+      if (Math.hypot(f.x - this.shelter.x, f.y - this.shelter.y) > this.shelter.r) {
+        this.damage(null, f, D.outDmg || 4, { type: "dot", kb: 0, noSrc: true });
+        if (f.hp > 0) FX.float(f.x, f.y - 60, "红圈侵蚀！", "#f87171", 13);
+      }
+    }
+  };
+  /** 离目标最近的门洞（僵尸寻路 / 玩家回防都用它） */
+  B.doomGap = function (f) {
+    const sh = this.shelter;
+    if (!sh || !sh.gaps || !sh.gaps.length) return null;
+    let best = sh.gaps[0], bd = Infinity;
+    sh.gaps.forEach(g => { const d = Math.hypot(g.x - f.x, g.y - f.y); if (d < bd) { bd = d; best = g; } });
+    return best;
+  };
+  /**
+   * v3.2 门洞寻路目标点。
+   * 关键：门洞点本身就在墙环上，直接朝它走会「原地打转」——
+   * 从斜上方接近时它是一条切线，到了门口方向立刻反指墙外，于是永远进不去。
+   * 因此分两步：还在圈外且没和门洞对齐 → 先去门外对位点；对齐后 → 直冲门内的穿门点。
+   */
+  B.doomAim = function (f) {
+    const sh = this.shelter;
+    if (!sh) return null;
+    const gate = this.doomGap(f);
+    if (!gate) return null;
+    const sign = gate.x >= sh.x ? 1 : -1;
+    const dSh = Math.hypot(f.x - sh.x, f.y - sh.y);
+    if (dSh <= sh.r - 40) return null;                        // 已经进来了，交给正常战斗移动
+    const aligned = Math.abs(f.y - gate.y) < 24 && Math.abs(f.x - gate.x) < sh.r + 40;
+    if (dSh > sh.r && !aligned) return { x: gate.x + sign * 72, y: gate.y };   // 门外对位点
+    return { x: gate.x - sign * 130, y: gate.y };                              // 门内穿门点
+  };
+  /** v3.2 门洞减速圈：僵尸站在门洞附近的圈里会明显变慢，给守门的人留输出窗口 */
+  B.updateGateSlow = function (dt) {
+    if (this.rule !== "doomsday" || !this.shelter || !this.shelter.gaps) return;
+    const D = LD.DOOMSDAY || {};
+    const gr = D.gateR || 92;
+    for (const f of this.fighters) {
+      if (f.dead || !f.isZombie) continue;
+      let inGate = false;
+      for (const g of this.shelter.gaps) {
+        if (Math.hypot(f.x - g.x, f.y - g.y) <= gr) { inGate = true; break; }
+      }
+      if (inGate) f.gateSlowT = 0.16;      // 每帧续期，离开圈后很快恢复
+      if (inGate && Math.random() < dt * 3) FX.trail(f.x + rand(-8, 8), f.y - rand(4, 26), "#67e8f9", 4, 0.3);
+    }
+  };
+  /** 人机逛商店：残血先买血包，否则轮流买加成，钱不够或都买不了就收手 */
+  B.botSpin = function (f) {
+    if (!f.isBot) return;
+    const S = LD.ASHOP || {};
+    let guard = 0;
+    while (guard++ < 4) {
+      const low = f.hp < f.maxHp * 0.55;
+      const order = low ? ["heal", "hp", "spd"] : ["hp", "spd", "heal"];
+      /* v3.2：有大招且能量不满时优先买能量球 */
+      if (f.loadout && f.loadout.ult && f.energy < f.maxEnergy * 0.6) order.unshift("energy");
+      let bought = false;
+      for (const id of order) {
+        const item = this.armyShop().find(i => i.id === id);
+        if (!item || (f.bcoins || 0) < item.price) continue;
+        if (id === "spd" && (f.spdBuys || 0) >= (S.spdMax != null ? S.spdMax : 3)) continue;
+        if (id === "heal" && f.hp >= f.maxHp) continue;
+        if (this.armyBuy(f, id)) { bought = true; break; }
+      }
+      if (!bought) break;
+    }
+  };
+  /** 摇一次技能轮盘：返回 3 个候选（小概率出大招） */
+  B.rollWheel = function (n) {
+    const skills = LD.skillsBy("skill").filter(s => !s.noAI);
+    const ults = LD.skillsBy("ult").filter(s => !s.noAI);
+    const out = [];
+    for (let i = 0; i < (n || 3); i++) {
+      const ult = ults.length && Math.random() < 0.18;      // 小概率刷出大招
+      const pool = ult ? ults : (skills.length ? skills : ults);
+      const sk = pool[(Math.random() * pool.length) | 0];
+      if (sk && out.indexOf(sk.id) < 0) out.push(sk.id);
+    }
+    return out;
+  };
+  /** 把某个技能装进配装（优先空槽，其次随机置换） */
+  B.equipIntoLoadout = function (f, id) {
+    const sk = LD.skill(id);
+    if (!sk || !f.loadout) return null;
+    let slot;
+    if (sk.kind === "ult") slot = "ult";
+    else if (!f.loadout.skill1) slot = "skill1";
+    else if (!f.loadout.skill2) slot = "skill2";
+    else if (f.loadout.skill1 === id) slot = "skill1";
+    else if (f.loadout.skill2 === id) slot = "skill2";
+    else slot = Math.random() < 0.5 ? "skill1" : "skill2";
+    f.loadout[slot] = id;
+    f.cd[slot] = 0.6;
+    if (f.slot) f.slot[slot] = { on: false, phase: "", t: 0, d: {} };
+    FX.ring(f.x, f.y - 26, 54, "#c4b5fd", 4, 0.4);
+    FX.float(f.x, f.y - 64, "轮盘：" + sk.name + " → " + ({ basic: "J", skill1: "K", skill2: "L", ult: "O" }[slot]), "#c4b5fd", 15);
+    return slot;
+  };
+
+  /* ---- 乱斗热身（v2.7）：阵亡不淘汰，计时到点随机位置复活 ---- */
+  B.randomRespawnSpot = function (minGap) {
+    const w = this.world, gap = minGap == null ? 240 : minGap;
+    let bx = rand(80, w.w - 80), by = rand(w.pt + 60, w.h - 90);
+    for (let k = 0; k < 40; k++) {
+      const x = rand(60, w.w - 60), y = rand(w.pt + 40, w.h - 60);
+      const near = this.humans(true).some(f => Math.hypot(f.x - x, f.y - y) < gap);
+      if (!near) { bx = x; by = y; break; }
+    }
+    return { x: bx, y: by };
+  };
+  B.updateRespawn = function (dt) {
+    if (this.rule !== "warmup") return;
+    const W = LD.WARMUP || {};
+    for (const f of this.fighters) {
+      if (!f.respawnT || f.respawnT <= 0) continue;
+      f.respawnT -= dt;
+      if (f.respawnT > 0) continue;
+      f.respawnT = 0;
+      f.dead = false;
+      f.hp = f.maxHp; f.energy = 0;
+      f.stun = 0; f.root = 0; f.silenceT = 0; f.blind = 0; f.slowT = 0; f.gateSlowT = 0; f.shield = 0; f.shieldT = 0;
+      f.knockLeft = 0; f.knockWall = false; f.meditate = 0; f.hitFlash = 0;
+      f.buff = { rage: 0, thousand: 0, rush: 0 };
+      Object.keys(f.slot || {}).forEach(k => { f.slot[k] = { on: false, phase: "", t: 0, d: {} }; });
+      if (f.cd) { f.cd.basic = 0; f.cd.skill1 = 0; f.cd.skill2 = 0; f.cd.dodge = 0; f.cd.ult = 1.5; }
+      const p = this.randomRespawnSpot();
+      f.x = p.x; f.y = p.y;
+      f.invuln = W.invuln || 1.6;
+      FX.ring(f.x, f.y - 26, 76, "rgba(103,232,249,.95)", 5, 0.5);
+      FX.burst(f.x, f.y - 26, 20, ["#7fe6f7", "#fff"], { speed: 240 });
+      FX.float(f.x, f.y - 70, "复活！", "#7fe6f7", 18);
+      this.ev.push(["h", f.x, f.y - 70, "复活！", "#7fe6f7"]);
+    }
+  };
+
+  /* ---- 血包（「回复」修饰符 / 缩圈模式圈外补给） ---- */
+  B.spawnHeal = function (x, y) {
+    const H = LD.HEALS || {};
+    const p = (x != null) ? { x, y } : this.healDropSpot();
+    const h = { x: p.x, y: p.y, t: 0, landed: false, born: this.t, id: "heal", kind: "heal" };
+    this.heals.push(h);
+    const cap = H.max || 4;
+    const same = this.heals.filter(o => o !== h);
+    if (same.length >= cap) {
+      same.sort((a, b) => a.born - b.born);
+      for (const o of same.slice(0, same.length - cap + 1)) {
+        const i = this.heals.indexOf(o);
+        if (i >= 0) this.heals.splice(i, 1);
+      }
+    }
+    return h;
+  };
+  B.healDropSpot = function () {
+    if (this.rule === "ring") return this.ringDropSpot(0.62);   // 缩圈模式：血包多半落在圈外
+    const w = this.world;
+    return { x: rand(80, w.w - 80), y: rand(w.pt + 60, w.h - 90) };
+  };
+  B.updateHeals = function (dt) {
+    if (!this.heals.length) return;
+    const H = LD.HEALS || {};
+    for (let i = this.heals.length - 1; i >= 0; i--) {
+      const h = this.heals[i];
+      h.t += dt;
+      if (!h.landed) {
+        if (h.t % 0.08 < dt) FX.trail(h.x + rand(-6, 6), h.y - 12 - (1 - h.t / (H.fallT || 1.4)) * 120, "#34d399", 4, 0.35);
+        if (h.t >= (H.fallT || 1.4)) { h.landed = true; FX.ring(h.x, h.y, 36, "rgba(52,211,153,.95)", 4, 0.45); }
+        continue;
+      }
+      if (this.t - h.born > (H.life || 40)) { this.heals.splice(i, 1); continue; }
+      for (const f of this.fighters) {
+        if (f.dead || f.kind !== "hero" || f.isClone || f.bench) continue;
+        if (Math.hypot(f.x - h.x, f.y - h.y) > f.r + (H.pickR || 32)) continue;
+        const amt = H.amount || 45;
+        const before = f.hp;
+        f.hp = Math.min(f.maxHp, f.hp + amt);
+        FX.float(f.x, f.y - 62, "+" + Math.round(f.hp - before), "#34d399", 16);
+        FX.burst(h.x, h.y - 12, 14, ["#34d399", "#fff"], { speed: 200 });
+        this.heals.splice(i, 1);
+        break;
+      }
+    }
+  };
+  B.healTimerStep = function (dt) {
+    if (this.rule !== "ring" && !this.mod("heal")) return;   // 缩圈模式常驻血包，回复修饰符额外开启
+    const H = LD.HEALS || {};
+    this.healT -= dt;
+    if (this.healT > 0) return;
+    this.healT = H.every || 8;
+    this.spawnHeal();
+  };
+
+  /* ---- 军备竞赛：击杀掉金币，拾取攒局内金币；人机自动逛商店 ---- */
+  B.spawnCoin = function (x, y, v) {
+    if (!this.coins) this.coins = [];
+    this.coins.push({ x, y, v: v || 1, t: 0 });
+    FX.ring(x, y - 20, 40, "rgba(252,211,77,.9)", 5, 0.35);
+  };
+  /* v3.1 炸药桶：延迟一帧的地形爆炸结算（可以连锁引爆） */
+  B.terrainBoom = function (x, y, r, dmg) {
+    FX.ring(x, y - 12, r, "rgba(251,146,60,.95)", 8, 0.5);
+    FX.ring(x, y - 12, r * 0.6, "rgba(254,215,170,.95)", 6, 0.38);
+    FX.burst(x, y - 12, 34, ["#f97316", "#fbbf24", "#fff"], { speed: 360, life: 0.8 });
+    FX.shake(14); FX.flash(0.14, "251,146,60");
+    this.fighters.forEach(f => {
+      if (f.dead) return;
+      const d = Math.hypot(f.x - x, (f.y - 26) - y);
+      if (d > r + f.r) return;
+      const k = 1 - Math.max(0, d - f.r) / (r + f.r);
+      this.damage(null, f, Math.round(dmg * (0.55 + 0.45 * k)), { type: "skill", kb: 320, from: { x: x, y: y + 26 } });
+    });
+    if (this.terrain) LD.Terrain.blast(this.terrain, x, y, r * 0.9, dmg * 0.8);
+    this.ev.push(["x", x, y, r]);
+  };
+
+  /* v3.1 补给箱掉落：随机血包 / 能量包 / 移速包 */
+  B.dropPickup = function (x, y, forceKind) {
+    const pool = ["heal", "energy", "speed"];
+    const kind = forceKind || pool[(Math.random() * pool.length) | 0];
+    if (!this.pickups) this.pickups = [];
+    this.pickups.push({ id: (this._pkId = (this._pkId || 0) + 1), x: x, y: y, kind: kind, t: 0 });
+    FX.ring(x, y - 10, 46, "rgba(125,211,252,.9)", 4, 0.4);
+  };
+
+  B.updatePickups = function (dt) {
+    if (!this.pickups || !this.pickups.length) return;
+    for (let i = this.pickups.length - 1; i >= 0; i--) {
+      const pk = this.pickups[i];
+      pk.t += dt;
+      if (pk.t > 26) { this.pickups.splice(i, 1); continue; }
+      for (const f of this.fighters) {
+        if (f.dead || f.bench || f.kind !== "hero") continue;
+        if (Math.hypot(f.x - pk.x, f.y - pk.y) > f.r + 24) continue;
+        const label = pk.kind === "heal" ? "生命 +35" : pk.kind === "energy" ? "大招能量 +60" : "移速提升 5 秒";
+        if (pk.kind === "heal") this.heal(f, 35);
+        else if (pk.kind === "energy") f.energy = Math.min(f.maxEnergy, f.energy + 60);
+        else f.speedBoostT = Math.max(f.speedBoostT || 0, 5);
+        FX.float(f.x, f.y - 64, label, pk.kind === "heal" ? "#7ff0c4" : pk.kind === "energy" ? "#a5b4fc" : "#fcd34d", 14);
+        FX.burst(pk.x, pk.y - 10, 12, ["#7dd3fc", "#fff"], { speed: 180 });
+        FX.ring(f.x, f.y - 26, 52, "rgba(125,211,252,.85)", 4, 0.35);
+        this.pickups.splice(i, 1);
+        break;
+      }
+    }
+  };
+
+  B.updateAuction = function (dt) {
+    if (!this.coins) return;
+    for (let i = this.coins.length - 1; i >= 0; i--) {
+      const c = this.coins[i];
+      c.t += dt;
+      if (c.t > 25) { this.coins.splice(i, 1); continue; }
+      for (const f of this.fighters) {
+        if (f.dead || f.kind !== "hero" || f.isZombie || f.bench) continue;
+        if (Math.hypot(f.x - c.x, f.y - c.y) < f.r + 22) {
+          f.bcoins = (f.bcoins || 0) + c.v;
+          FX.float(f.x, f.y - 60, "+" + c.v + " 局内金币", "#fcd34d", 14);
+          FX.burst(c.x, c.y - 10, 8, ["#fcd34d", "#fff"], { speed: 150 });
+          this.coins.splice(i, 1);
+          if (f.isBot) this.botSpin(f);
+          break;
+        }
+      }
+    }
+  };
+  /* v2.7 军备竞赛：局内商店（打僵尸/杀人掉金币，金币买增益，只在当局有效） */
+  B.armyShop = function () {
+    const S = LD.ASHOP || {};
+    return [
+      { id: "heal", name: "血包", icon: "❤️", price: S.healPrice || 2,
+        desc: "立刻恢复 " + (S.healAmount || 45) + " 点生命（满血时买不了）" },
+      { id: "hp", name: "血量加成", icon: "💪", price: S.hpPrice || 2,
+        desc: "本局生命上限 +" + (S.hpGain || 80) + " 并回满增量，可叠加" },
+      { id: "spd", name: "移速加成", icon: "👟", price: S.spdPrice || 2,
+        desc: "本局移速 +" + Math.round((S.spdGain || 0.15) * 100) + "%（最多叠 " + (S.spdMax || 3) + " 次）" },
+      { id: "energy", name: "能量球", icon: "🔮", price: S.energyPrice || 3,
+        desc: "立刻补充 " + (S.energyGain || 60) + " 点大招能量（能量已满时买不了）" }
+    ];
+  };
+  /** 购买局内商品：成功返回 true（扣金币 + 立刻生效） */
+  B.armyBuy = function (f, id) {
+    const S = LD.ASHOP || {};
+    const item = this.armyShop().find(i => i.id === id);
+    if (!f || !item) return false;
+    if ((f.bcoins || 0) < item.price) return false;
+    if (id === "heal") {
+      if (f.hp >= f.maxHp) return false;
+      f.bcoins -= item.price;
+      f.hp = Math.min(f.maxHp, f.hp + (S.healAmount || 45));
+      FX.ring(f.x, f.y - 26, 62, "#4ade80", 5, 0.45);
+      FX.float(f.x, f.y - 64, "+" + (S.healAmount || 45), "#4ade80", 15);
+    } else if (id === "hp") {
+      f.bcoins -= item.price;
+      f.maxHp += (S.hpGain || 80); f.hp += (S.hpGain || 80);
+      FX.ring(f.x, f.y - 26, 66, "#fb7185", 5, 0.45);
+      FX.float(f.x, f.y - 64, "上限+" + (S.hpGain || 80), "#fb7185", 15);
+    } else if (id === "spd") {
+      if ((f.spdBuys || 0) >= (S.spdMax != null ? S.spdMax : 3)) return false;
+      f.bcoins -= item.price;
+      f.spdBuys = (f.spdBuys || 0) + 1;
+      f.speedMul = (f.speedMul || 1) + (S.spdGain || 0.15);
+      FX.ring(f.x, f.y - 26, 66, "#67e8f9", 5, 0.45);
+      FX.float(f.x, f.y - 64, "移速+" + Math.round((S.spdGain || 0.15) * 100) + "%", "#67e8f9", 15);
+    } else if (id === "energy") {
+      /* v3.2 能量球：立刻补大招能量 */
+      if (f.energy >= f.maxEnergy) return false;
+      f.bcoins -= item.price;
+      const gain = S.energyGain || 60;
+      f.energy = Math.min(f.maxEnergy, f.energy + gain);
+      FX.ring(f.x, f.y - 26, 66, "#818cf8", 5, 0.45);
+      FX.burst(f.x, f.y - 26, 14, ["#a5b4fc", "#fff"], { speed: 180 });
+      FX.float(f.x, f.y - 64, "能量+" + gain, "#a5b4fc", 15);
+    } else return false;
+    if (typeof Audio2 !== "undefined" && Audio2.buy) Audio2.buy();
+    return true;
+  };
+
+  /* ---- 车轮战：败者下台，胜者回血 30% 并迎接下一位（本地面板轮换，不上联机） ---- */
+  B.initRelay = function () {
+    const heroes = this.fighters.filter(f => f.kind === "hero");
+    this.relay = { order: heroes.map(f => f.side), alive: heroes.map(f => f.side) };
+    heroes.forEach((f, i) => { if (i >= 2) { f.bench = true; f.x = -200; f.y = -200; } });
+  };
+  B.relayOnKill = function (f, by) {
+    /* f 刚被击杀。胜者 = by（若同归则取另一位在台者） */
+    const alive = this.fighters.filter(x => x.kind === "hero" && !x.dead && !x.bench);
+    const winner = by && by.kind === "hero" && !by.dead ? by : alive[0];
+    if (winner) {
+      winner.hp = Math.min(winner.maxHp, Math.round(winner.hp + winner.maxHp * 0.3));
+      FX.float(winner.x, winner.y - 80, "胜者回血 30%", "#7ff0c4", 15);
+    }
+    const nextSide = (this.relay.alive || []).find(s => {
+      const ff = this.fighters.find(o => o.side === s);
+      return ff && !ff.dead && ff !== f && ff !== winner;   // 挑战者通常在板凳上（bench），不排除
+    });
+    if (nextSide == null) {
+      /* 台上只剩胜者 → 整场结束 */
+      if (winner) this.finish(winner.side === this.mySide);
+      return;
+    }
+    this.relayNext = 1.6;               // 1.6 秒后下一位上场
+    this.relayIn = nextSide;
+    FX.float(B.world.w / 2, B.world.pt + 60, "下一位挑战者登场！", "#fcd34d", 20);
+  };
+  B.relayTick = function (dt) {
+    if (!this.relayNext) return;
+    this.relayNext -= dt;
+    if (this.relayNext > 0) return;
+    this.relayNext = 0;
+    const f = this.fighters.find(o => o.side === this.relayIn);
+    if (!f) return;
+    f.bench = false; f.dead = false;
+    f.hp = f.maxHp; f.stun = 0; f.invuln = 1;
+    f.x = B.world.w * rand(0.25, 0.75);
+    f.y = B.world.h * rand(0.4, 0.7);
+    f.energy = 0;
+    Object.keys(f.slot || {}).forEach(k => { f.slot[k] = { on: false, phase: "", t: 0, d: {} }; });
+    if (f.cd) { f.cd.basic = 0; f.cd.skill1 = 0; f.cd.skill2 = 0; f.cd.dodge = 0; f.cd.ult = 1.5; }
+    FX.ring(f.x, f.y - 26, 90, "rgba(252,211,77,.95)", 6, 0.5);
+    this.state = "fight";
+  };
+
+  /* ---- 技能轮盘修饰符：每 12 秒全场勇者随机换一套技能 ---- */
+  B.updateWheel = function (dt) {
+    if (!this.mod("wheel")) return;
+    this.wheelT = (this.wheelT || 0) + dt;
+    if (this.wheelT < 12) return;
+    this.wheelT = 0;
+    const skills = LD.skillsBy("skill").filter(s => !s.noAI);
+    const ults = LD.skillsBy("ult").filter(s => !s.noAI);
+    const pick = arr => arr[(Math.random() * arr.length) | 0];
+    this.fighters.forEach(f => {
+      if (f.kind !== "hero" || f.dead || f.bench) return;
+      if (f.isZombie) return;                 // v3.1：僵尸只有固定的突刺 / 撕咬，不参与技能轮盘
+      f.loadout.skill1 = pick(skills).id;
+      let s2 = pick(skills).id, guard = 0;
+      while (s2 === f.loadout.skill1 && guard++ < 10) s2 = pick(skills).id;
+      f.loadout.skill2 = s2;
+      f.loadout.ult = pick(ults).id;
+      ["skill1", "skill2", "ult"].forEach(k => { if (f.slot) f.slot[k] = { on: false, phase: "", t: 0, d: {} }; });
+      if (f.cd) f.cd.ult = 3;
+      FX.float(f.x, f.y - 78, "轮盘换技能！", "#c4b5fd", 15);
+    });
+    FX.flash(0.18, "196,181,253");
+  };
+
+  /* ---- BOSS 二阶段：血量过半触发狂暴（巨龙有自己的 rageStage，不走这里） ---- */
+  B.updateBossPhase = function (dt) {
+    this.fighters.forEach(f => {
+      if (!f.isBoss || f.dead || f.phase2) return;
+      const cfg = LD.BOSS && LD.BOSS[f.bossKind];
+      const p2 = cfg && cfg.phase2;
+      if (!p2) return;
+      if (f.hp <= f.maxHp * (p2.hpPct != null ? p2.hpPct : 0.5)) {
+        f.phase2 = true;
+        f.rateM = (f.rateM || 1) * (p2.rateMul || 1.3);
+        f.dmgM = (f.dmgM || 1) * (p2.dmgMul || 1.15);
+        FX.flash(0.3, "251,113,133"); FX.shake(14);
+        FX.ring(f.x, f.y - 26, 130, "rgba(251,113,133,.95)", 7, 0.6);
+        FX.float(f.x, f.y - 90, "狂暴！", "#fb7185", 24);
+        this.ev.push(["h", f.x, f.y - 90, "狂暴！", "#fb7185"]);
+      }
+    });
+  };
+
+  /* ==========================================================
+   *  天外来物：随机降落技能 / 大招掉落物（v2.5)
    *  - 每 10s 掉一个技能、每 20s 掉一个大招，降落 2s 后可拾取
    *  - 拾取：先装 skill1（K）再 skill2（L），大招装 ult（O）
    *  - 槽位满 → 碰到时挂 pending，玩家按对应键后先照常出手，0.3s 后置换，
    *    被换下的技能以掉落物形式留在原地
    *  - 场上最多 maxSkill 个技能 / maxUlt 个大招，超限最旧的消失
    * ========================================================== */
+  /* v2.7：天外来物与缩圈乱斗共用同一套掉落系统，只是容量 / 节奏不同 */
+  B.giftRule = function () { return this.rule === "gifts" || this.rule === "ring"; };
+  B.giftCfg = function () {
+    const G = LD.GIFTS || {};
+    const base = {
+      skillEvery: G.skillEvery != null ? G.skillEvery : 10,
+      ultEvery: G.ultEvery != null ? G.ultEvery : 20,
+      firstSkill: G.firstSkill != null ? G.firstSkill : 3,
+      firstUlt: G.firstUlt != null ? G.firstUlt : 8,
+      maxSkill: G.maxSkill != null ? G.maxSkill : 3,
+      maxUlt: G.maxUlt != null ? G.maxUlt : 2,
+      fallT: G.fallT != null ? G.fallT : 2, pickR: G.pickR != null ? G.pickR : 30
+    };
+    if (this.rule === "ring" && G.ring) Object.assign(base, G.ring);
+    return base;
+  };
+
   B.spawnGift = function (kind, id, x, y, landed) {
     const G = LD.GIFTS || {};
+    /* 缩圈乱斗：掉落点有一半概率落在圈外，想捡就得冒着中毒的风险出去 */
+    if (x == null && y == null && this.rule === "ring") {
+      const p = this.ringDropSpot(0.55); x = p.x; y = p.y;
+    }
     const g = {
       kind, id: id || this.randGiftId(kind),
-      x: x != null ? x : rand(70, C.W - 70),
-      y: y != null ? y : rand(C.H * 0.40, C.H - 60),
+      x: x != null ? x : rand(70, B.world.w - 70),
+      y: y != null ? y : rand(B.world.pt + 20, B.world.h - 60),
       t: landed ? (G.fallT || 2) : 0, landed: !!landed, born: this.t
     };
     this.gifts.push(g);
@@ -598,8 +1669,8 @@
   };
 
   B.trimGifts = function (kind, except) {
-    const G = LD.GIFTS || {};
-    const cap = kind === "ult" ? (G.maxUlt != null ? G.maxUlt : 2) : (G.maxSkill != null ? G.maxSkill : 3);
+    const cfg = this.giftCfg();
+    const cap = kind === "ult" ? cfg.maxUlt : cfg.maxSkill;
     const same = this.gifts.filter(g => g.kind === kind && g !== except);
     if (same.length <= cap) return;
     same.sort((a, b) => a.born - b.born);
@@ -611,77 +1682,23 @@
   };
 
   B.updateGifts = function (dt) {
-    const G = LD.GIFTS || {};
+    const G = this.giftCfg();
     // 计时刷落
-    this.giftT = (this.giftT == null ? 3 : this.giftT) - dt;
-    this.giftUltT = (this.giftUltT == null ? 8 : this.giftUltT) - dt;
-    if (this.giftT <= 0) { this.spawnGift("skill"); this.trimGifts("skill"); this.giftT = G.skillEvery != null ? G.skillEvery : 10; }
-    if (this.giftUltT <= 0) { this.spawnGift("ult"); this.trimGifts("ult"); this.giftUltT = G.ultEvery != null ? G.ultEvery : 20; }
-    // 1) 先清理失效 / 离开范围的待置换（技能与大招分别判定）
-    //    必须在拾取之前跑：否则站在新掉落物上时，同类型还挂着的那颗「已消失的旧掉落物」会
-    //    挡住新掉落物的挂起，而旧的在同一帧才被清掉 —— 表现为拾取失灵，要走出再走回来才恢复。
-    this.fighters.forEach(f => {
-      const pend = f.giftPending;
-      if (!pend) return;
-      ["skill", "ult"].forEach(pk => {
-        const p = pend[pk];
-        if (!p) return;
-        const g = p.g;
-        if (!g || this.gifts.indexOf(g) < 0) { pend[pk] = null; return; }
-        if (Math.hypot(f.x - g.x, f.y - g.y) > f.r + (G.pickR != null ? G.pickR : 30) + 26) pend[pk] = null;
-      });
-    });
-    // 2) 推进每颗掉落物：降落 + 拾取 / 挂待置换
-    //    （技能与大招各挂一个：两者用不同的按键，站在两个掉落物中间时不该互相顶掉）
+    this.giftT = (this.giftT == null ? G.firstSkill : this.giftT) - dt;
+    this.giftUltT = (this.giftUltT == null ? G.firstUlt : this.giftUltT) - dt;
+    if (this.giftT <= 0) { this.spawnGift("skill"); this.trimGifts("skill"); this.giftT = G.skillEvery; }
+    if (this.giftUltT <= 0) { this.spawnGift("ult"); this.trimGifts("ult"); this.giftUltT = G.ultEvery; }
+    /* v3.3：掉落物不再「碰到即装备」——走到旁边按 P 拾取（见 45_interact.js）。
+     * 这里只负责降落动画与过期提示。 */
     for (let i = this.gifts.length - 1; i >= 0; i--) {
       const g = this.gifts[i];
+      if (g.noPick > 0) g.noPick = Math.max(0, g.noPick - dt);
       if (!g.landed) {
         g.t += dt;
         if (g.t % 0.08 < dt) FX.trail(g.x + rand(-6, 6), g.y - 18 - (1 - g.t / (G.fallT || 2)) * 130, g.kind === "ult" ? "#fcd34d" : "#67e8f9", 4, 0.35);
         if (g.t >= (G.fallT || 2)) { g.landed = true; FX.ring(g.x, g.y, 40, g.kind === "ult" ? "rgba(252,211,77,.95)" : "rgba(103,232,249,.95)", 4, 0.45); }
-        continue;                            // 没落地不能拾取
-      }
-      for (const f of this.fighters) {
-        if (f.dead || f.kind !== "hero" || f.isClone) continue;
-        if (Math.hypot(f.x - g.x, f.y - g.y) > f.r + (G.pickR != null ? G.pickR : 30)) continue;
-        const pk = g.kind === "ult" ? "ult" : "skill";
-        const pend = f.giftPending || (f.giftPending = { skill: null, ult: null });
-        if (pend[pk] && pend[pk].g === g) continue;             // 已经在等按键置换
-        if (pk === "ult") {
-          if (!f.loadout.ult) this.equipGift(f, "ult", g);
-          else if (!pend.ult) pend.ult = { g, kind: "ult" };
-        } else {
-          if (!f.loadout.skill1) this.equipGift(f, "skill1", g);
-          else if (!f.loadout.skill2) this.equipGift(f, "skill2", g);
-          else if (!pend.skill) pend.skill = { g, kind: "skill" };
-        }
-        break;
       }
     }
-    // 置换倒计时（0.3s 延迟：按键瞬间先照常出手，这里只负责到点换装）
-    this.fighters.forEach(f => {
-      if (!f.giftSwap) return;
-      f.giftSwap.t -= dt;
-      if (f.giftSwap.t > 0) return;
-      const { slot, drop } = f.giftSwap;
-      f.giftSwap = null;
-      if (!drop || this.gifts.indexOf(drop) < 0) return;       // 掉落物已消失（超限被挤掉等）
-      const oldId = f.loadout[slot] || null;
-      const sk = LD.skill(drop.id);
-      f.loadout[slot] = drop.id;
-      f.cd[slot] = 0.5;                                        // 换上的技能给半秒保护 CD，防误触
-      f.slot[slot] = { on: false, phase: "", t: 0, d: {} };
-      const di = this.gifts.indexOf(drop);
-      if (di >= 0) this.gifts.splice(di, 1);
-      FX.ring(f.x, f.y - 26, 60, "#7fe6f7", 4, 0.4);
-      FX.float(f.x, f.y - 64, "装入 " + (sk ? sk.name : "?"), "#7fe6f7", 15);
-      // 被换下的技能留在原地（掉落物位置）
-      if (oldId) {
-        const oldSk = LD.skill(oldId);
-        this.spawnGift(oldSk && oldSk.kind === "ult" ? "ult" : "skill", oldId, drop.x, drop.y, true);
-        this.trimGifts(oldSk && oldSk.kind === "ult" ? "ult" : "skill");
-      }
-    });
   };
 
   B.equipGift = function (f, slot, g) {
@@ -691,9 +1708,10 @@
     f.loadout[slot] = g.id;
     f.cd[slot] = 0.5;
     f.slot[slot] = { on: false, phase: "", t: 0, d: {} };
+    if (f.skillGot) f.skillGot[slot] = this.t;
     FX.ring(f.x, f.y - 26, 54, "#7fe6f7", 4, 0.4);
     FX.burst(g.x, g.y - 14, 14, ["#7fe6f7", "#fff"], { speed: 180 });
-    const slotLab = { skill1: "K", skill2: "L", ult: "O" }[slot];
+    const slotLab = { skill1: "K", skill2: "L", ult: "U" }[slot];
     FX.float(f.x, f.y - 64, "获得 " + (sk ? sk.name : "?") + " → " + slotLab, "#7fe6f7", 15);
   };
 
@@ -1015,8 +2033,8 @@
         const from = { x: f.x, y: f.y };
         if (foe) {
           const a = Math.atan2(f.y - foe.y, f.x - foe.x);
-          f.x = clamp(foe.x + Math.cos(a) * 40, 40, C.W - 40);
-          f.y = clamp(foe.y + Math.sin(a) * 40, C.H * 0.30, C.H - 46);
+          f.x = clamp(foe.x + Math.cos(a) * 40, 40, B.world.w - 40);
+          f.y = clamp(foe.y + Math.sin(a) * 40, B.world.pt, B.world.h - 46);
           f.facing = { x: Math.cos(a + Math.PI), y: Math.sin(a + Math.PI) };
         }
         FX.burst(from.x, from.y - 26, 20, ["#f87171", "#fecaca"], { speed: 240 });
@@ -1040,8 +2058,8 @@
     start(f, slot, sk) {
       f.facing = aimAt(f, this);
       const a = Math.atan2(f.facing.y, f.facing.x) + Math.PI;
-      const ex = clamp(f.x + Math.cos(a) * sk.back, 40, C.W - 40);
-      const ey = clamp(f.y + Math.sin(a) * sk.back, C.H * 0.30, C.H - 46);
+      const ex = clamp(f.x + Math.cos(a) * sk.back, 40, B.world.w - 40);
+      const ey = clamp(f.y + Math.sin(a) * sk.back, B.world.pt, B.world.h - 46);
       const bx = f.x, by = f.y;
       f.x = ex; f.y = ey;
       f.invuln = Math.max(f.invuln, 0.24);
@@ -1086,8 +2104,8 @@
       const p = s.d.p, i = B.projs.indexOf(p);
       if (i >= 0) B.projs.splice(i, 1);
       const bx = f.x, by = f.y;
-      f.x = clamp(p.x, 40, C.W - 40);
-      f.y = clamp(p.y + 26, C.H * 0.32, C.H - 40);
+      f.x = clamp(p.x, 40, B.world.w - 40);
+      f.y = clamp(p.y + 26, B.world.pt, B.world.h - 40);
       f.invuln = Math.max(f.invuln, 0.12);
       FX.burst(bx, by - 26, 18, ["#c4b5fd", "#fff"], { speed: 220 });
       FX.ring(f.x, f.y - 26, 70, "rgba(167,139,250,.95)", 5, 0.35);
@@ -1187,8 +2205,24 @@
         if (o === f || o.dead || o.kind !== "hero" || B.sameTeam(f, o)) return;
         if (dist(f, o) > R + o.r) return;
         const a = Math.atan2(o.y - f.y, o.x - f.x);
-        o.x = clamp(f.x + Math.cos(a) * (f.r + o.r + 6), 40, C.W - 40);
-        o.y = clamp(f.y + Math.sin(a) * (f.r + o.r + 6), C.H * 0.32, C.H - 40);
+        const tx = clamp(f.x + Math.cos(a) * (f.r + o.r + 6), 40, B.world.w - 40);
+        const ty = clamp(f.y + Math.sin(a) * (f.r + o.r + 6), B.world.pt, B.world.h - 40);
+        /* v3.1：吸引路径被墙体截断 → 停在墙前并额外受 18 伤害 */
+        const blocked = (B.terrain && LD.Terrain.losHit(B.terrain, o.x, o.y - 20, tx, ty - 20, 0)) || B.hitWallAt(o, tx, ty);
+        if (blocked) {
+          /* 沿路径回退到最后一个不撞墙的点 */
+          let px = o.x, py = o.y;
+          for (let s2 = 1; s2 <= 12; s2++) {
+            const qx = o.x + (tx - o.x) * s2 / 12, qy = o.y + (ty - o.y) * s2 / 12;
+            if (B.hitWallAt(o, qx, qy)) break;
+            px = qx; py = qy;
+          }
+          o.x = px; o.y = py;
+          FX.float(o.x, o.y - 60, "撞墙 +" + (sk.wallDmg || 18), "#f87171", 15);
+          B.damage(f, o, sk.wallDmg || 18, { type: "skill", kb: 0, from: f });
+        } else {
+          o.x = tx; o.y = ty;
+        }
         o.slowT = Math.max(o.slowT || 0, sk.slow);
         B.damage(f, o, sk.dmg, { type: "skill", kb: 0, from: f });
         FX.burst(o.x, o.y - 26, 12, ["#67e8f9", "#fff"], { speed: 180 });
@@ -1207,7 +2241,7 @@
       B.fighters.forEach(o => {
         if (o === f || o.dead || o.kind !== "hero" || B.sameTeam(f, o)) return;
         if (dist(f, o) > R + o.r) return;
-        B.damage(f, o, sk.dmg, { type: "skill", kbDist: sk.kbDist || 400, from: f,
+        B.damage(f, o, sk.dmg, { type: "skill", kbDist: sk.kbDist || 400, wallHit: true, from: f,
           hitDir: Math.atan2(o.y - f.y, o.x - f.x) });
         FX.ring(o.x, o.y - 30, 60, "rgba(248,113,113,.85)", 5, 0.35);
       });
@@ -1366,6 +2400,7 @@
         B.damage(owner, f, f === owner ? selfDmg : dmg, { type: "skill", kb: 320, from: owner, hitDir: Math.atan2(f.y - 26 - y, f.x - x) });
       }
     }
+    if (B.terrain) LD.Terrain.blast(B.terrain, x, y, R, dmg * 0.9);
     B.ev.push(["x", x, y, R]);
   };
 
@@ -1437,6 +2472,382 @@
       if (s.phase !== "hookFly") return;
       const p = s.d.p;
       if (!p || B.projs.indexOf(p) < 0) B.endSlot(f, slot, sk.cd);   // 已命中 / 消失
+    }
+  };
+
+  /* ---- v3.1 僵尸突刺：向前小突进 + 沿途多段伤害 ---- */
+  IMPL.z_lunge = {
+    start(f, slot, sk) {
+      const s = f.slot[slot];
+      f.facing = aimAt(f, this);
+      s.on = true; s.phase = "lunge"; s.t = 0;
+      s.d = { sx: f.x, sy: f.y, dir: { x: f.facing.x, y: f.facing.y }, tickT: 0, hits: 0 };
+      f.atkAnim = (sk.dashT || 0.28) + 0.08; f.atkDur = (sk.dashT || 0.28) + 0.08;
+      FX.burst(f.x, f.y - 26, 10, ["#a3e635", "#4d7c0f"],
+        { speed: 180, dir: Math.atan2(-f.facing.y, -f.facing.x), spread: 1.1 });
+      FX.float(f.x, f.y - 62, "突刺！", "#a3e635", 14);
+    },
+    update(f, slot, sk, dt) {
+      const s = f.slot[slot], d = s.d;
+      if (s.phase !== "lunge") return;
+      s.t += dt;
+      const p = Math.min(1, s.t / (sk.dashT || 0.28));
+      f.x = d.sx + d.dir.x * (sk.dash || 130) * p;
+      f.y = d.sy + d.dir.y * (sk.dash || 130) * p;
+      FX.trail(f.x, f.y, "#a3e635", 6, 0.24);
+      /* 多段：每 gap 秒结算一段（最多 hits 段），空挥不消耗段数，段内命中所有贴身敌人 */
+      d.tickT -= dt;
+      if (d.tickT <= 0 && d.hits < (sk.hits || 3)) {
+        d.tickT = sk.gap || 0.09;
+        let hitAny = false;
+        for (const o of B.fighters) {
+          if (o === f || o.dead || B.sameTeam(f, o)) continue;
+          if (dist(f, o) > (sk.reach || 46) + o.r) continue;
+          hitAny = true;
+          B.damage(f, o, sk.dmg, { type: "skill", kb: sk.kb || 55, from: f,
+            hitDir: Math.atan2(o.y - f.y, o.x - f.x) });
+        }
+        if (hitAny) d.hits++;
+      }
+      if (p >= 1) B.endSlot(f, slot, sk.cd);
+    }
+  };
+
+  /* ---- v3.1 僵尸撕咬：前摇 0.18s，咬住前方敌人 → 少量伤害 + 定身 2s ---- */
+  IMPL.z_bite = {
+    start(f, slot, sk) {
+      const s = f.slot[slot];
+      f.facing = aimAt(f, this);
+      s.on = true; s.phase = "biteWind"; s.t = 0;
+      f.atkAnim = (sk.windup || 0.18) + 0.22; f.atkDur = (sk.windup || 0.18) + 0.22;
+      const a = Math.atan2(f.facing.y, f.facing.x);
+      FX.ring(f.x + Math.cos(a) * 30, f.y - 26 + Math.sin(a) * 16, 26, "rgba(163,230,53,.9)", 3, 0.16);
+    },
+    update(f, slot, sk, dt) {
+      const s = f.slot[slot];
+      if (s.phase !== "biteWind") return;
+      s.t += dt;
+      if (s.t < (sk.windup || 0.18)) return;
+      s.phase = "biteDone";
+      const a = Math.atan2(f.facing.y, f.facing.x);
+      const reach = sk.range || 82, half = sk.half || 1.0;
+      let bit = false;
+      for (const o of B.fighters) {
+        if (o === f || o.dead || B.sameTeam(f, o)) continue;
+        const dx = o.x - f.x, dy = o.y - f.y;
+        if (Math.hypot(dx, dy) > reach + o.r) continue;
+        const rel = Math.atan2(Math.sin(Math.atan2(dy, dx) - a), Math.cos(Math.atan2(dy, dx) - a));
+        if (Math.abs(rel) > half) continue;
+        bit = true;
+        B.damage(f, o, sk.dmg, { type: "skill", kb: 20, from: f, hitDir: a });
+        o.root = Math.max(o.root || 0, sk.root || 2);
+        FX.float(o.x, o.y - 62, "被咬住！定身 " + (sk.root || 2) + "s", "#a3e635", 15);
+        FX.burst(o.x, o.y - 26, 8, ["#a3e635", "#ecfccb"], { speed: 160, dir: a, spread: 0.8 });
+      }
+      if (bit) FX.shake(4);
+      B.endSlot(f, slot, sk.cd);
+    }
+  };
+
+  /* ---- 钢链：向前 350 甩出锁链，近末端命中更痛 ---- */
+  IMPL.chain = {
+    start(f, slot, sk) {
+      const s = f.slot[slot]; s.on = true; s.phase = "chainCharge"; s.t = 0;
+      f.facing = aimAt(f, this);
+      FX.float(f.x, f.y - 60, "蓄力中…", "#cbd5e1", 13);
+      FX.ring(f.x, f.y - 26, 26, "rgba(203,213,225,.9)", 3, 0.35);
+    },
+    update(f, slot, sk, dt) {
+      const s = f.slot[slot];
+      if (s.phase !== "chainCharge") return;
+      s.t += dt;
+      /* 前摇期间手上甩链的蓄势轨迹 */
+      if (s.t < (sk.charge || 0.4)) {
+        const a0 = Math.atan2(f.facing.y, f.facing.x);
+        FX.trail(f.x + Math.cos(a0) * 20 + rand(-6, 6), f.y - 26 + Math.sin(a0) * 10 + rand(-6, 6),
+          "#cbd5e1", 3, 0.18);
+        return;
+      }
+      f.facing = aimAt(f, this);
+      const a = Math.atan2(f.facing.y, f.facing.x);
+      const range = sk.range || 250;
+      const ux = Math.cos(a), uy = Math.sin(a);
+      const ox = f.x, oy = f.y - 26;
+      const ex = ox + ux * range, ey = oy + uy * range;
+      /* 锁链表现：一串小环节 + 末端铁钩 */
+      for (let i = 0; i <= 22; i++) {
+        const t2 = i / 22;
+        FX.trail(ox + ux * range * t2 + Math.sin(i * 1.7) * 1.5,
+                 oy + uy * range * t2 + Math.cos(i * 1.7) * 1.5, "#cbd5e1", 4.4, 0.34);
+      }
+      FX.burst(ex, ey, 10, ["#e2e8f0", "#fff"], { speed: 200, dir: a, spread: 0.7 });
+      FX.shake(4);
+      const halfW = sk.halfW || 26;
+      B.fighters.forEach(o => {
+        if (o === f || o.dead || B.sameTeam(f, o)) return;
+        /* 点到线段距离 */
+        const px = o.x - ox, py = (o.y - 26) - oy;
+        let t2 = (px * ux + py * uy) / range;
+        t2 = Math.max(0, Math.min(1, t2));
+        const cx = ox + ux * range * t2, cy = oy + uy * range * t2;
+        if (Math.hypot(o.x - cx, (o.y - 26) - cy) > halfW + o.r) return;
+        const far = t2 >= (sk.farFrom || 0.66);
+        B.damage(f, o, far ? (sk.farDmg || 22) : sk.dmg, {
+          type: "skill", kb: 120, from: f, hitDir: a
+        });
+        FX.float(o.x, o.y - 60, far ? "锁链末端！" : "锁链命中", far ? "#fca5a5" : "#e2e8f0", far ? 16 : 13);
+        FX.burst(o.x, o.y - 26, 10, ["#cbd5e1", "#fff"], { speed: 220, dir: a });
+      });
+      f.atkAnim = 0.26; f.atkDur = 0.26;
+      B.endSlot(f, slot, sk.cd);
+    }
+  };
+
+  /* ---- 运货：蓄力 1 秒 → 召唤木箱并扔出 ---- */
+  IMPL.cargo = {
+    start(f, slot, sk) {
+      const s = f.slot[slot]; s.on = true; s.phase = "cargoCharge"; s.t = 0;
+      f.facing = aimAt(f, this);
+      FX.float(f.x, f.y - 60, "蓄力中…", "#fbbf24", 13);
+    },
+    update(f, slot, sk, dt) {
+      const s = f.slot[slot];
+      if (s.phase !== "cargoCharge") return;
+      s.t += dt;
+      if (s.t < (sk.charge || 1)) return;
+      f.facing = aimAt(f, this);
+      const a = Math.atan2(f.facing.y, f.facing.x);
+      if (!B.terrain) { B.endSlot(f, slot, sk.cd); return; }
+      /* 上一个木箱自动销毁 */
+      if (f._cargoPrev && !f._cargoPrev.dead && B.terrain.props.indexOf(f._cargoPrev) >= 0) {
+        const pr = f._cargoPrev;
+        pr.dead = true;
+        FX.burst(pr.x, pr.y - 14, 14, ["#9a7444", "#c39a62"], { speed: 200 });
+      }
+      const size = 40;
+      const cx = f.x + Math.cos(a) * 42, cy = f.y - 26 + Math.sin(a) * 42 + 12;
+      const mat = (LD.TERRAIN.mats.breakable || []).find(m => m.id === "crate_wood") || {};
+      const o = {
+        uid: 9000 + (B._crateId = (B._crateId || 0) + 1),
+        kind: "breakable", mat: "crate_wood", shape: "square",
+        cw: 1, ch: 1, w: size, h: size, x: cx, y: cy, ox: cx, oy: cy,
+        elev: mat.elev || 22, mass: 1.1, hp: sk.crateHp || 20, maxHp: sk.crateHp || 20,
+        dead: false, flash: 0, vx: Math.cos(a) * (sk.speed || 620), vy: Math.sin(a) * (sk.speed || 620),
+        free: false, variant: 0, blockMove: true, blockProj: true, soft: false,
+        cargo: true, landed: false, runtime: true, owner: f, ownerSide: f.side,
+        hitDmg: sk.dmg || 25
+      };
+      B.terrain.props.push(o);
+      f._cargoPrev = o;
+      FX.burst(cx, cy - 10, 14, ["#9a7444", "#c39a62", "#fff"], { speed: 200, dir: a });
+      FX.float(f.x, f.y - 62, "运货！", "#fbbf24", 15);
+      f.atkAnim = 0.3; f.atkDur = 0.3;
+      B.endSlot(f, slot, sk.cd);
+    }
+  };
+
+  /* ---- 咸鱼：命中抽能（抽多少回多少） ---- */
+  IMPL.fish = {
+    start(f, slot, sk) {
+      const s = f.slot[slot]; s.on = true; s.phase = "fish"; s.t = 0;
+      f.facing = aimAt(f, this);
+      const a = Math.atan2(f.facing.y, f.facing.x);
+      const p = B.spawnProj({
+        x: f.x + Math.cos(a) * 24, y: f.y - 26 + Math.sin(a) * 14,
+        vx: Math.cos(a) * sk.proj.speed, vy: Math.sin(a) * sk.proj.speed,
+        r: sk.proj.r, dmg: sk.dmg, life: sk.proj.life, maxLife: sk.proj.life + 2, owner: f,
+        color: "#93c5fd", core: "#eff6ff", type: "fish", kindTag: "skill", trail: true, spin: 1,
+        data: { drain: sk.drain || 20 }
+      });
+      s.d.p = p;
+      f.atkAnim = 0.24; f.atkDur = 0.24;
+    },
+    update(f, slot, sk, dt) {
+      const s = f.slot[slot];
+      if (s.phase !== "fish") return;
+      const p = s.d.p;
+      if (!p || B.projs.indexOf(p) < 0) B.endSlot(f, slot, sk.cd);
+    }
+  };
+
+  /* ---- 突击枪：600 距离 8 连发 ---- */
+  IMPL.assault = {
+    start(f, slot, sk) {
+      const s = f.slot[slot]; s.on = true; s.phase = "assault"; s.t = 0; s.n = 0;
+      f.facing = aimAt(f, this);
+      f.atkAnim = 0.5; f.atkDur = 0.5;
+    },
+    update(f, slot, sk, dt) {
+      const s = f.slot[slot];
+      if (s.phase !== "assault") return;
+      s.t += dt;
+      const gap = sk.gap || 0.06;
+      while (s.n < (sk.n || 8) && s.t >= s.n * gap) {
+        const a = Math.atan2(f.facing.y, f.facing.x);
+        const jitter = (Math.random() - 0.5) * 0.05;
+        const life = (sk.range || 600) / (sk.speed || 900);
+        B.spawnProj({
+          x: f.x + Math.cos(a) * 26, y: f.y - 26 + Math.sin(a) * 14,
+          vx: Math.cos(a + jitter) * sk.speed, vy: Math.sin(a + jitter) * sk.speed,
+          r: 6, dmg: sk.dmg, life: life, maxLife: life + 1, owner: f,
+          color: "#fde68a", core: "#fffbeb", type: "bullet", kindTag: "skill", trail: true, data: {}
+        });
+        FX.burst(f.x + Math.cos(a) * 30, f.y - 26 + Math.sin(a) * 14, 4, ["#fde68a", "#fff"], { speed: 130, dir: a, spread: 0.4 });
+        FX.shake(1.2);
+        s.n++;
+      }
+      if (s.n >= (sk.n || 8) && s.t >= (sk.n || 8) * gap + 0.12) B.endSlot(f, slot, sk.cd);
+    }
+  };
+
+  /* ---- 大招：爆裂之火（外圈预警 → 圈内持续降火球 2 秒，中心安全区） ---- */
+  IMPL.blaze = {
+    start(f, slot, sk) {
+      const s = f.slot[slot]; s.on = true; s.phase = "blazeWarn"; s.t = 0;
+      s.x = f.x; s.y = f.y; s.d.n = 0; s.d.acc = 0;
+      B.zones.push({ type: "blaze", x: f.x, y: f.y - 8, r: sk.outer || 150,
+        life: 0, max: (sk.charge || 0.6) + 0.1, warn: sk.charge || 0.6,
+        inner: sk.inner || 55, owner: f });
+      FX.ring(f.x, f.y - 8, sk.outer || 150, "rgba(251,146,60,.95)", 6, 0.5);
+      LD.Cine.start(f, sk.name, "", "#fb923c");
+    },
+    update(f, slot, sk, dt) {
+      const s = f.slot[slot];
+      if (s.phase !== "blazeWarn" && s.phase !== "blaze") return;
+      s.t += dt;
+      if (s.phase === "blazeWarn") {
+        if (s.t < (sk.charge || 0.6)) return;
+        s.phase = "blaze"; s.t = 0;
+        FX.shake(10); FX.flash(0.15, "251,146,60");
+        return;
+      }
+      /* 落火球：每 gap 秒一颗，七成瞄准对手当前位置（给 0.28s 预警逼他跑位） */
+      s.d.acc += dt;
+      const outer = sk.outer || 150, inner = sk.inner || 55;
+      const dmin = inner + 33, dmax = outer - 24;      // 保证中心安全区真的打不到
+      if (s.d.n < (sk.drops || 12) && s.d.acc >= (sk.gap || 0.16)) {
+        s.d.acc = 0; s.d.n++;
+        const foe = B.foeOf(f);
+        const cx = s.x, cy = s.y - 8;
+        let px, py;
+        if (foe && !foe.dead && Math.random() < 0.7) { px = foe.x; py = foe.y; }
+        else { const a2 = Math.random() * TAU, dd = rand(dmin, dmax);
+               px = cx + Math.cos(a2) * dd; py = cy + Math.sin(a2) * dd * 0.62; }
+        /* 收进圆环 */
+        const dx = px - cx, dy = py - cy, d = Math.hypot(dx, dy) || 1;
+        const dc = Math.max(dmin, Math.min(dmax, d));
+        px = cx + dx / d * dc; py = cy + dy / d * dc;
+        B.zones.push({ type: "pillar", x: px, y: py, r: sk.ballR || 46, life: 0, max: 0.45,
+          dmg: sk.dmg, kb: 130, slow: sk.slow, dmgType: "ult",
+          owner: f, hit: false, warn: sk.warn || 0.28 });
+        FX.mark(px, py, sk.ballR || 46, "rgba(251,146,60,.95)", (sk.warn || 0.28) + 0.55, "circle");
+        FX.shake(4);
+      }
+      if (s.d.n >= (sk.drops || 12) &&
+          s.t > (sk.gap || 0.16) * (sk.drops || 12) + (sk.warn || 0.28) + 0.35) {
+        B.endSlot(f, slot, sk.cd);
+      }
+    }
+  };
+
+  /* ---- 大招：流水碎岩拳（五连拳 + 向前推进 200，撞墙不中断、贴墙打完） ---- */
+  IMPL.rockFist = {
+    start(f, slot, sk) {
+      const s = f.slot[slot]; s.on = true; s.phase = "fistCharge"; s.t = 0; s.n = 0;
+      f.facing = aimAt(f, this);
+      FX.ring(f.x, f.y - 26, 46, "rgba(96,165,250,.9)", 5, 0.4);
+      /* 大招演出；预支蓄力时间，演出一结束立刻开拳 */
+      LD.Cine.start(f, sk.name, "", "#60a5fa");
+      s.t = sk.charge || 0.3;
+    },
+    update(f, slot, sk, dt) {
+      const s = f.slot[slot];
+      const charge = sk.charge || 0.3;
+      if (s.phase === "fistCharge") {
+        s.t += dt;
+        if (s.t >= charge) { s.phase = "fist"; s.t = 0; s.n = 0; s.trv = 0; f.invuln = Math.max(f.invuln, 0.5); }
+        return;
+      }
+      if (s.phase !== "fist") return;
+      s.t += dt;
+      const total = sk.punches || 5;
+      const dur = 0.72;
+      const per = dur / total;
+      const step = (sk.move || 200) / total;
+      while (s.n < total && s.t >= s.n * per) {
+        const a = Math.atan2(f.facing.y, f.facing.x);
+        /* 每拳向前推进；总推进距离仍然封顶在 sk.move，撞墙不中断，改为贴着墙滑行。
+           位移拆成 4 个小步逐段判定，避免一拳 40 距离直接穿进墙体。 */
+        const room = Math.max(0, (sk.move || 200) - (s.trv || 0));
+        const st = Math.min(step, room);
+        if (st > 0.01) {
+          const SUB = 4, part = st / SUB;
+          let budget = st;
+          for (let k = 0; k < SUB && budget > 0.01; k++) {
+            const dx = Math.cos(a) * part, dy = Math.sin(a) * part;
+            let mv = 0;
+            if (!B.hitWallAt(f, f.x + dx, f.y + dy)) { f.x += dx; f.y += dy; mv = part; }
+            else {
+              /* 正面被墙挡住时，保留没被挡住的那个分量，沿墙继续蹭过去 */
+              const keepX = Math.abs(dx) >= Math.abs(dy);
+              const tryX = () => { if (Math.abs(dx) > 0.01 && !B.hitWallAt(f, f.x + dx, f.y)) { f.x += dx; mv = Math.abs(dx); return true; } return false; };
+              const tryY = () => { if (Math.abs(dy) > 0.01 && !B.hitWallAt(f, f.x, f.y + dy)) { f.y += dy; mv = Math.abs(dy); return true; } return false; };
+              if (keepX) { if (!tryX()) tryY(); } else { if (!tryY()) tryX(); }
+            }
+            s.trv = (s.trv || 0) + mv;
+            budget -= part;
+            if (mv <= 0.01) break;              // 彻底顶死：这一拳不再白费力气，后面几拳照常打
+          }
+        }
+        FX.burst(f.x + Math.cos(a) * 34, f.y - 26 + Math.sin(a) * 18, 8, ["#60a5fa", "#bfdbfe", "#fff"], { speed: 240, dir: a, spread: 0.8 });
+        FX.ring(f.x + Math.cos(a) * 40, f.y - 26 + Math.sin(a) * 18, 46, "rgba(147,197,253,.85)", 4, 0.28);
+        B.fighters.forEach(o => {
+          if (o === f || o.dead || B.sameTeam(f, o)) return;
+          const dx = o.x - f.x, dy = (o.y - 26) - (f.y - 26);
+          const d = Math.hypot(dx, dy);
+          if (d > (sk.reach || 86) + o.r) return;
+          const da = Math.abs(((Math.atan2(dy, dx) - a + Math.PI * 3) % TAU) - Math.PI);
+          if (da > 1.0) return;
+          B.damage(f, o, sk.dmg, { type: "ult", stun: sk.stun || 0.16, kb: sk.kb || 95, from: f, hitDir: a });
+        });
+        f.atkAnim = 0.12; f.atkDur = 0.12;
+        FX.shake(3);
+        s.n++;
+      }
+      if (s.n >= total && s.t >= dur + 0.12) B.endSlot(f, slot, sk.cd);
+    }
+  };
+
+  /* ---- 大招：黄金弹力炮（弹射子弹，见 updateProjs 的 gold 分支） ---- */
+  IMPL.goldCannon = {
+    start(f, slot, sk) {
+      const s = f.slot[slot]; s.on = true; s.phase = "goldReady"; s.t = 0;
+      f.facing = aimAt(f, this);
+      /* 先放大招演出；演出期间战斗暂停，出弹挪到 update 里（演出一结束立刻开炮） */
+      LD.Cine.start(f, sk.name, "", "#fcd34d");
+    },
+    update(f, slot, sk, dt) {
+      const s = f.slot[slot];
+      if (s.phase === "goldReady") {
+        s.phase = "gold";
+        const a = Math.atan2(f.facing.y, f.facing.x);
+        const p = B.spawnProj({
+          x: f.x + Math.cos(a) * 26, y: f.y - 26 + Math.sin(a) * 14,
+          vx: Math.cos(a) * sk.speed, vy: Math.sin(a) * sk.speed,
+          r: sk.r || 8, dmg: sk.dmg, life: 3.0, maxLife: 3.0, owner: f,
+          color: "#fcd34d", core: "#fffbeb", type: "gold", kindTag: "ult",
+          passWall: false, trail: true,
+          data: { left: sk.dist || 2000, stun: sk.stun || 0.25, bounces: 0 }
+        });
+        s.d.p = p;
+        f.atkAnim = 0.3; f.atkDur = 0.3;
+        FX.flash(0.1, "252,211,77");
+        FX.shake(5);
+        return;
+      }
+      if (s.phase !== "gold") return;
+      const p = s.d.p;
+      if (!p || B.projs.indexOf(p) < 0) B.endSlot(f, slot, sk.cd);
     }
   };
 
@@ -1536,6 +2947,15 @@
       (f.posHist || []).forEach(h => {
         if (!bestPos || Math.abs(h.t - target) < Math.abs(bestPos.t - target)) bestPos = h;
       });
+      /* v3.1：技能 CD 一并回到 3 秒前 */
+      let bestCd = null;
+      (f.cdHist || []).forEach(h => {
+        if (!bestCd || Math.abs(h.t - target) < Math.abs(bestCd.t - target)) bestCd = h;
+      });
+      if (bestCd) {
+        f.cd.basic = bestCd.cd.basic; f.cd.skill1 = bestCd.cd.skill1;
+        f.cd.skill2 = bestCd.cd.skill2; f.cd.ult = bestCd.cd.ult;
+      }
       const old = best ? best.hp : f.hp;
       const healed = Math.round(old - f.hp);
       f.hp = Math.min(f.maxHp, Math.max(f.hp, old));
@@ -1549,6 +2969,7 @@
       FX.ring(f.x, f.y - 26, 110, "rgba(251,191,36,.95)", 7, 0.6);
       FX.burst(f.x, f.y - 26, 26, ["#fbbf24", "#fff7d6"], { speed: 260 });
       FX.float(f.x, f.y - 62, (healed > 0 ? "+" : "") + healed, "#fbbf24", 20);
+      FX.float(f.x, f.y - 78, "冷却已回溯", "#fde68a", 13);
       B.endSlot(f, slot, sk.cd);
     }
   };
@@ -1587,7 +3008,9 @@
       if (s.phase !== "kingMark") return false;
       s.phase = "kingRise"; s.t = 0;
       f.kingMark = { x: s.d.mx, y: s.d.my, global: true };   // 全员可见
-      f.invuln = Math.max(f.invuln, sk.rise + 0.3);
+      /* v2.7：飞起蓄力期间不再无敌——可以被伤害，但伤害不会打断大招（落地结算照常）。
+       * 以前这里是 invuln = rise + 0.3，等于白送一个无敌位移。 */
+      f.kingVuln = true;
       LD.Cine.start(f, sk.name, "", "#fbbf24");
       FX.ring(f.x, f.y - 26, 90, "rgba(251,191,36,.9)", 6, 0.5);
       FX.burst(f.x, f.y - 26, 24, ["#fbbf24", "#fff"], { speed: 280 });
@@ -1644,8 +3067,8 @@
       FX.burst(f.x, f.y - 26, 32, ["#a78bfa", "#334155", "#fff"], { speed: 300 });
       FX.shake(8);
       const c = B.mkHero(2, {
-        x: clamp(f.x + rand(-70, 70), 60, C.W - 60),
-        y: clamp(f.y + rand(-50, 50), C.H * 0.36, C.H - 50),
+        x: clamp(f.x + rand(-70, 70), 60, B.world.w - 60),
+        y: clamp(f.y + rand(-50, 50), B.world.pt + 16, B.world.h - 50),
         look: f.look, name: f.name
       });
       c.isClone = true;
@@ -1669,8 +3092,8 @@
       if (foe) {
         const ox = f.x, oy = f.y;
         const a = Math.atan2(f.y - foe.y, f.x - foe.x) || 0;
-        f.x = clamp(foe.x + Math.cos(a) * (foe.r + f.r + 14), 40, C.W - 40);
-        f.y = clamp(foe.y + Math.sin(a) * (foe.r + f.r + 14), C.H * 0.32 + 10, C.H - 44);
+        f.x = clamp(foe.x + Math.cos(a) * (foe.r + f.r + 14), 40, B.world.w - 40);
+        f.y = clamp(foe.y + Math.sin(a) * (foe.r + f.r + 14), B.world.pt + 10, B.world.h - 44);
         const dx = foe.x - f.x, dy = foe.y - f.y, dd = Math.hypot(dx, dy) || 1;
         f.facing = { x: dx / dd, y: dy / dd };
         FX.burst(ox, oy - 26, 18, ["#a78bfa", "#334155"], { speed: 240 });
@@ -1715,7 +3138,9 @@
         type: "shuriken", x: f.x, y: f.y - 26,
         vx: Math.cos(a) * sk.speed, vy: Math.sin(a) * sk.speed,
         r: sk.r, life: 0, max: sk.life, dmg: sk.dmg, tick: sk.tick,
-        pull: sk.pull, pullR: sk.pullR, owner: f, hits: {}, color: "#38bdf8"
+        pull: sk.pull, pullR: sk.pullR, owner: f, hits: {}, color: "#38bdf8",
+        /* v2.7：飞出 boomDist 距离后引爆一次中范围爆炸（或飞满 life 到点自爆） */
+        dist: 0, boomDist: sk.boomDist || 520, boomR: sk.boomR || 150, boomDmg: sk.boomDmg || 25, boomed: false
       });
       FX.shake(10);
       B.endSlot(f, slot, sk.cd * (f.rateM || 1));
@@ -1724,6 +3149,21 @@
 
   /* ---- 勇者版螺旋手里剑（大招商店）：与大招 IMPL 共用实现，数值走 skills.shuriken ---- */
   IMPL.shuriken = IMPL.n_ult;
+
+  /* v2.7 螺旋手里剑二段：飞出设定距离后的中范围爆炸（额外伤害 + 弹开） */
+  B.shurikenBoom = function (z) {
+    const R = z.boomR || 150, dmg = z.boomDmg || 25;
+    FX.ring(z.x, z.y, R, "rgba(56,189,248,.95)", 9, 0.55);
+    FX.burst(z.x, z.y, 34, ["#38bdf8", "#e0faff", "#fff"], { speed: 340 });
+    FX.shake(12); FX.flash(0.16, "120,200,255");
+    for (const f of this.fighters) {
+      if (f.dead || f.kind !== "hero" || f === z.owner || this.sameTeam(z.owner, f)) continue;
+      if (Math.hypot(f.x - z.x, (f.y - 26) - z.y) <= R + f.r) {
+        this.damage(z.owner, f, dmg, { type: "ult", kb: 320, from: z.owner,
+          hitDir: Math.atan2(f.y - z.y, f.x - z.x) });
+      }
+    }
+  };
 
   /* ---- 快枪手：快枪（1s CD 手枪普攻，全程持续） ----
    * 不能直接复用 IMPL.pistol：手枪读的是 sk.proj.*，而 BOSS 的普攻配置是扁平的
@@ -1817,6 +3257,359 @@
         FX.ring(f.x, f.y - 26, 60, "rgba(148,163,184,.9)", 4, 0.4);
         B.endSlot(f, slot, sk.cd * (f.rateM || 1));
       }
+    }
+  };
+
+  /* ==================== v2.6 新 BOSS 技能实现 ==================== */
+
+  /* ---- 机械蜂后：尾针 / 孵化 / 蜂群冲锋 / 蜂群倾巢 ---- */
+  IMPL.b_needle = {
+    start(f, slot, sk) {
+      const pj = sk.proj || sk;
+      f.atkAnim = 0.22; f.atkDur = 0.22;
+      f.facing = aimAt(f, this);
+      const a = Math.atan2(f.facing.y, f.facing.x);
+      const v = pj.speed || 640;
+      B.spawnProj({
+        x: f.x + Math.cos(a) * 22, y: f.y - 26 + Math.sin(a) * 10,
+        vx: Math.cos(a) * v, vy: Math.sin(a) * v,
+        r: pj.r || 7, dmg: sk.dmg, life: pj.life || 2.0, owner: f,
+        color: "#a3e635", core: "#f7fee7", type: "bullet", kindTag: "basic", basic: true, trail: true
+      });
+      FX.burst(f.x + Math.cos(a) * 24, f.y - 26, 6, "#a3e635", { speed: 170, dir: a, spread: 0.4 });
+      B.endSlot(f, slot, sk.cd * (f.rateM || 1));
+    }
+  };
+  IMPL.b_hatch = {
+    start(f, slot, sk) {
+      f.atkAnim = 0.35; f.atkDur = 0.35;
+      const n = sk.n || 2;
+      const alive = B.fighters.filter(x => x.kind === "minion" && x.owner === f && !x.dead).length;
+      for (let i = 0; i < n && alive + i < 6; i++) {
+        const a = rand(0, TAU);
+        B.spawnMinion("beeDrone", f.x + Math.cos(a) * 42, f.y + Math.sin(a) * 30, f);
+      }
+      FX.ring(f.x, f.y - 26, 80, "rgba(163,230,53,.95)", 5, 0.45);
+      FX.float(f.x, f.y - 78, "孵化！", "#a3e635", 16);
+      B.endSlot(f, slot, sk.cd * (f.rateM || 1));
+    }
+  };
+  IMPL.b_sweep = {
+    start(f, slot, sk) {
+      const s = f.slot[slot]; s.on = true; s.phase = "beeWind"; s.t = 0;
+      s.d.n = 0; s.d.acc = 0;
+      f.facing = aimAt(f, this);
+      f.root = Math.max(f.root, (sk.windup || 0.35) + (sk.hits || 3) * (sk.gap || 0.16) + 0.15);
+    },
+    update(f, slot, sk, dt) {
+      const s = f.slot[slot];
+      if (s.phase === "beeWind") {
+        s.t += dt;
+        FX.trail(f.x + rand(-20, 20), f.y - 26 + rand(-26, 10), "#fbbf24", 6, 0.3);
+        if (s.t >= (sk.windup || 0.35)) { s.phase = "beeSlash"; s.t = 0; s.d.acc = 0; }
+      } else if (s.phase === "beeSlash") {
+        s.d.acc += dt;
+        if (s.d.n < sk.hits && s.d.acc >= (sk.gap || 0.16)) {
+          s.d.acc = 0; s.d.n++;
+          f.atkAnim = 0.2; f.atkDur = 0.2;
+          f.facing = aimAt(f, this);
+          B.melee(f, { reach: sk.reach || 110, half: 1.3, dmg: sk.dmg, type: "skill", kb: 170 });
+          arcFX(f, "#fbbf24", 100);
+          FX.shake(5);
+          if (s.d.n >= sk.hits) B.endSlot(f, slot, sk.cd * (f.rateM || 1));
+        }
+      }
+    }
+  };
+  IMPL.b_swarm = {
+    start(f, slot, sk) {
+      LD.Cine.start(f, sk.name, "", "#a3e635");
+      const foe = B.foeOf(f);
+      const cx = foe ? foe.x : f.x, cy = foe ? foe.y : f.y;
+      const n = sk.n || 5;
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * TAU + rand(-0.3, 0.3);
+        const rr2 = rand(60, 130);
+        B.spawnMinion("beeDrone",
+          clamp(cx + Math.cos(a) * rr2, 40, B.world.w - 40),
+          clamp(cy + Math.sin(a) * rr2, B.world.pt, B.world.h - 40), f);
+      }
+      FX.shake(10); FX.flash(0.2, "163,230,53");
+      B.endSlot(f, slot, sk.cd * (f.rateM || 1));
+    }
+  };
+
+  /* ---- 霜甲巨像：冰锥 / 霜压 / 寒霜领域 / 绝对零度 ---- */
+  IMPL.f_cone = {
+    start(f, slot, sk) {
+      f.atkAnim = 0.28; f.atkDur = 0.28;
+      f.facing = aimAt(f, this);
+      const a = Math.atan2(f.facing.y, f.facing.x);
+      B.spawnProj({
+        x: f.x + Math.cos(a) * 26, y: f.y - 30 + Math.sin(a) * 10,
+        vx: Math.cos(a) * (sk.speed || 380), vy: Math.sin(a) * (sk.speed || 380),
+        r: sk.r || 12, dmg: sk.dmg, life: sk.life || 2.6, owner: f,
+        color: "#7dd3fc", core: "#f0f9ff", type: "icicle", kindTag: "basic", basic: true, trail: true
+      });
+      FX.burst(f.x + Math.cos(a) * 28, f.y - 30, 7, "#bae6fd", { speed: 160, dir: a, spread: 0.4 });
+      B.endSlot(f, slot, sk.cd * (f.rateM || 1));
+    }
+  };
+  IMPL.f_quake = {
+    start(f, slot, sk) {
+      const s = f.slot[slot]; s.on = true; s.phase = "quakeCast"; s.t = 0;
+      B.zones.push({
+        type: "quake", x: f.x, y: f.y, r: sk.r || 150, warn: sk.warn || 0.7,
+        life: 0, max: 0.3, dmg: sk.dmg, owner: f, hits: {}
+      });
+      B.endSlot(f, slot, sk.cd * (f.rateM || 1));
+    }
+  };
+  IMPL.f_field = {
+    start(f, slot, sk) {
+      const s = f.slot[slot]; s.on = true; s.phase = "fieldCast"; s.t = 0;
+      B.zones.push({
+        type: "frost", x: f.x, y: f.y, r: sk.r || 175,
+        life: 0, max: sk.dur || 6, owner: f, hits: {},
+        dmg: sk.dmg || 3, tick: sk.tick || 0.5, fromField: true
+      });
+      FX.ring(f.x, f.y - 20, sk.r || 175, "rgba(125,211,252,.9)", 6, 0.6);
+      FX.float(f.x, f.y - 84, "寒霜领域", "#7dd3fc", 16);
+      B.endSlot(f, slot, sk.cd * (f.rateM || 1));
+    }
+  };
+  IMPL.f_zero = {
+    start(f, slot, sk) {
+      const s = f.slot[slot]; s.on = true; s.phase = "zeroCast"; s.t = 0;
+      s.d.warn = sk.warn || 2.6;
+      LD.Cine.start(f, sk.name, "", "#7dd3fc");
+      B.zones.push({
+        type: "zero", x: f.x, y: f.y, r: sk.safeR || 210, warn: sk.warn || 2.6,
+        life: 0, max: 0.4, dmg: sk.dmg, stun: sk.stun || 1.5, owner: f, hits: {}
+      });
+      B.endSlot(f, slot, sk.cd * (f.rateM || 1));
+    }
+  };
+
+  /* ---- 双子剑客：交替突刺 / 交叉突进 / 合璧斩 ---- */
+  IMPL.t_slash = {
+    start(f, slot, sk) {
+      f.atkAnim = 0.22; f.atkDur = 0.26;
+      f.facing = aimAt(f, this);
+      B.melee(f, { reach: 78, half: 1.2, dmg: sk.dmg, type: "basic", kb: 120, basic: true });
+      arcFX(f, "#cbd5e1", 78);
+      B.endSlot(f, slot, sk.cd * (f.rateM || 1));
+    }
+  };
+  IMPL.t_cross = {
+    start(f, slot, sk) {
+      const s = f.slot[slot]; s.on = true; s.phase = "twinWind"; s.t = 0;
+      const foe = B.foeOf(f);
+      if (foe) {
+        const a = Math.atan2(f.y - foe.y, f.x - foe.x) || 0;
+        f.x = clamp(foe.x + Math.cos(a) * (foe.r + f.r + 12), 40, B.world.w - 40);
+        f.y = clamp(foe.y + Math.sin(a) * (foe.r + f.r + 12), B.world.pt + 10, B.world.h - 44);
+        const dx = foe.x - f.x, dy = foe.y - f.y, dd = Math.hypot(dx, dy) || 1;
+        f.facing = { x: dx / dd, y: dy / dd };
+        FX.burst(f.x, f.y - 26, 14, ["#cbd5e1", "#475569"], { speed: 240 });
+        f.invuln = Math.max(f.invuln, (sk.windup || 0.3) + 0.1);
+        f.root = Math.max(f.root, (sk.windup || 0.3) + 0.35);
+      }
+    },
+    update(f, slot, sk, dt) {
+      const s = f.slot[slot];
+      if (s.phase !== "twinWind") return;
+      s.t += dt;
+      FX.trail(f.x + rand(-16, 16), f.y - 26 + rand(-22, 10), "#94a3b8", 6, 0.3);
+      if (s.t >= (sk.windup || 0.3)) {
+        f.atkAnim = 0.2; f.atkDur = 0.2;
+        B.melee(f, { reach: sk.reach || 130, half: 1.25, dmg: sk.dmg, type: "skill", kb: 220 });
+        arcFX(f, "#cbd5e1", 110);
+        FX.shake(7);
+        B.endSlot(f, slot, sk.cd * (f.rateM || 1));
+      }
+    }
+  };
+  IMPL.t_duo = {
+    start(f, slot, sk) {
+      LD.Cine.start(f, sk.name, "", "#cbd5e1");
+      const s = f.slot[slot]; s.on = true; s.phase = "duoWind"; s.t = 0;
+      s.d.wind = sk.windup || 0.5;
+      f.root = Math.max(f.root, (sk.windup || 0.5) + 0.6);
+      /* 另一位双子也同步突进 */
+      const partner = f.twinLink;
+      if (partner && !partner.dead) {
+        const foe2 = B.foeOf(partner);
+        if (foe2) {
+          const a2 = Math.atan2(partner.y - foe2.y, partner.x - foe2.x) || 0;
+          partner.x = clamp(foe2.x + Math.cos(a2) * (foe2.r + partner.r + 12), 40, B.world.w - 40);
+          partner.y = clamp(foe2.y + Math.sin(a2) * (foe2.r + partner.r + 12), B.world.pt + 10, B.world.h - 44);
+          const dx2 = foe2.x - partner.x, dy2 = foe2.y - partner.y, dd2 = Math.hypot(dx2, dy2) || 1;
+          partner.facing = { x: dx2 / dd2, y: dy2 / dd2 };
+          partner.root = Math.max(partner.root, (sk.windup || 0.5) + 0.6);
+          FX.burst(partner.x, partner.y - 26, 14, ["#cbd5e1", "#fff"], { speed: 240 });
+        }
+      }
+      f.invuln = Math.max(f.invuln, (sk.windup || 0.5) + 0.1);
+    },
+    update(f, slot, sk, dt) {
+      const s = f.slot[slot];
+      if (s.phase !== "duoWind") return;
+      s.t += dt;
+      FX.trail(f.x + rand(-18, 18), f.y - 26 + rand(-24, 10), "#e2e8f0", 7, 0.3);
+      if (s.t >= (sk.windup || 0.5)) {
+        const foe = B.foeOf(f);
+        if (foe) {
+          const dx = foe.x - f.x, dy = foe.y - f.y, dd = Math.hypot(dx, dy) || 1;
+          f.facing = { x: dx / dd, y: dy / dd };
+        }
+        f.atkAnim = 0.24; f.atkDur = 0.24;
+        B.melee(f, { reach: sk.reach || 160, half: 1.4, dmg: sk.dmg, type: "ult", kb: 380 });
+        arcFX(f, "#e2e8f0", 140);
+        FX.shake(12);
+        const partner = f.twinLink;
+        if (partner && !partner.dead) {
+          partner.atkAnim = 0.24; partner.atkDur = 0.24;
+          B.melee(partner, { reach: sk.reach || 160, half: 1.4, dmg: sk.dmg, type: "ult", kb: 380 });
+          arcFX(partner, "#e2e8f0", 140);
+        }
+        B.endSlot(f, slot, sk.cd * (f.rateM || 1));
+      }
+    }
+  };
+
+  /* ---- 赌徒：掷骰 / 抽牌 / 出千 / 俄罗斯轮盘 ---- */
+  IMPL.gm_dice = {
+    start(f, slot, sk) {
+      f.atkAnim = 0.24; f.atkDur = 0.24;
+      f.facing = aimAt(f, this);
+      const a = Math.atan2(f.facing.y, f.facing.x);
+      const dmg = 4 + Math.floor(Math.random() * 11);          // 4 - 14 随机
+      B.spawnProj({
+        x: f.x + Math.cos(a) * 24, y: f.y - 26 + Math.sin(a) * 10,
+        vx: Math.cos(a) * (sk.speed || 560), vy: Math.sin(a) * (sk.speed || 560),
+        r: sk.r || 9, dmg, life: sk.life || 2.2, owner: f,
+        color: "#34d399", core: "#ecfdf5", type: "dice", kindTag: "basic", basic: true, spin: true
+      });
+      B.endSlot(f, slot, sk.cd * (f.rateM || 1));
+    }
+  };
+  IMPL.gm_card = {
+    start(f, slot, sk) {
+      f.atkAnim = 0.3; f.atkDur = 0.3;
+      const roll = Math.random();
+      if (roll < 0.3) {
+        B.heal(f, 15);
+        FX.float(f.x, f.y - 80, "回血牌 +15", "#7ff0c4", 16);
+      } else if (roll < 0.6) {
+        f.buff.rush = 4;
+        FX.float(f.x, f.y - 80, "加速牌！", "#fbbf24", 16);
+      } else if (roll < 0.85) {
+        f.invuln = Math.max(f.invuln, 1.5);
+        FX.float(f.x, f.y - 80, "无敌牌！", "#67e8f9", 16);
+      } else {
+        B.damage(f, f, 8, { type: "dot", kb: 0, noSrc: true });
+        FX.float(f.x, f.y - 80, "自爆牌…", "#fb7185", 16);
+      }
+      FX.burst(f.x, f.y - 40, 12, ["#34d399", "#fbbf24", "#fff"], { speed: 200 });
+      B.endSlot(f, slot, sk.cd * (f.rateM || 1));
+    }
+  };
+  IMPL.gm_cheat = {
+    start(f, slot, sk) {
+      f.atkAnim = 0.3; f.atkDur = 0.3;
+      let n = 0;
+      B.projs.forEach(p => {
+        if (p.side === f.side || p.type === "hbomb" || p.type === "bomb") return;
+        p.side = f.side; p.owner = f; p.reflect = true;
+        p.vx *= -1; p.vy *= -1;
+        p.dmg = Math.round(p.dmg * 1.2) + 2;
+        p.color = "#34d399"; p.life = 0; p.maxLife = 3;
+        n++;
+      });
+      FX.ring(f.x, f.y - 26, 110, "rgba(52,211,153,.95)", 6, 0.5);
+      FX.float(f.x, f.y - 82, n ? "出千！弹幕反转 x" + n : "出千…但场上没有你的弹", "#34d399", 16);
+      FX.flash(0.16, "52,211,153");
+      B.endSlot(f, slot, sk.cd * (f.rateM || 1));
+    }
+  };
+  IMPL.gm_roulette = {
+    start(f, slot, sk) {
+      const s = f.slot[slot]; s.on = true; s.phase = "roulCast"; s.t = 0;
+      LD.Cine.start(f, sk.name, "", "#34d399");
+      const foe = B.foeOf(f);
+      const cx = foe ? foe.x : f.x, cy = foe ? foe.y : f.y;
+      const n = sk.n || 6;
+      const bigIdx = (Math.random() * n) | 0;
+      for (let i = 0; i < n; i++) {
+        const a = rand(0, TAU), rr2 = rand(30, 240);
+        const zx = clamp(cx + Math.cos(a) * rr2, 50, B.world.w - 50);
+        const zy = clamp(cy + Math.sin(a) * rr2, B.world.pt, B.world.h - 46);
+        B.zones.push({
+          type: "roul", x: zx, y: zy, r: sk.r || 64,
+          warn: (sk.warn || 1.0) + (i % 2) * 0.3,           // 一半格子提前亮出
+          life: 0, max: 0.25, dmg: i === bigIdx ? sk.dmg : (sk.small || 6),
+          big: i === bigIdx, owner: f, hits: {}
+        });
+      }
+      B.endSlot(f, slot, sk.cd * (f.rateM || 1));
+    }
+  };
+
+  /* ---- 磁暴坦克：电弧 / 极性反转 / 电磁护盾 / 雷暴 ---- */
+  IMPL.ts_zap = {
+    start(f, slot, sk) {
+      f.atkAnim = 0.2; f.atkDur = 0.2;
+      f.facing = aimAt(f, this);
+      const a = Math.atan2(f.facing.y, f.facing.x);
+      B.spawnProj({
+        x: f.x + Math.cos(a) * 24, y: f.y - 26 + Math.sin(a) * 10,
+        vx: Math.cos(a) * (sk.speed || 1000), vy: Math.sin(a) * (sk.speed || 1000),
+        r: sk.r || 6, dmg: sk.dmg, life: sk.life || 1.4, owner: f,
+        color: "#a78bfa", core: "#ede9fe", type: "zap", kindTag: "basic", basic: true, trail: true
+      });
+      FX.burst(f.x + Math.cos(a) * 26, f.y - 26, 6, "#c4b5fd", { speed: 200, dir: a, spread: 0.5 });
+      B.endSlot(f, slot, sk.cd * (f.rateM || 1));
+    }
+  };
+  IMPL.ts_polar = {
+    start(f, slot, sk) {
+      f.atkAnim = 0.3; f.atkDur = 0.3;
+      B.magnetT = sk.dur || 5;
+      FX.ring(B.world.w / 2, (B.world.pt + B.world.h) / 2, 130, "rgba(167,139,250,.95)", 7, 0.6);
+      FX.float(f.x, f.y - 84, "极性反转！", "#a78bfa", 17);
+      B.ev.push(["h", f.x, f.y - 84, "极性反转！", "#a78bfa"]);
+      B.endSlot(f, slot, sk.cd * (f.rateM || 1));
+    }
+  };
+  IMPL.ts_shield = {
+    start(f, slot, sk) {
+      f.atkAnim = 0.3; f.atkDur = 0.3;
+      f.shield = Math.max(f.shield || 0, sk.shield || 60);
+      f.shieldT = sk.dur || 6;
+      f.shieldBoom = { R: sk.boomR || 130, dmg: sk.boomDmg || 10 };   // 破盾放电（见 B.shieldBreak）
+      FX.ring(f.x, f.y - 26, 80, "rgba(196,181,253,.95)", 6, 0.5);
+      FX.float(f.x, f.y - 80, "电磁护盾", "#c4b5fd", 15);
+      B.endSlot(f, slot, sk.cd * (f.rateM || 1));
+    }
+  };
+  IMPL.ts_storm = {
+    start(f, slot, sk) {
+      const s = f.slot[slot]; s.on = true; s.phase = "stormCast"; s.t = 0;
+      LD.Cine.start(f, sk.name, "", "#a78bfa");
+      const foe = B.foeOf(f);
+      const cx = foe ? foe.x : f.x, cy = foe ? foe.y : f.y;
+      const n = sk.n || 10;
+      for (let i = 0; i < n; i++) {
+        const a = rand(0, TAU), rr2 = rand(20, 300);
+        B.zones.push({
+          type: "bolt", x: clamp(cx + Math.cos(a) * rr2, 50, B.world.w - 50),
+          y: clamp(cy + Math.sin(a) * rr2, B.world.pt, B.world.h - 46),
+          r: sk.r || 56, warn: (sk.warn || 1.0) * (0.7 + 0.6 * Math.random()),
+          life: 0, max: 0.2, dmg: sk.dmg, owner: f, hits: {}
+        });
+      }
+      B.endSlot(f, slot, sk.cd * (f.rateM || 1));
     }
   };
 
@@ -1923,8 +3716,8 @@
     if (s.d.n < sk.pillars && s.d.acc >= sk.gap) {
       s.d.acc = 0; s.d.n++;
       const bx = foe ? foe.x : f.x - 200, by = foe ? foe.y : f.y;
-      const px = clamp(bx + rand(-90, 90), 60, C.W - 60);
-      const py = clamp(by + rand(-60, 60), C.H * 0.34, C.H - 56);
+      const px = clamp(bx + rand(-90, 90), 60, B.world.w - 60);
+      const py = clamp(by + rand(-60, 60), B.world.pt + 14, B.world.h - 56);
       B.zones.push({ type: "pillar", x: px, y: py, r: sk.pillarR, life: 0, max: sk.dur, dmg: sk.dmg,
         owner: f, hit: false, color: "#fb923c", warn: sk.warn || 0.28 });
       FX.mark(px, py, sk.pillarR, "rgba(251,146,60,.95)", (sk.warn || 0.28) + sk.dur + 0.3, "circle");
@@ -1939,8 +3732,18 @@
    *  工具
    * ========================================================== */
   function aimAt(f, impl) {
-    const foe = B.aimFoe(f);   // 索敌优先：有锁定目标就朝他瞄准，否则取最近对手
-    if (!foe || foe.dead) return f.facing;
+    let foe = B.aimFoe(f);   // 索敌优先：有锁定目标就朝他瞄准，否则取最近对手
+    if (foe && foe.dead) foe = null;
+    /* v3.7 塔防：身边没有敌人时，自动瞄最近的敌方建筑（防御塔 / 水晶） */
+    if (B.rule === "tower" && B.aimStructFor) {
+      const st = B.aimStructFor(f);
+      if (st) {
+        const ds = Math.hypot(st.x - f.x, st.y - f.y);
+        const df = foe ? Math.hypot(foe.x - f.x, foe.y - f.y) : Infinity;
+        if (ds < df) foe = st;
+      }
+    }
+    if (!foe) return f.facing;
     const dx = foe.x - f.x, dy = foe.y - f.y;
     const n = Math.hypot(dx, dy) || 1;
     return { x: dx / n, y: dy / n };
@@ -1967,6 +3770,9 @@
 
   B.trySlot = function (f, slot, ctrl) {
     if (f.dead || f.stun > 0 || Cine_paused()) return;
+    /* v3.3：躲在柜子里 / 坐在驾驶位上时不能出招（车上只有喇叭与坦克火炮） */
+    if (f.hideProp) return;
+    if (f.rideCar) { if (f._rideNoSkillT == null || this.t - f._rideNoSkillT > 1.2) { f._rideNoSkillT = this.t; FX.float(f.x, f.y - 56, "车上无法使用技能", "#9fb3dd", 13); } return; }
     // 王从天降飞起期间：与眩晕同级的自锁，任何技能（含位移类）都无法使用
     if (f.slot && f.slot.ult.on && f.slot.ult.phase === "kingRise") return;
     const id = f.loadout[slot];
@@ -1985,14 +3791,16 @@
     const cur = f.slot[slot];
     if (cur.on && IMPL[id] && IMPL[id].again && IMPL[id].again(f, slot, sk)) return;
     if (cur.on) return;
-    // 大招能量
-    if (sk.kind === "ult") {
+    // 大招能量（v2.6：BOSS 不吃能量——镜影会整套装玩家的英雄大招，同样走 CD 制）
+    if (sk.kind === "ult" && !f.isBoss) {
       if (f.energy < f.maxEnergy) { FX.float(f.x, f.y - 56, "能量不足", "#9fb3dd", 13); return; }
     }
     if (f.cd[slot] > 0) return;
     if (f.meditate > 0) return;
     // 能量消耗
-    if (sk.kind === "ult") f.energy = 0;
+    if (sk.kind === "ult" && !f.isBoss) f.energy = 0;
+    /* v3.1 草丛：一出手就从草里暴露 1.4 秒 */
+    if (f.bushHide) { f.bushFlash = 1.4; f.bushHide = false; FX.float(f.x, f.y - 58, "暴露！", "#fde68a", 13); }
     IMPL[id].start(f, slot, sk, ctrl);
   };
 
@@ -2021,20 +3829,9 @@
       }
       if (ctrl.press[slot]) this.trySlot(f, slot, ctrl);
     });
-    // 天外来物：槽位已满时碰到掉落物 → 按对应键置换（按键已照常出手，这里只挂 0.3s 延迟换装）
-    // 技能与大招各挂一个待置换物，K/L 对应技能、O 对应大招，互不干扰
-    if (this.rule === "gifts" && f.giftPending) {
-      const pend = f.giftPending;
-      const key = (ctrl.press.ult && pend.ult) ? "ult"
-        : (ctrl.press.skill1 && pend.skill) ? "skill1"
-        : (ctrl.press.skill2 && pend.skill) ? "skill2" : null;
-      if (key) {
-        const p = key === "ult" ? pend.ult : pend.skill;
-        f.giftSwap = { slot: key, drop: p.g, t: (LD.GIFTS && LD.GIFTS.swapDelay) || 0.3 };
-        if (key === "ult") pend.ult = null; else pend.skill = null;
-      }
-    }
+    // 天外来物：拾取与替换统一走 P 交互键（v3.3），这里不再做「按键置换」
     ctrl.press.basic = ctrl.press.skill1 = ctrl.press.skill2 = ctrl.press.ult = false;
+    ctrl.press.interact = false;
   };
 
   /* ==========================================================
@@ -2042,6 +3839,7 @@
    * ========================================================== */
   B.update = function (rdt) {
     if (this.state === "idle" || this.state === "over") return;
+    if (this.paused) { FX.update(rdt); return; }   // v2.6：本地暂停（Esc 面板 / 军备商店）冻结世界
     FX.update(rdt);   // 特效（闪光/震屏/粒子）必须始终推进：大招演出会触发白屏闪光，
                       // 若在演出期间冻结 FX，闪光会卡在最高亮度，整个画面灰掉 2.6 秒
     if (LD.Cine.active) { LD.Cine.update(rdt); return; }
@@ -2055,7 +3853,11 @@
 
     if (this.state === "countdown") {
       this.countdown -= dt;
-      if (this.countdown <= 0) { this.state = "fight"; FX.float(C.W / 2, C.H * 0.4, "开始！", "#7fe6f7", 30); }
+      if (this.countdown <= 0) {
+        this.state = "fight";
+        const mh = this.hero(this.mySide == null ? 0 : this.mySide) || this.fighters[0];
+        FX.float(mh ? mh.x : B.world.w / 2, mh ? mh.y - 80 : B.world.h * 0.4, "开始！", "#7fe6f7", 30);
+      }
       this.regen(dt);
       return;
     }
@@ -2068,7 +3870,8 @@
 
     /* ---- fight ---- */
     this.fighters.forEach(f => {
-      if (f.dead) return;
+      if (f.dead || f.bench) return;
+      if (f.kind === "laneMinion") return;        // v3.7 塔防小兵由 updateTower 推进
       f.enGainT = Math.max(0, (f.enGainT || 0) - dt);
       if (f.kind === "hero") this.updateHero(f, dt);
       else this.updateDragonBody(f, dt);
@@ -2087,9 +3890,45 @@
       }
     });
 
+    /* v3.3 车辆驾驶 / 撞击 / 油量（在弹道之前，司机位置先落到车身上） */
+    if (this.updateVehicles) this.updateVehicles(dt);
+    /* v3.5 吹风机气流：在位移之后、弹道之前把角色往外吹 */
+    if (this.updateWind) this.updateWind(dt);
     this.updateProjs(dt);
+    if (this.terrain) LD.Terrain.update(this.terrain, dt, this);
+    this.updatePickups(dt);
     this.updateZones(dt);
-    if (this.rule === "gifts") this.updateGifts(dt);
+    if (this.giftRule()) this.updateGifts(dt);
+    /* ---- v2.7 血包与掉落补给 ---- */
+    this.updateHeals(dt);
+    this.healTimerStep(dt);
+    /* ---- v2.6 / v2.7 各规则 / 系统推进 ---- */
+    this.updateMinions(dt);
+    /* v3.7 塔防：兵线、建筑开火、基地回血、复活与 10 分钟倒计时 */
+    if (this.rule === "tower" && this.updateTower) this.updateTower(dt);
+    this.updateZombies(dt);
+    this._corpseT = (this._corpseT || 0) - dt;
+    if (this._corpseT <= 0) { this._corpseT = 0.5; this.trimZombieCorpses(); }
+    this.updateRespawn(dt);
+    this.updateBossPhase(dt);
+    this.updateWheel(dt);
+    if (this.rule === "ring") this.updateRing(dt);
+    if (this.rule === "hunt") this.updateHunt(dt);
+    if (this.rule === "auction") this.updateAuction(dt);
+    if (this.rule === "doomsday") { this.updateAuction(dt); this.updateDoomsday(dt); this.updateGateSlow(dt); }
+    /* v3.3 规则修饰符：物资刷新 */
+    if (this.mod && this.mod("refresh") && this.updateRefresh) this.updateRefresh(dt);
+    if (this.rule === "relay") this.relayTick(dt);
+    /* v2.6 磁暴坦克「极性反转」：全场飞行物被吸向场地中心 */
+    if (this.magnetT > 0) {
+      this.magnetT -= dt;
+      const cx = B.world.w / 2, cy = (B.world.pt + B.world.h) / 2;
+      this.projs.forEach(p => {
+        if (p.type === "hbomb") return;
+        const dx = cx - p.x, dy = cy - p.y, d = Math.hypot(dx, dy) || 1;
+        p.vx += dx / d * 620 * dt; p.vy += dy / d * 620 * dt;
+      });
+    }
     // 黑侠客分身：到时消散（被击散的 0.9s 尸体期由 kill() 设置 cloneT）
     for (let i = this.fighters.length - 1; i >= 0; i--) {
       const c = this.fighters[i];
@@ -2106,25 +3945,90 @@
       const dg = this.fighters.find(f => f.kind === "dragon");
       if (dg && dg.dead) this.dragonCorpseT = (this.dragonCorpseT || 0) + dt;   // 尸体 3 秒后消失
     }
+    /* v2.6 双子剑客：每 8 秒换位 + 真身标记互换 */
+    if (this.twinSwapT != null) {
+      this.twinSwapT -= dt;
+      if (this.twinSwapT <= 0) {
+        this.twinSwapT = 8;
+        const twins = this.fighters.filter(x => x.isTwin && !x.dead);
+        if (twins.length >= 2) {
+          const A = twins[0], B2 = twins[1];
+          const tx = A.x, ty = A.y;
+          A.x = B2.x; A.y = B2.y; B2.x = tx; B2.y = ty;
+          this.twinMark = this.twinMark === A.side ? B2.side : A.side;
+          FX.ring(A.x, A.y - 26, 70, "rgba(148,163,184,.9)", 5, 0.4);
+          FX.ring(B2.x, B2.y - 26, 70, "rgba(148,163,184,.9)", 5, 0.4);
+          FX.float((A.x + B2.x) / 2, Math.min(A.y, B2.y) - 80, "换位！真身互换", "#94a3b8", 16);
+          this.ev.push(["h", (A.x + B2.x) / 2, Math.min(A.y, B2.y) - 80, "换位！真身互换", "#94a3b8"]);
+        }
+      }
+    }
     this.regen(dt);
 
-    // 决斗模式倒计时
-    if (this.mode !== "dragon") {
+    /* v2.7 乱斗热身：时间到按击杀分结算，不淘汰、不进回合流程 */
+    if (this.rule === "warmup") {
+      this.roundT -= dt;
+      if (this.roundT <= 0) {
+        const hs = this.humans();
+        let bestI = -1, bestS = -1;
+        hs.forEach(f => { const i = this.fighters.indexOf(f); const s = this.wScore[i] || 0; if (s > bestS) { bestS = s; bestI = i; } });
+        const meF = this.hero(this.mySide == null ? 0 : this.mySide);
+        this.matchWinner = bestI >= 0 ? this.fighters[bestI].side : 0;
+        this.finish(!!(meF && this.fighters.indexOf(meF) === bestI));
+        return;
+      }
+    }
+    /* v3.2 世界末日：限时；时间到按分数判胜（不看剩余血量），只剩一人则提前结算 */
+    if (this.rule === "doomsday") {
+      this.roundT -= dt;
+      if (this.roundT <= 0) {
+        const alive = this.humans(true);
+        let best = null, bs = -1;
+        alive.forEach(f => {
+          const s = this.wScore[this.fighters.indexOf(f)] || 0;
+          if (s > bs) { bs = s; best = f; }
+        });
+        const meF = this.hero(this.mySide == null ? 0 : this.mySide);
+        this.matchWinner = best ? best.side : -1;
+        if (best) {
+          FX.float(best.x, best.y - 80, "最高分获胜！", "#fcd34d", 22);
+          LD.Cine.start(best, "胜者：" + (best.name || ("玩家" + (best.side + 1))), "", "#fcd34d", bs + " 分");
+        }
+        this.finish(!!(meF && best && best.side === meF.side));
+        return;
+      }
+    }
+    // 决斗模式倒计时（v2.7：缩圈 / 车轮战 / 追猎 / 热身都有各自的时钟逻辑，不走通用倒计时）
+    if (this.mode !== "dragon" && this.rule !== "ring" && this.rule !== "relay"
+        && this.rule !== "hunt" && this.rule !== "warmup" && this.rule !== "doomsday"
+        && this.rule !== "tower") {
       this.roundT = (this.roundT || 75) - dt;
       if (this.roundT <= 0) {
         /* 超时：当前血量最高者赢下回合（平血按座位号） */
-        const alive = this.fighters.filter(x => !x.dead && x.kind === "hero");
-        let w = alive[0] || this.fighters[0];
+        const alive = this.humans(true);
+        let w = alive[0] || this.humans()[0] || this.fighters[0];
         alive.forEach(x => { if (x.hp > w.hp) w = x; });
         this.endRound(w.side);
       }
     }
+    /* v2.6 追猎时刻倒计时：时间到还有生存者活着 → 生存者获胜 */
+    if (this.rule === "hunt") {
+      this.roundT -= dt;
+      if (this.roundT <= 0) {
+        const runners = this.fighters.filter(x => x.kind === "hero" && x.huntRole === "runner" && !x.dead && !x.bench);
+        const meF = this.hero(this.mySide == null ? 0 : this.mySide);
+        const iAmRunner = meF && meF.huntRole === "runner";
+        this.matchWinner = runners.length ? runners[0].side : 0;
+        this.finish(iAmRunner ? runners.length > 0 : runners.length === 0);
+        return;
+      }
+    }
     // 越界修正 + 墙体（场地边界与绝望囚牢圈壁都视作墙体）
     this.fighters.forEach(f => {
-      if (f.kind === "dragon") { f.x = clamp(f.x, 90, C.W - 90); f.y = clamp(f.y, C.H * 0.34, C.H - 70); return; }
+      if (f.kind === "dragon") { f.x = clamp(f.x, 90, B.world.w - 90); f.y = clamp(f.y, B.world.pt + 20, B.world.h - 70); return; }
       const px = f.x, py = f.y;
-      f.x = clamp(f.x, 34, C.W - 34);
-      f.y = clamp(f.y, C.H * 0.32, C.H - 40);
+      f.x = clamp(f.x, 34, B.world.w - 34);
+      f.y = clamp(f.y, B.world.pt, B.world.h - 40);
       if (f.x !== px || f.y !== py) this.wallHit(f);   // 被击飞撞到边界
       // 绝望囚牢圈壁：成形后是一堵圆形的墙——除释放者外无法进出，但不会被吸附到圈壁上
       const pz = this.zones.find(z => z.type === "prison" && z.owner !== f && !z.owner.dead && z.life >= (z.formT || 0));
@@ -2145,6 +4049,9 @@
   B.regen = function (dt) {
     this.fighters.forEach(f => {
       if (f.dead) return;
+      /* 杂兵（工蜂等）没有 cd / buff / energy 字段，直接跳过，
+         否则 f.cd.basic 会炸出 TypeError 卡死整个渲染循环 */
+      if (f.kind === "minion" || f.kind === "laneMinion") return;
       /* 冷却对所有角色递减（修复：原来写在 hero 分支里，巨龙 CD 永远不减 → 不攻击、不放技能） */
       f.cd.basic = Math.max(0, f.cd.basic - dt);
       f.cd.skill1 = Math.max(0, f.cd.skill1 - dt);
@@ -2160,13 +4067,26 @@
       if (f.shieldT > 0) { f.shieldT -= dt; if (f.shieldT <= 0 && f.shield > 0) { f.shield = 0; FX.float(f.x, f.y - 52, "护盾消失", "#9fb3dd", 12); } }
       if (f.blind > 0) f.blind = Math.max(0, f.blind - dt);
       if (f.slowT > 0) f.slowT = Math.max(0, f.slowT - dt);
+      if (f.gateSlowT > 0) f.gateSlowT = Math.max(0, f.gateSlowT - dt);
       if (f.silenceT > 0) f.silenceT = Math.max(0, f.silenceT - dt);
+      if (f.pushT > 0) f.pushT = Math.max(0, f.pushT - dt);
+      if (f.speedBoostT > 0) f.speedBoostT = Math.max(0, f.speedBoostT - dt);
+      if (f.bushFlash > 0) f.bushFlash = Math.max(0, f.bushFlash - dt);
+      /* v2.6 词条：回春（每 10 秒回血 3） */
+      if (f.perkRegen && f.hp > 0 && f.hp < f.maxHp) {
+        f.regenAcc = (f.regenAcc || 0) + dt;
+        if (f.regenAcc >= 10) { f.regenAcc = 0; this.heal(f, 3); FX.float(f.x, f.y - 56, "+3", "#7ff0c4", 13); }
+      }
       // 血量 / 位置历史（败者食尘：回溯约 3 秒的血量与位置）
       if (f.kind === "hero") {
         (f.hpHist = f.hpHist || []).push({ t: this.t, hp: f.hp });
         (f.posHist = f.posHist || []).push({ t: this.t, x: f.x, y: f.y });
+        /* v3.1 败者食尘：技能冷却同样回溯 3 秒 */
+        (f.cdHist = f.cdHist || []).push({ t: this.t,
+          cd: { basic: f.cd.basic, skill1: f.cd.skill1, skill2: f.cd.skill2, ult: f.cd.ult } });
         while (f.hpHist.length && f.hpHist[0].t < this.t - 3.6) f.hpHist.shift();
         while (f.posHist.length && f.posHist[0].t < this.t - 3.6) f.posHist.shift();
+        while (f.cdHist.length && f.cdHist[0].t < this.t - 3.6) f.cdHist.shift();
       }
       if (f.buff.rage > 0) f.buff.rage = Math.max(0, f.buff.rage - dt);
       if (f.buff.thousand > 0) f.buff.thousand = Math.max(0, f.buff.thousand - dt);
@@ -2181,6 +4101,8 @@
     f.stun = Math.max(0, f.stun - dt);
     f.root = Math.max(0, f.root - dt);
     f.invuln = Math.max(0, f.invuln - dt);
+    /* v3.4：隐匿第 2 秒会闪形 0.4 秒 —— AI 只有这一小段能看见（其余时间完全隐身） */
+    f._stealthFlash = !f._ghostNoFlash && f.stealthT > 1.6 && f.stealthT <= 2.0;
     if (f.parryT > 0) f.parryT = Math.max(0, f.parryT - dt);
     // 眨眼
     f.blinkT -= dt;
@@ -2189,20 +4111,49 @@
 
     // 击退速度衰减
     f.x += f.vx * dt; f.y += f.vy * dt;
-    const damp = Math.exp(-7.5 * dt); f.vx *= damp; f.vy *= damp;
+    const damp = Math.exp((this.mod && this.mod('lowgrav') ? -4.2 : -7.5) * dt); f.vx *= damp; f.vy *= damp;
     // 赫的定向击飞（固定距离推进，撞墙由越界修正区判定）
     this.knockStep(f, dt);
 
     const ctrl = f.ctrl || { mx: 0, my: 0, hold: {}, press: {} };
-    if (this.state === "fight") this.ctrlFire(f, ctrl, dt);
+    /* v3.3 交互键 P：先于一切动作处理（躲藏 / 离开 / 上下车 / 拾取 / 扔泥土） */
+    if (this.state === "fight" && ctrl.press && ctrl.press.interact) {
+      ctrl.press.interact = false;
+      if (this.doInteract) this.doInteract(f);
+    }
+    if (this.state === "fight" && !f.hideProp && !f.rideCar) this.ctrlFire(f, ctrl, dt);
+    /* 躲进柜子 / 坐在车上：不能移动、不能闪避（相机与朝向照旧） */
+    if (f.hideProp || f.rideCar) {
+      f.moving = false;
+      f.atkAnim = Math.max(0, f.atkAnim - dt);
+      /* v3.4 躲藏计时：超过 spotT 秒 AI 就会察觉；这里给玩家一个「被发现了」的提示 */
+      if (f.hideProp) {
+        f.hideTimer = (f.hideTimer || 0) + dt;
+        if (!f.hideSpotted && f.hideTimer >= ((LD.INTERACT && LD.INTERACT.spotT) || 2)) {
+          f.hideSpotted = true;
+          /* 只有场上真有 AI 对手时才提示「被发现」，纯人对人不用吓唬人 */
+          if (this.fighters.some(o => o !== f && !o.dead && o.bot && !this.sameTeam(f, o))) {
+            FX.float(f.x, f.y - 66, "被发现了！", "#fbbf24", 14);
+            this.ev.push(["t", f.x, f.y - 66, "被发现了！", "#fbbf24"]);
+          }
+        }
+      }
+      /* 躲在柜子里时把攻击键吃掉，别让出来之后补放一发 */
+      if (f.hideProp && ctrl.press) {
+        ctrl.press.basic = ctrl.press.skill1 = ctrl.press.skill2 = ctrl.press.ult = false;
+      }
+      return;
+    }
 
     // 双击方向键 → 短位移闪避（无无敌帧，CD 2.5 秒）
+    /* v3.1：僵尸没有闪避 */
+    if (ctrl.dodge && f.isZombie) ctrl.dodge = null;
     if (ctrl.dodge) {
       const dv = ctrl.dodge; ctrl.dodge = null;
       // 激光蓄力中双击方向键 → 直接取消该技能（不然可以用位移把激光带到别的位置）
       const lz = f.slot.skill1.phase === "laserCharge" ? "skill1"
                : f.slot.skill2.phase === "laserCharge" ? "skill2" : null;
-      const locked = ["dash", "bdash", "blinkCharge", "rush", "meditate"]
+      const locked = ["dash", "bdash", "blinkCharge", "rush", "meditate", "chainCharge"]
         .some(ph => f.slot.skill1.phase === ph || f.slot.skill2.phase === ph);
       if (lz) {
         B.endSlot(f, lz, 2);
@@ -2211,12 +4162,12 @@
       } else if (f.stun <= 0 && f.root <= 0 && f.meditate <= 0 && !locked && (f.cd.dodge || 0) <= 0) {
         const n = Math.hypot(dv.x, dv.y);
         if (n > 0.05) {
-          const ux = dv.x / n, uy = dv.y / n, dd = C.dodge.dist;
+          const ux = dv.x / n, uy = dv.y / n, dd = C.dodge.dist * (this.mod && this.mod('lowgrav') ? 1.5 : 1);
           for (let i = 1; i <= 4; i++) FX.trail(f.x + ux * dd * i / 4, f.y - 26 + uy * dd * i / 4, "#9be8ff", 5, 0.35);
-          f.x = clamp(f.x + ux * dd, 34, C.W - 34);
-          f.y = clamp(f.y + uy * dd, C.H * 0.32, C.H - 40);
+          f.x = clamp(f.x + ux * dd, 34, B.world.w - 34);
+          f.y = clamp(f.y + uy * dd, B.world.pt, B.world.h - 40);
           f.facing = { x: ux, y: uy };
-          f.cd.dodge = C.dodge.cd;
+          f.cd.dodge = C.dodge.cd * (f.perkDodgeM || 1);
           f.cd.basic = Math.max(f.cd.basic, C.dodge.cd);   // 普攻与闪避共享 CD：闪避会锁住普攻
           FX.burst(f.x, f.y - 26, 10, ["#9be8ff", "#e0fbff"], { speed: 150, dir: Math.atan2(-uy, -ux), spread: 0.9 });
           FX.float(f.x, f.y - 56, "闪避", "#9be8ff", 13);
@@ -2231,14 +4182,25 @@
     const kingRising = !!(f.slot && f.slot.ult.on && f.slot.ult.phase === "kingRise");
     let canMove = f.stun <= 0 && f.root <= 0 && f.meditate <= 0 && !kingRising;
     let sp = C.hero.speed * (f.speedMul || 1);   // BOSS 等特殊单位可带速度倍率
+    if (this.mod && this.mod("speed")) sp *= 1.35;   // v2.6 高速修饰符
     if (f.parryT > 0) sp *= 0.42;
     const ls = f.slot.skill1.phase === "laserCharge" || f.slot.skill2.phase === "laserCharge";
     if (ls) canMove = false;   // 激光波蓄力期间无法移动，方向锁定为出手朝向
+    /* v3.4 钢链：0.4 秒蓄力期间定身（原来可以边走边蓄，等于没有前摇代价） */
+    if (f.slot.skill1.phase === "chainCharge" || f.slot.skill2.phase === "chainCharge") canMove = false;
     if (f.slot.skill1.phase === "blinkCharge" || f.slot.skill2.phase === "blinkCharge") canMove = false;
     if (f.slot.skill1.phase === "dash" || f.slot.skill2.phase === "dash" ||
         f.slot.skill1.phase === "bdash" || f.slot.skill2.phase === "bdash") canMove = false;
     if (f.buff.rush > 0) sp *= LD.skill("meatRush").mul;
     if (f.slowT > 0) sp *= 0.55;   // 被冰痕 / 苍减速
+    /* v3.2 世界末日：僵尸在门洞减速圈里额外变慢（给守门的人留输出窗口） */
+    if (f.gateSlowT > 0 && f.isZombie) sp *= (LD.DOOMSDAY && LD.DOOMSDAY.gateSlow) || 0.5;
+    /* v3.1：推着汽车 / 轮胎 / 方块走时明显变慢；水池里减速；拾取移速包短暂加速 */
+    if (f.pushT > 0) sp *= 0.52;
+    if (f.speedBoostT > 0) sp *= 1.35;
+    /* v3.7 塔防：疾行符（主动装备） */
+    if (f.speedBuffT > 0) sp *= (f.speedBuff || 1.6);
+    if (this.terrain && LD.Terrain.waterAt(this.terrain, f.x, f.y)) sp *= 0.55;
     // 火男开启期间自身移速略微降低（可被其他减速叠加）
     const faOn = f.slot.skill1.phase === "fire" || f.slot.skill2.phase === "fire";
     if (faOn) sp *= (LD.skill("fireAura") && LD.skill("fireAura").moveMul) || 0.85;
@@ -2255,6 +4217,29 @@
       if (f.buff.rush > 0) FX.trail(f.x + rand(-10, 10), f.y - rand(2, 30), "#fbbf24", 4, 0.3);
     }
     f.atkAnim = Math.max(0, f.atkAnim - dt);
+    /* v3.0 地形碰撞：普通移动 / 闪避 / 击退统一在这里被推出障碍 */
+    if (this.terrain) {
+      LD.Terrain.collideFighter(this.terrain, f, dt);
+      /* v3.1 草丛隐身：站在草丛里进入伪装，出手后短暂现形 */
+      const bush = LD.Terrain.bushAt(this.terrain, f.x, f.y);
+      f.inBush = !!bush;
+      f.bushHide = !!bush && (f.bushFlash || 0) <= 0;
+      /* v3.4 草丛躲藏计时：超过 spotT 秒同样会被 AI 察觉 */
+      if (f.bushHide) {
+        f.bushTimer = (f.bushTimer || 0) + dt;
+        if (!f.bushSpotted && f.bushTimer >= ((LD.INTERACT && LD.INTERACT.spotT) || 2)) {
+          f.bushSpotted = true;
+          if (this.fighters.some(o => o !== f && !o.dead && o.bot && !this.sameTeam(f, o))) {
+            FX.float(f.x, f.y - 66, "被发现了！", "#fbbf24", 14);
+            this.ev.push(["t", f.x, f.y - 66, "被发现了！", "#fbbf24"]);
+          }
+        }
+      } else {
+        f.bushTimer = 0; f.bushSpotted = false;
+      }
+    } else {
+      f.inBush = false; f.bushHide = false; f.bushTimer = 0; f.bushSpotted = false;
+    }
   };
 
   B.updateDragonBody = function (f, dt) {
@@ -2266,7 +4251,12 @@
     if (foe && f.mode === "idle") {
       const dx = foe.x - f.x, dy = foe.y - f.y;
       const d = Math.hypot(dx, dy) || 1;
-      if (d > 240) { f.x += (dx / d) * LD.DRAGON.speed * dt; f.y += (dy / d) * LD.DRAGON.speed * dt; }
+      if (d > 240) {
+        /* v3.0：撞上柱子会沿障碍滑开，而不是卡死 */
+        const av = this.terrain ? LD.Terrain.avoid(this.terrain, f.x, f.y, 96) : { x: 0, y: 0 };
+        f.x += ((dx / d) + av.x * 0.9) * LD.DRAGON.speed * dt;
+        f.y += ((dy / d) + av.y * 0.9) * LD.DRAGON.speed * dt;
+      }
       f.facing = { x: dx / d, y: dy / d };
     }
   };
@@ -2274,6 +4264,7 @@
   B.updateProjs = function (dt) {
     for (let i = this.projs.length - 1; i >= 0; i--) {
       const p = this.projs[i];
+      if (!p) continue;                       // 命中结算里可能顺带删掉别的弹道，数组会缩短
       p.life += dt;
       if (p.type === "bomb") {
         // v2.5：带初速的炸弹会被"扔"出去（快枪手炸弹投掷），减速滑行到目标附近再爆
@@ -2296,17 +4287,67 @@
           p.x += p.vx * dt; p.y += p.vy * dt;
           const damp = Math.exp(-(p.data.throwDamp || 1.05) * dt);
           p.vx *= damp; p.vy *= damp;
-          const L = 26, T = C.H * 0.2 + 26;
-          if (p.x < L || p.x > C.W - L) { p.x = Math.max(L, Math.min(C.W - L, p.x)); p.vx = 0; }
-          if (p.y < T || p.y > C.H - 10) { p.y = Math.max(T, Math.min(C.H - 10, p.y)); p.vy = 0; }
+          const L = 26, T = 96;
+          if (p.x < L || p.x > B.world.w - L) { p.x = Math.max(L, Math.min(B.world.w - L, p.x)); p.vx = 0; }
+          if (p.y < T || p.y > B.world.h - 10) { p.y = Math.max(T, Math.min(B.world.h - 10, p.y)); p.vy = 0; }
           pushTrail(p);
         }
         continue;
       }
       p.x += p.vx * dt; p.y += p.vy * dt;
+      /* v3.1 黄金弹力炮：按光路反射，撞到的可破坏物照样吃伤害；总路程 1200 */
+      if (p.type === "gold") {
+        const ox0 = p.x - p.vx * dt, oy0 = p.y - p.vy * dt;
+        p.data.left -= Math.hypot(p.vx, p.vy) * dt;
+        let prop = null;
+        p.x = ox0 + p.vx * dt; p.y = oy0;
+        const hx = this.terrain ? LD.Terrain.projHit(this.terrain, p) : null;
+        if (hx) { p.x = ox0; p.vx = -p.vx; prop = hx; }
+        p.x = ox0; p.y = oy0 + p.vy * dt;
+        const hy = this.terrain ? LD.Terrain.projHit(this.terrain, p) : null;
+        if (hy) { p.y = oy0; p.vy = -p.vy; prop = prop || hy; }
+        p.x = ox0 + p.vx * dt; p.y = oy0 + p.vy * dt;
+        /* 场地边界也当墙 */
+        if (p.x < p.r + 6) { p.x = p.r + 6; p.vx = Math.abs(p.vx); }
+        if (p.x > B.world.w - p.r - 6) { p.x = B.world.w - p.r - 6; p.vx = -Math.abs(p.vx); }
+        if (p.y < B.world.pt + p.r) { p.y = B.world.pt + p.r; p.vy = Math.abs(p.vy); }
+        if (p.y > B.world.h - p.r) { p.y = B.world.h - p.r; p.vy = -Math.abs(p.vy); }
+        if (prop) {
+          LD.Terrain.hitProp(this.terrain, prop, Math.round(p.dmg * 0.8), { dir: Math.atan2(p.vy, p.vx), melee: false, src: p.owner });
+          FX.burst(p.x, p.y, 7, ["#fcd34d", "#fff"], { speed: 170, dir: Math.atan2(-p.vy, -p.vx) });
+          FX.shake(1.4);
+          p.data.bounces = (p.data.bounces || 0) + 1;
+        }
+        p.tick = true; p.spin = (p.spin || 0) + dt * 9;
+        pushTrail(p);
+        if (p.data.left <= 0) {
+          FX.burst(p.x, p.y, 12, ["#fcd34d", "#fde68a"], { speed: 200 });
+          this.projs.splice(i, 1);
+          continue;
+        }
+      } else if (this.terrain) {
+        const to = LD.Terrain.projHit(this.terrain, p);
+        if (to) {
+          LD.Terrain.hitProp(this.terrain, to, p.dmg, { dir: Math.atan2(p.vy, p.vx), melee: false, src: p.owner });
+          FX.burst(p.x, p.y, 8, [p.color || "#cbd5e1", "#fff"], { speed: 140, dir: Math.atan2(-p.vy, -p.vx) });
+          FX.shake(1.5);
+          this.projs.splice(i, 1);
+          continue;
+        }
+      }
       if (p.tick) p.spin = (p.spin || 0) + dt * 9;
       pushTrail(p);
 
+      /* v3.8 塔防建筑弹道：高速 + 追踪（p.homing 为每秒最大转向弧度） */
+      if (p.homing > 0 && p.data && p.data.tgt && !p.data.tgt.dead) {
+        const tg = p.data.tgt;
+        const ta = Math.atan2((tg.y - 24) - p.y, tg.x - p.x);
+        const cur = Math.atan2(p.vy, p.vx);
+        let da = ((ta - cur + Math.PI * 3) % TAU) - Math.PI;
+        const na = cur + clamp(da, -p.homing * dt, p.homing * dt);
+        const sp = Math.hypot(p.vx, p.vy);
+        p.vx = Math.cos(na) * sp; p.vy = Math.sin(na) * sp;
+      }
       // 巨龙的火球轻微追踪
       if (p.side === 1 && p.type === "fireball") {
         const foe = this.foeOf(p.owner || { side: 1 });
@@ -2347,7 +4388,7 @@
       }
 
       // 出界
-      if (p.x < -60 || p.x > C.W + 60 || p.y < C.H * 0.2 - 80 || p.y > C.H + 60 || p.life > p.maxLife) {
+      if (p.x < -60 || p.x > B.world.w + 60 || p.y < -80 || p.y > B.world.h + 60 || p.life > p.maxLife) {
         if (p.type !== "bomb") FX.burst(p.x, p.y, 6, p.color, { speed: 110 });
         this.projs.splice(i, 1);
         continue;
@@ -2358,6 +4399,34 @@
         if (f.side === p.side || f.dead || this.sameTeam(p.owner, f)) continue;
         if (p.type === "hbomb") continue;   // 高压炸弹只按倒计时引爆
         if (Math.hypot(f.x - p.x, (f.y - 26) - p.y) > p.r + f.r) continue;
+
+        /* v3.1 黄金弹力炮：穿透并在敌人之间弹来弹去，同一目标 0.3 秒内只吃一次 */
+        if (p.type === "gold") {
+          const key = "g" + f.side;
+          if ((p.hits[key] || 0) > this.t) continue;
+          p.hits[key] = this.t + 0.3;
+          this.damage(p.owner, f, p.dmg, { type: "ult", stun: p.data.stun || 0.25, kb: 90, proj: true,
+            from: p.owner, hitDir: Math.atan2(p.vy, p.vx) });
+          FX.burst(p.x, p.y, 12, ["#fcd34d", "#fff"], { speed: 220 });
+          FX.float(f.x, f.y - 58, "弹射命中", "#fcd34d", 13);
+          continue;
+        }
+
+        /* v3.1 咸鱼：造成伤害并抽取对方大招能量 */
+        if (p.type === "fish") {
+          const drain = Math.min(Math.max(0, f.energy || 0), p.data.drain || 20);
+          f.energy = Math.max(0, (f.energy || 0) - drain);
+          if (p.owner && p.owner !== f) {
+            p.owner.energy = Math.min(p.owner.maxEnergy, (p.owner.energy || 0) + drain);
+          }
+          this.damage(p.owner, f, p.dmg, { type: "skill", kb: 150, proj: true, from: p.owner,
+            hitDir: Math.atan2(p.vy, p.vx) });
+          if (drain > 0) FX.float(p.owner ? p.owner.x : f.x, (p.owner ? p.owner.y : f.y) - 62,
+            "吸能 +" + Math.round(drain), "#a5b4fc", 14);
+          FX.burst(p.x, p.y, 12, ["#93c5fd", "#dbeafe"], { speed: 200 });
+          this.projs.splice(i, 1);
+          break;
+        }
 
         // 弹反反射
         if (f.kind === "hero" && f.parryT > 0 && p.kindTag !== "ult") {
@@ -2385,7 +4454,7 @@
         // 钩索：命中伤害 + 眩晕 + 把对手朝释放者当前位置拖回
         if (p.type === "hook") {
           const own = p.owner;
-          this.damage(own, f, p.dmg, { type: "skill", stun: p.data.stun || 0.6, kb: 0, from: own });
+          this.damage(own, f, p.dmg, { type: "skill", stun: p.data.stun || 0.6, kb: 0, proj: true, from: own });
           const dx = own.x - f.x, dy = own.y - f.y;
           const d = Math.hypot(dx, dy) || 1;
           const stop = own.r + f.r + 10;
@@ -2407,7 +4476,7 @@
           const key = (p.data.phase === "back" ? "b" : "o") + f.side;
           if (!p.hits[key]) {
             p.hits[key] = 1;
-            this.damage(p.owner, f, p.dmg, { type: "skill", kb: 140, from: p.owner,
+            this.damage(p.owner, f, p.dmg, { type: "skill", kb: 140, proj: true, from: p.owner,
               hitDir: Math.atan2(p.vy, p.vx) });
             FX.burst(p.x, p.y, 10, [p.color, p.core], { speed: 170, dir: Math.atan2(-p.vy, -p.vx) });
           }
@@ -2422,13 +4491,13 @@
           if (p.data.tickAcc >= p.tick) {
             p.data.tickAcc = 0;
             const st = p.hits[key] < 3 ? 0.34 : 0;
-            this.damage(p.owner, f, p.dmg, { type: "ult", stun: st, kb: 90, from: p.owner, basic: false });
+            this.damage(p.owner, f, p.dmg, { type: "ult", stun: st, kb: 90, proj: true, from: p.owner, basic: false });
           }
           if (p.hits[key] > p.tickMax) continue;   // 单个目标吃满伤害上限后不再吃
           continue;
         }
 
-        this.damage(p.owner, f, p.dmg, { type: p.kindTag === "ult" ? "ult" : "skill",
+        this.damage(p.owner, f, p.dmg, { type: p.kindTag === "ult" ? "ult" : "skill", proj: true,
           basic: !!p.basic, kb: p.pierce ? 90 : 130, from: p.owner,
           hitDir: Math.atan2(p.vy, p.vx), root: p.root, stun: p.stun, blind: p.blind });
         if (p.root) { f.root = Math.max(f.root, p.root); FX.float(f.x, f.y - 60, "定身 " + p.root + "s", "#6ee7b7", 14); }
@@ -2447,9 +4516,10 @@
     for (const f of this.fighters) {
       if (f.side === p.side || f.dead || this.sameTeam(p.owner, f)) continue;
       if (Math.hypot(f.x - p.x, (f.y - 26) - p.y) <= R + f.r) {
-        this.damage(p.owner, f, dmg, { type: "skill", kb: 300, stun: stun, from: p, hitDir: Math.atan2(f.y - p.y, f.x - p.x) });
+        this.damage(p.owner, f, dmg, { type: "skill", kb: 300, stun: stun, proj: true, from: p, hitDir: Math.atan2(f.y - p.y, f.x - p.x) });
       }
     }
+    if (this.terrain) LD.Terrain.blast(this.terrain, p.x, p.y, R, dmg * 0.9);
     this.ev.push(["x", p.x, p.y, R]);
   };
 
@@ -2460,9 +4530,10 @@
       if (z.type === "pillar") {
         if (z.life > z.warn && !z.hit) {
           for (const f of this.fighters) {
-            if (f.side === z.owner.side || f.dead) continue;
+            if (f.dead || this.sameTeam(z.owner, f)) continue;
             if (Math.hypot(f.x - z.x, (f.y - 26) - z.y) <= z.r + f.r * 0.5) {
-              this.damage(z.owner, f, z.dmg, { type: "skill", kb: 200, from: z, hitDir: Math.atan2(f.y - z.y, f.x - z.x) });
+              this.damage(z.owner, f, z.dmg, { type: z.dmgType || "skill", kb: z.kb || 200, from: z, hitDir: Math.atan2(f.y - z.y, f.x - z.x) });
+              if (z.slow) f.slowT = Math.max(f.slowT || 0, z.slow);
             }
           }
           FX.burst(z.x, z.y, 26, ["#fb923c", "#fde68a", "#fff"], { speed: 300 });
@@ -2478,10 +4549,10 @@
           if (Math.hypot(f.x - z.x, f.y - z.y) > z.r + f.r) { z.hits["s" + f.side] = 0; continue; }
           const key = "t" + f.side;
           z.hits[key] = (z.hits[key] || 0) + dt;
-          if (z.hits[key] >= 0.3) {         // 冰痕冻伤：每 0.3 秒 6 点 + 减速
+          if (z.hits[key] >= (z.tick || 0.3)) {         // 冰痕冻伤：每 0.3 秒 6 点 + 减速（寒霜领域可自定义数值）
             z.hits[key] = 0;
             f.slowT = Math.max(f.slowT || 0, 0.5);
-            this.damage(z.owner, f, 6, { type: "dot", kb: 0, from: z.owner });
+            this.damage(z.owner, f, z.dmg || 6, { type: "dot", kb: 0, from: z.owner });
             FX.burst(f.x, f.y - 20, 6, ["#bfdbfe", "#fff"], { speed: 110 });
           }
         }
@@ -2544,10 +4615,12 @@
       }
       if (z.type === "shuriken") {
         // 螺旋手里剑：中速飞行 + 场地边缘反弹，范围内的敌人被中度吸引并持续掉血
+        const ox = z.x, oy = z.y;
         z.x += z.vx * dt; z.y += z.vy * dt;
-        if (z.x < 60 || z.x > C.W - 60) { z.vx *= -1; z.x = clamp(z.x, 60, C.W - 60); }
-        if (z.y < C.H * 0.34 || z.y > C.H - 40) { z.vy *= -1; z.y = clamp(z.y, C.H * 0.34, C.H - 40); }
+        if (z.x < 60 || z.x > B.world.w - 60) { z.vx *= -1; z.x = clamp(z.x, 60, B.world.w - 60); }
+        if (z.y < B.world.pt || z.y > B.world.h - 40) { z.vy *= -1; z.y = clamp(z.y, B.world.pt, B.world.h - 40); }
         z.spin = (z.spin || 0) + dt * 9;
+        z.dist = (z.dist || 0) + Math.hypot(z.x - ox, z.y - oy);   // 累计飞行距离
         if (z.life % 0.06 < dt) FX.trail(z.x + rand(-z.r, z.r) * 0.5, z.y + rand(-z.r, z.r) * 0.5, "#38bdf8", 6, 0.35);
         for (const f of this.fighters) {
           if (f.side === z.owner.side || f.dead || f.kind !== "hero" || this.sameTeam(z.owner, f)) continue;
@@ -2567,6 +4640,12 @@
             }
           }
         }
+        /* v2.7：飞出设定距离 → 中等范围爆炸，额外 25 点伤害，然后直接消散 */
+        if (!z.boomed && z.dist >= z.boomDist) {
+          z.boomed = true;
+          this.shurikenBoom(z);
+          z.life = z.max;                                  // 提前结束
+        }
       }
       if (z.type === "prison") {
         // 绝望囚牢：0.8s 成形后才生效；圈内对手被禁言（禁技能与大招，普攻不受影响）
@@ -2583,9 +4662,59 @@
           FX.trail(z.x - Math.cos(a) * z.r, z.y - Math.sin(a) * z.r, "#a78bfa", 4, 0.4);
         }
       }
+      if (z.type === "quake") {
+        // 霜压：以施法点为中心的延迟冲击波，预警后一次性结算 + 击退
+        if (z.life < z.warn) FX.trail(z.x + rand(-z.r, z.r) * 0.7, z.y + rand(-z.r, z.r) * 0.35, "#93c5fd", 4, 0.3);
+        else if (!z.hit) {
+          z.hit = true;
+          FX.ring(z.x, z.y, z.r, "rgba(147,197,253,.95)", 8, 0.5);
+          FX.shake(12);
+          for (const f of this.fighters) {
+            if (f.side === z.owner.side || f.dead || this.sameTeam(z.owner, f)) continue;
+            if (Math.hypot(f.x - z.x, (f.y - 20) - z.y) <= z.r + f.r)
+              this.damage(z.owner, f, z.dmg, { type: "skill", kb: 320, from: z, hitDir: Math.atan2(f.y - z.y, f.x - z.x) });
+          }
+        }
+      }
+      if (z.type === "zero") {
+        // 绝对零度：以施法点为圆心的安全区，读条结束后圈外敌人受伤 + 冻结
+        if (z.life < z.warn) {
+          // 预警阶段在渲染层画圈（见 worldDraw 的 zero 分支）
+        } else if (!z.hit) {
+          z.hit = true;
+          FX.flash(0.3, "191,219,254"); FX.shake(14);
+          for (const f of this.fighters) {
+            if (f.side === z.owner.side || f.dead || this.sameTeam(z.owner, f)) continue;
+            const out = Math.hypot(f.x - z.x, (f.y - 20) - z.y) > z.r;
+            if (out) {
+              this.damage(z.owner, f, z.dmg, { type: "ult", kb: 0, from: z.owner });
+              B.applyStun(f, z.stun);
+              FX.float(f.x, f.y - 60, "冻结！", "#7dd3fc", 16);
+            }
+          }
+        }
+      }
+      if (z.type === "roul" || z.type === "bolt") {
+        // 俄罗斯轮盘 / 雷暴：预警圈 → 一次性结算
+        if (z.life < z.warn) {
+          if (z.life % 0.08 < dt) FX.trail(z.x + rand(-z.r * 0.5, z.r * 0.5), z.y + rand(-z.r * 0.25, z.r * 0.25),
+            z.type === "roul" ? (z.big ? "#f87171" : "#34d399") : "#a78bfa", 4, 0.3);
+        } else if (!z.hit) {
+          z.hit = true;
+          FX.ring(z.x, z.y, z.r, z.type === "roul" ? (z.big ? "rgba(248,113,113,.95)" : "rgba(52,211,153,.9)") : "rgba(167,139,250,.95)", 6, 0.4);
+          FX.burst(z.x, z.y - 12, 16, z.type === "roul" ? ["#fde68a", "#fff"] : ["#c4b5fd", "#fff"], { speed: 260 });
+          for (const f of this.fighters) {
+            if (f.side === z.owner.side || f.dead || this.sameTeam(z.owner, f)) continue;
+            if (Math.hypot(f.x - z.x, (f.y - 20) - z.y) <= z.r + f.r)
+              this.damage(z.owner, f, z.dmg, { type: z.big || z.type === "bolt" ? "ult" : "skill", kb: 160, from: z.owner });
+          }
+        }
+      }
       if (z.life >= z.max + (z.warn || 0)) this.zones.splice(i, 1);
     }
   };
+
+
 
   /* ==========================================================
    *  回合 / 结算
@@ -2627,14 +4756,190 @@
   /* ==========================================================
    *  渲染
    * ========================================================== */
+  /* v2.6 摄像机：本地角色固定在屏幕中心；只有靠近世界边界时视口才被 clamp，人物才开始偏移 */
+  B.updateCam = function () {
+    const w = this.world || { w: C.W, h: C.H };
+    const me = this.fighters.find(f => f.side === this.mySide && f.kind === "hero") || this.fighters[0];
+    const vw = C.W, vh = C.H;
+    let tx = 0, ty = 0;
+    if (me) {
+      tx = clamp(me.x - vw / 2, 0, Math.max(0, w.w - vw));
+      ty = clamp((me.y - 30) - vh / 2, 0, Math.max(0, w.h - vh));
+    }
+    if (!this.cam) this.cam = { x: tx, y: ty };
+    let dt = 1;
+    try {
+      const now = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+      dt = this._camT ? Math.min(0.12, (now - this._camT) / 1000) : 1;
+      this._camT = now;
+    } catch (e) { dt = 1; }
+    const k = Math.min(1, dt * 18);
+    this.cam.x += (tx - this.cam.x) * k;
+    this.cam.y += (ty - this.cam.y) * k;
+  };
+
   B.draw = function (ctx) {
     const W = C.W, H = C.H;
+    this.updateCam();
     ctx.save();
     FX.applyShake(ctx);
-    V.arena(ctx, W, H, this.t, this.theme);
+    V.arena(ctx, W, H, this.t, this.theme, this.world);
 
     const worldDraw = () => {
       FX.drawGround(ctx);
+      /* v3.7 塔防：基地回血圈、兵线指示与敌方攻击范围 */
+      if (this.rule === "tower" && V.towerField) V.towerField(ctx, this);
+      /* v3.8 塔防：炸弹画在地面之上、角色之下 */
+      if (this.rule === "tower" && V.bomb) (this.bombs || []).forEach(b => V.bomb(ctx, b, this.t));
+      /* ---- v2.7 毒圈绘制：缩圈乱斗的多个安全圈 / 追猎时刻的大毒圈，通用同款画法 ---- */
+      const poisonSets = [];
+      if (this.rule === "ring" && this.rings)
+        poisonSets.push({ list: this.rings.filter(c => !c.dead), ink: "rgba(120,10,30,.36)", line: "rgba(248,113,113,.95)", safe: true });
+      if (this.rule === "hunt" && this.huntRing)
+        poisonSets.push({ list: [this.huntRing], ink: "rgba(120,10,30,.34)", line: "rgba(248,113,113,.9)", safe: false });
+      /* v3.2 世界末日：庇护所外整片红圈（墙外持续掉血） */
+      if (this.rule === "doomsday" && this.shelter)
+        poisonSets.push({ list: [this.shelter], ink: "rgba(120,10,30,.34)", line: "rgba(248,113,113,.9)", safe: true });
+      poisonSets.forEach(set => {
+        if (!set.list.length) return;
+        ctx.save();
+        /* 先铺满整块场地，再把安全圈作为「洞」挖掉（evenodd 填充） */
+        ctx.beginPath();
+        ctx.rect(-40, B.world.pt - 120, B.world.w + 80, B.world.h - B.world.pt + 160);
+        set.list.forEach(c => { ctx.moveTo(c.x + c.r, c.y); ctx.arc(c.x, c.y, c.r, 0, TAU, true); });
+        ctx.fillStyle = set.ink;
+        ctx.fill("evenodd");
+        ctx.setLineDash([18, 12]); ctx.lineDashOffset = -this.t * 30;
+        set.list.forEach(c => {
+          ctx.beginPath(); ctx.arc(c.x, c.y, c.r, 0, TAU);
+          ctx.strokeStyle = set.line; ctx.lineWidth = 4; ctx.stroke();
+          if (set.safe) {                     // 安全圈再描一层绿色内边，区分「圈内安全」
+            ctx.beginPath(); ctx.arc(c.x, c.y, Math.max(4, c.r - 6), 0, TAU);
+            ctx.strokeStyle = "rgba(52,211,153,.5)"; ctx.lineWidth = 2; ctx.stroke();
+          }
+        });
+        ctx.setLineDash([]);
+        ctx.restore();
+      });
+      /* v3.2 世界末日：门洞外的减速圈（僵尸进圈变慢）+ 门洞本体的绿圈 */
+      if (this.rule === "doomsday" && this.shelter && this.shelter.gaps) {
+        const D = LD.DOOMSDAY || {};
+        const gr = D.gateR || 92;
+        const pulse = 0.5 + Math.sin(this.t * 2.4) * 0.14;
+        this.shelter.gaps.forEach(g => {
+          ctx.save();
+          ctx.globalAlpha = 0.1 + Math.sin(this.t * 2.4) * 0.03;   // 减速圈淡青色底
+          ctx.fillStyle = "#67e8f9";
+          ctx.beginPath(); ctx.arc(g.x, g.y, gr, 0, TAU); ctx.fill();
+          ctx.globalAlpha = pulse;
+          ctx.setLineDash([10, 8]); ctx.lineDashOffset = -this.t * 22;
+          ctx.strokeStyle = "rgba(103,232,249,.95)"; ctx.lineWidth = 2.5;
+          ctx.beginPath(); ctx.arc(g.x, g.y, gr, 0, TAU); ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.globalAlpha = 0.5 + Math.sin(this.t * 3) * 0.16;
+          ctx.strokeStyle = "rgba(52,211,153,.85)"; ctx.lineWidth = 3;
+          ctx.beginPath(); ctx.ellipse(g.x, g.y, 34, 46, 0, 0, TAU); ctx.stroke();
+          ctx.restore();
+        });
+      }
+      /* v3.1 补给掉落物：血包 / 能量包 / 移速包 */
+      (this.pickups || []).forEach(pk => {
+        const bob = Math.sin(this.t * 4 + pk.x * 0.05) * 3;
+        const col = pk.kind === "heal" ? "#34d399" : pk.kind === "energy" ? "#818cf8" : "#fbbf24";
+        const edge = pk.kind === "heal" ? "#065f46" : pk.kind === "energy" ? "#3730a3" : "#92400e";
+        ctx.save();
+        ctx.globalCompositeOperation = "lighter";
+        V.glow(ctx, pk.x, pk.y - 14 + bob, 26, col, 0.42);
+        ctx.restore();
+        ctx.save();
+        ctx.fillStyle = "rgba(0,0,0,.3)";
+        ctx.beginPath(); ctx.ellipse(pk.x, pk.y + 8, 13, 5, 0, 0, TAU); ctx.fill();
+        ctx.fillStyle = col; ctx.strokeStyle = edge; ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(pk.x, pk.y - 30 + bob);
+        ctx.lineTo(pk.x + 12, pk.y - 18 + bob);
+        ctx.lineTo(pk.x + 12, pk.y - 4 + bob);
+        ctx.lineTo(pk.x, pk.y + 8 + bob);
+        ctx.lineTo(pk.x - 12, pk.y - 4 + bob);
+        ctx.lineTo(pk.x - 12, pk.y - 18 + bob);
+        ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = "#fff";
+        if (pk.kind === "heal") {
+          ctx.fillRect(pk.x - 2.4, pk.y - 21 + bob, 4.8, 12);
+          ctx.fillRect(pk.x - 6, pk.y - 17.4 + bob, 12, 4.8);
+        } else if (pk.kind === "energy") {
+          ctx.beginPath();
+          ctx.moveTo(pk.x + 1, pk.y - 24 + bob); ctx.lineTo(pk.x - 5, pk.y - 12 + bob);
+          ctx.lineTo(pk.x - 0.5, pk.y - 12 + bob); ctx.lineTo(pk.x - 2, pk.y - 2 + bob);
+          ctx.lineTo(pk.x + 6, pk.y - 15 + bob); ctx.lineTo(pk.x + 1, pk.y - 15 + bob);
+          ctx.closePath(); ctx.fill();
+        } else {
+          ctx.beginPath();
+          ctx.moveTo(pk.x - 7, pk.y - 19 + bob); ctx.lineTo(pk.x - 1, pk.y - 19 + bob);
+          ctx.lineTo(pk.x - 5, pk.y - 10 + bob); ctx.lineTo(pk.x + 1, pk.y - 10 + bob);
+          ctx.lineTo(pk.x - 4, pk.y - 1 + bob); ctx.lineTo(pk.x - 2, pk.y - 12 + bob);
+          ctx.lineTo(pk.x - 8, pk.y - 12 + bob);
+          ctx.closePath(); ctx.fill();
+        }
+        ctx.restore();
+      });
+      (this.coins || []).forEach(c => {                 // 军备竞赛：局内金币
+        const bob = Math.sin(this.t * 5 + c.x) * 3;
+        ctx.save();
+        V.glow(ctx, c.x, c.y - 12 + bob, 22, "rgba(252,211,77,.5)", 1);
+        ctx.fillStyle = "#fbbf24";
+        ctx.beginPath(); ctx.arc(c.x, c.y - 12 + bob, 8, 0, TAU); ctx.fill();
+        ctx.strokeStyle = "#b45309"; ctx.lineWidth = 1.6; ctx.stroke();
+        ctx.fillStyle = "#fde68a";
+        ctx.beginPath(); ctx.arc(c.x - 2.4, c.y - 15 + bob, 2.6, 0, TAU); ctx.fill();
+        ctx.restore();
+      });
+      if (this.magnetT > 0) {                           // 磁暴坦克：极性反转中心提示
+        const cx = B.world.w / 2, cy = (B.world.pt + B.world.h) / 2;
+        ctx.save(); ctx.globalCompositeOperation = "lighter";
+        V.glow(ctx, cx, cy, 120 + Math.sin(this.t * 8) * 22, "rgba(167,139,250,.35)", 1);
+        ctx.restore();
+      }
+      /* v2.6 新区域预警圈（霜压 / 绝对零度 / 轮盘 / 雷暴） */
+      this.zones.forEach(z => {
+        if ((z.type !== "quake" && z.type !== "zero" && z.type !== "roul" && z.type !== "bolt") || z.life >= z.warn) return;
+        const p = Math.min(1, z.life / z.warn);
+        const col = z.type === "quake" ? "147,197,253" : z.type === "zero" ? "191,219,254"
+          : z.type === "roul" ? (z.big ? "248,113,113" : "52,211,153") : "167,139,250";
+        ctx.save();
+        ctx.globalAlpha = 0.10 + p * 0.2;
+        ctx.fillStyle = "rgb(" + col + ")";
+        ctx.beginPath(); ctx.ellipse(z.x, z.y, z.r, z.r * 0.55, 0, 0, TAU); ctx.fill();
+        ctx.globalAlpha = 0.85;
+        ctx.strokeStyle = "rgb(" + col + ")"; ctx.lineWidth = 2.4;
+        ctx.setLineDash([12, 8]);
+        ctx.beginPath(); ctx.ellipse(z.x, z.y, z.r, z.r * 0.55, 0, 0, TAU); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+      });
+
+      /* v3.1 爆裂之火：外圈预警 + 内圈安全区（挖空） */
+      this.zones.forEach(z => {
+        if (z.type !== "blaze" || z.life >= z.warn) return;
+        const p = Math.min(1, z.life / z.warn);
+        const outer = z.r, inner = z.inner || 40;
+        ctx.save();
+        ctx.beginPath();
+        ctx.ellipse(z.x, z.y, outer, outer * 0.58, 0, 0, TAU);
+        ctx.ellipse(z.x, z.y, inner, inner * 0.58, 0, 0, TAU);
+        ctx.globalAlpha = 0.12 + p * 0.22;
+        ctx.fillStyle = "#fb923c";
+        ctx.fill("evenodd");
+        ctx.globalAlpha = 0.9;
+        ctx.strokeStyle = "rgba(251,146,60,.95)"; ctx.lineWidth = 2.6;
+        ctx.setLineDash([12, 8]);
+        ctx.beginPath(); ctx.ellipse(z.x, z.y, outer, outer * 0.58, 0, 0, TAU); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.strokeStyle = "rgba(134,239,172,.9)"; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.ellipse(z.x, z.y, inner, inner * 0.58, 0, 0, TAU); ctx.stroke();
+        ctx.restore();
+      });
+
       // 激光预警
       this.fighters.forEach(f => {
         if (f.kind !== "hero") return;
@@ -2790,6 +5095,32 @@
         ctx.restore();
       });
 
+      // v2.7 血包（「回复」修饰符 / 缩圈模式圈外补给）
+      (this.heals || []).forEach(h => {
+        const H = LD.HEALS || {};
+        const fall = h.landed ? 0 : 1 - h.t / (H.fallT || 1.4);
+        const yy = h.y - 12 - fall * 120;
+        ctx.save();
+        ctx.globalAlpha = 0.3; ctx.fillStyle = "#000";
+        ctx.beginPath(); ctx.ellipse(h.x, h.y + 4, 13 * (1 - fall * 0.5), 5 * (1 - fall * 0.5), 0, 0, TAU); ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.globalCompositeOperation = "lighter";
+        V.glow(ctx, h.x, yy, 26, "rgba(52,211,153,.75)", 1);
+        ctx.globalCompositeOperation = "source-over";
+        // 白色药箱 + 绿色十字
+        ctx.fillStyle = "#f8fafc"; ctx.strokeStyle = "#047857"; ctx.lineWidth = 1.6;
+        V.rr(ctx, h.x - 10, yy - 8, 20, 16, 4); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = "#10b981";
+        ctx.fillRect(h.x - 2.2, yy - 6, 4.4, 12);
+        ctx.fillRect(h.x - 6, yy - 2.2, 12, 4.4);
+        if (h.landed) {
+          ctx.font = "700 11px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+          ctx.fillStyle = "#6ee7b7";
+          ctx.fillText("血包", h.x, yy + 22);
+        }
+        ctx.restore();
+      });
+
       // 能量石（霸主争霸）
       if (this.stone) {
         const s = this.stone, pulse = 0.6 + Math.sin(this.t * 8) * 0.35;
@@ -2823,9 +5154,31 @@
         ctx.restore();
       });
 
-      // 角色（按 y 排序）
-      const order = this.fighters.slice().sort((a, b) => (a.y + (a.kind === "dragon" ? 20 : 0)) - (b.y + (b.kind === "dragon" ? 20 : 0)));
-      order.forEach(f => {
+      // 角色 + 地形障碍统一按 y 排序，保证人站在箱子前面 / 后面时遮挡关系正确
+      const drawList = this.fighters.map(f => ({ f: f, y: f.y + (f.kind === "dragon" ? 20 : 0), prop: null }));
+      if (this.terrain) this.terrain.props.forEach(o => {
+        if (o.dead || o.kind === "bush" || o.kind === "water") return;
+        drawList.push({ f: null, y: o.y + o.h / 2, prop: o });
+      });
+      drawList.sort((a, b) => a.y - b.y);
+      drawList.forEach(it => {
+        const f = it.f;
+        if (it.prop) { V.prop(ctx, it.prop, this.t); return; }
+        if (f.dead && f.corpseGone) return;        // v3.5 超过 10 具的老丧尸尸体已消失
+        if (f.dead && this.rule === "tower") return;   // v3.7 塔防：阵亡尸体不留在场上（等复活）
+        if (f.bench) return;                       // 车轮战板凳：不渲染
+        if (f.rideCar || f.hiddenNet) return;      // v3.3 坐在车里 / 客机收到躲藏状态：只画车或什么都不画
+        if (f.hideProp && f !== meHero) return;    // v3.3 躲在柜子里：别人看不见
+        /* v3.1 草丛隐身：对手在草丛里时本地看不见 */
+        if (f.bushHide && !this.sameTeam(meHero, f)) return;
+        if (f.kind === "laneMinion") {              // v3.7 塔防：机器人小兵
+          if (!f.dead) V.robot(ctx, f, this.t);
+          return;
+        }
+        if (f.kind === "minion") {                 // v2.6 杂兵（机械蜂等）
+          if (!f.dead) V.minion(ctx, f, this.t);
+          return;
+        }
         if (f.kind === "dragon") {
           /* 尸体 3 秒后消失（最后 1 秒渐隐） */
           if (!(f.dead && (this.dragonCorpseT || 0) > 3)) {
@@ -2837,6 +5190,9 @@
           }
           return;
         }
+        /* 自己在草丛里：半透明，方便看清走位 */
+        const bushAlpha = (f.inBush && f === meHero) ? 0.62 : 1;
+        if (bushAlpha < 1) { ctx.save(); ctx.globalAlpha = bushAlpha; }
         // 蓄力光环
         if (f.slot.skill1.phase === "blinkCharge" || f.slot.skill2.phase === "blinkCharge") {
           ctx.save(); ctx.globalCompositeOperation = "lighter";
@@ -2909,9 +5265,9 @@
         ctx.save(); ctx.font = "600 11px system-ui"; ctx.textAlign = "center";
         const baseNm = f.name || (f.side === 0 ? "房主" : "玩家" + (f.side + 1));
         const nm = (meF2 && meF2 === f) ? "你 · " + baseNm : baseNm;
-        const dot = (f.team != null && f.team >= 0) ? TM[f.team] : null;
-        const label = (f.overlord ? "👑 " : "") + nm;
-        ctx.fillStyle = dot || (f.side === 0 ? "rgba(159,230,247,.9)" : "rgba(255,170,180,.9)");
+        const dot = (f.team != null && f.team >= 0 && f.team < TM.length && !f.isZombie) ? TM[f.team] : null;
+        const label = ((f.overlord || f.huntRole === "hunter") ? "👑 " : "") + nm;
+        ctx.fillStyle = f.isZombie ? "rgba(163,230,53,.95)" : (dot || (f.side === 0 ? "rgba(159,230,247,.9)" : "rgba(255,170,180,.9)"));
         ctx.fillText(label, f.x, f.y + 20);
         if (dot) {
           const w = ctx.measureText(label).width;
@@ -2924,6 +5280,7 @@
           ctx.strokeStyle = "#fcd34d"; ctx.lineWidth = 3;
           ctx.beginPath(); ctx.ellipse(f.x, f.y, 28, 11, 0, 0, TAU); ctx.stroke(); ctx.restore();
         }
+        if (bushAlpha < 1) ctx.restore();
         // 索敌标记：本地玩家锁定的目标头顶黄色三角
         {
           const meF = this.hero(this.mySide == null ? 0 : this.mySide);
@@ -2936,13 +5293,54 @@
         }
       });
 
+      /* v3.1 草丛前景层：站在草丛里的人被草叶遮住 */
+      if (this.terrain) V.bushPass(ctx, this.terrain, this.t);
+
+      /* v3.8 塔防：墓碑压在角色之上，倒计时不会被挡住 */
+      if (this.rule === "tower" && V.grave) (this.graves || []).forEach(g => V.grave(ctx, g, this.t));
+
+      /* v3.3 交互提示浮窗（靠近柜子 / 车 / 掉落物 / 泥土时显示 O + 动作） */
+      if (this.drawInteractHints) this.drawInteractHints(ctx);
+
       FX.draw(ctx);
     };
 
-    if (LD.Cine.active) {
-      LD.Cine.draw(ctx, W, H, worldDraw);
-    } else {
+    /* v2.6 世界坐标 → 屏幕：世界内容随摄像机平移（大招演出期间交给 Cine 自己做特写变换） */
+    const drawWorld = () => {
+      const co = LD.Cine.active ? { x: 0, y: 0 } : (this.cam || { x: 0, y: 0 });
+      ctx.save();
+      ctx.translate(-Math.round(co.x), -Math.round(co.y));
+      if (this.terrain) {
+        /* v3.0：地面材质替换原来的空白网格底；边界与顶部渐变仍由 V.ground 补 */
+        V.terrainGround(ctx, this.terrain, this.t, co, W, H);
+        V.ground(ctx, this.world, this.t, true);
+        V.terrainFlat(ctx, this.terrain, this.t);
+      } else {
+        V.ground(ctx, this.world, this.t);
+      }
       worldDraw();
+      ctx.restore();
+    };
+
+    if (LD.Cine.active) {
+      LD.Cine.draw(ctx, W, H, drawWorld);
+    } else {
+      drawWorld();
+      /* v2.6 大地图：视野外的敌人用屏幕边缘箭头提示方位 */
+      const meCam = this.fighters.find(f => f.side === this.mySide && f.kind === "hero") || this.fighters[0];
+      this.fighters.forEach(f => {
+        if (f === meCam || f.dead || f.kind === "minion" || f.bench || f.isClone) return;
+        if (this.sameTeam(meCam, f)) return;
+        const sx = f.x - (this.cam ? this.cam.x : 0), sy = f.y - (this.cam ? this.cam.y : 0);
+        if (sx > 14 && sx < W - 14 && sy > 14 && sy < H - 14) return;
+        const cx = clamp(sx, 22, W - 22), cy = clamp(sy, 22, H - 22);
+        const ang = meCam ? Math.atan2(f.y - meCam.y, f.x - meCam.x) : 0;
+        ctx.save();
+        ctx.translate(cx, cy); ctx.rotate(ang);
+        ctx.fillStyle = "rgba(251,113,133,.9)";
+        ctx.beginPath(); ctx.moveTo(9, 0); ctx.lineTo(-6, -6); ctx.lineTo(-6, 6); ctx.closePath(); ctx.fill();
+        ctx.restore();
+      });
       // 倒计时
       if (this.state === "countdown") {
         const n = Math.ceil(this.countdown);

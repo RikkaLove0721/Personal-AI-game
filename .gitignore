@@ -1,0 +1,15 @@
+# 临时文件与备份
+temp/
+.agents/
+*.log
+
+# 分发包
+*.zip
+
+# Python
+__pycache__/
+*.pyc
+
+# 系统文件
+Thumbs.db
+.DS_Store

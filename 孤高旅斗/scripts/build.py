@@ -12,6 +12,7 @@
 """
 import base64
 import io
+import json
 import os
 import re
 import sys
@@ -64,6 +65,39 @@ def main():
     shell = io.open(os.path.join(SRC, "shell.html"), encoding="utf-8").read()
     if "__SCRIPTS__" not in shell or "__VERSION__" not in shell:
         raise SystemExit("!! shell.html 缺少占位符")
+
+    # 皮肤贴图：assets/skins/<套装>/parts/*.png -> window.LD_SKIN_IMG（data URI，单文件内嵌）
+    # key = png 文件名（不含扩展名），与部件数据里的 img 字段对应
+    skin_dir = os.path.join(ROOT, "assets", "skins")
+    img_lines = []
+    if os.path.isdir(skin_dir):
+        for suit in sorted(os.listdir(skin_dir)):
+            pdir = os.path.join(skin_dir, suit, "parts")
+            if not os.path.isdir(pdir):
+                continue
+            for fn in sorted(os.listdir(pdir)):
+                if not fn.lower().endswith(".png"):
+                    continue
+                with open(os.path.join(pdir, fn), "rb") as f:
+                    uri = "data:image/png;base64," + base64.b64encode(f.read()).decode("ascii")
+                img_lines.append('LD_SKIN_IMG[%s]=%s;' % (json.dumps(fn[:-4]), json.dumps(uri)))
+                print("  皮肤贴图 %-24s %6.1f KB" % (fn, len(uri) / 1024.0))
+    skin_js = "/* 皮肤贴图由 build.py 自动内嵌，请勿手改 */\nwindow.LD_SKIN_IMG={};" + "".join(img_lines)
+    blocks.insert(0, skin_js)
+
+    # v3.7 建筑贴图：assets/props/*.png -> window.LD_PROP_IMG（key = 文件名，如 tower / crystal）
+    prop_dir = os.path.join(ROOT, "assets", "props")
+    prop_lines = []
+    if os.path.isdir(prop_dir):
+        for fn in sorted(os.listdir(prop_dir)):
+            if not fn.lower().endswith(".png"):
+                continue
+            with open(os.path.join(prop_dir, fn), "rb") as f:
+                uri = "data:image/png;base64," + base64.b64encode(f.read()).decode("ascii")
+            prop_lines.append('LD_PROP_IMG[%s]=%s;' % (json.dumps(fn[:-4]), json.dumps(uri)))
+            print("  建筑贴图 %-24s %6.1f KB" % (fn, len(uri) / 1024.0))
+    prop_js = "/* 建筑贴图由 build.py 自动内嵌，请勿手改 */\nwindow.LD_PROP_IMG={};" + "".join(prop_lines)
+    blocks.insert(0, prop_js)
 
     html = shell.replace("__SCRIPTS__", "\n".join(blocks)).replace("__VERSION__", ver)
 

@@ -23,7 +23,12 @@
       progress: {},                        // "1_normal": true
       cheat: 0,
       aiLoadout: null,                     // 自定义的电脑对手配装
-      bgmOn: true                          // 背景音乐开关（主菜单右上角可切换）
+      bgmOn: true,                         // 背景音乐开关（主菜单右上角可切换）
+      stats: { kills: 0, wins: 0, losses: 0, bossWins: 0, relayWins: 0, huntWins: 0, dailyWins: 0, coinsEarned: 0,
+               warmupWins: 0, zombieKills: 0, modeWins: {} },   // v2.6 累计战绩（v2.8 增补 modeWins 各模式胜场）
+      ach: {},                             // v2.6 已解锁成就 { id: true }
+      title: "",                           // v2.6 当前佩戴的称号
+      daily: {}                            // v2.6 每日挑战 { "2026-09-21": 最快秒数 }
     };
   }
 
@@ -35,6 +40,17 @@
     d.progress = o.progress || {};
     d.ownedParts = Array.isArray(o.ownedParts) ? o.ownedParts : base.ownedParts;
     d.ownedSkills = Array.isArray(o.ownedSkills) ? o.ownedSkills : base.ownedSkills;
+    d.stats = Object.assign(fresh().stats, o.stats || {});
+    /* v2.8：各模式胜场统一收进 stats.modeWins；旧档的 relayWins / huntWins / warmupWins
+     * 一次性迁移过来（取两者较大值），避免老玩家的称号进度被清零。 */
+    const mm = d.stats.modeWins = Object.assign({}, o.stats && o.stats.modeWins);
+    [["relay", "relayWins"], ["hunt", "huntWins"], ["warmup", "warmupWins"]].forEach(pair => {
+      const v = (o.stats && o.stats[pair[1]]) || 0;
+      if (v > (mm[pair[0]] || 0)) mm[pair[0]] = v;
+    });
+    d.ach = o.ach || {};
+    d.title = o.title || "";
+    d.daily = o.daily || {};
     return d;
   }
 
@@ -110,7 +126,10 @@
       }
     },
     get coins() { return this.d.coins; },
-    displayName() { return this.d.name || "勇者"; },
+    displayName() {
+      const t = this.d.title && LD.TITLES ? LD.TITLES.find(x => x.id === this.d.title) : null;
+      return (t ? "「" + t.name + "」" : "") + (this.d.name || "勇者");
+    },
     rename(n) {
       n = String(n || "").trim().slice(0, 8);
       if (!n) return { ok: false, why: "名字不能为空" };
@@ -118,7 +137,12 @@
       return { ok: true, name: n };
     },
 
-    addCoins(n) { this.d.coins = Math.max(0, this.d.coins + n); this.save(); return this.d.coins; },
+    addCoins(n) {
+      this.d.coins = Math.max(0, this.d.coins + n);
+      if (n > 0) { this.stat("coinsEarned", n); this.checkAch(); }   // v2.6：成就需要累计获得金币
+      this.save();
+      return this.d.coins;
+    },
     spend(n) { if (this.d.coins < n) return false; this.d.coins -= n; this.save(); return true; },
 
     /* ---------------- 部件 ---------------- */
@@ -137,6 +161,35 @@
       const p = LD.part(id);
       if (!p || !this.ownsPart(id)) return false;
       this.d.equip[p.part] = id; this.save(); return true;
+    },
+
+    /* ---------------- 套装（v2.8 图片皮肤） ---------------- */
+    ownsSuit(id) {
+      const s = LD.suit(id);
+      if (!s) return false;
+      const self = this;
+      return Object.keys(s.pieces).every(k => self.ownsPart(s.pieces[k]));
+    },
+    buySuit(id) {
+      const s = LD.suit(id);
+      if (!s) return { ok: false, why: "没有这个套装" };
+      if (this.ownsSuit(id)) return { ok: false, why: "已拥有" };
+      if (this.d.coins < s.price) return { ok: false, why: "金币不足" };
+      this.spend(s.price);
+      const self = this;
+      Object.keys(s.pieces).forEach(k => {
+        if (!self.ownsPart(s.pieces[k])) self.d.ownedParts.push(s.pieces[k]);
+      });
+      this.equipSuit(id);                        // 买完整套直接穿上
+      this.save();
+      return { ok: true };
+    },
+    equipSuit(id) {
+      const s = LD.suit(id);
+      if (!s || !this.ownsSuit(id)) return false;
+      const self = this;
+      Object.keys(s.pieces).forEach(k => { self.d.equip[k] = s.pieces[k]; });
+      this.save(); return true;
     },
 
     /* ---------------- 技能 ---------------- */
@@ -181,6 +234,54 @@
 
     cheatCoins() { this.d.cheat++; this.addCoins(10); return this.d.coins; },
 
+    /* ---------------- v2.6 成就 / 称号 / 每日挑战 / 累计战绩 ---------------- */
+    stat(k, n) {
+      if (!this.d.stats) this.d.stats = {};
+      if (n != null) { this.d.stats[k] = (this.d.stats[k] || 0) + n; this.save(); }
+      return this.d.stats[k] || 0;
+    },
+    /* 战斗结算入口：win=是否获胜，kind=dragon|duel|net；rule 供特殊模式计数 */
+    battleEnd(win, kind, rule) {
+      const st = this.d.stats;
+      if (!st.modeWins) st.modeWins = {};
+      if (win) st.wins++; else st.losses++;
+      if (kind === "dragon" && win) st.bossWins++;
+      /* v2.8：按模式记胜场（闯关不计模式；未知 rule 用 ruleInfo 兜底校验，防止脏数据写进表） */
+      if (win && kind !== "dragon" && rule && LD.ruleInfo(rule).id === rule) {
+        st.modeWins[rule] = (st.modeWins[rule] || 0) + 1;
+      }
+      if (rule === "relay" && win) st.relayWins++;
+      if (rule === "hunt" && win) st.huntWins++;
+      if (rule === "warmup" && win) st.warmupWins++;
+      this.checkAch();
+      this.save();
+    },
+    achUnlocked(id) { return !!this.d.ach[id]; },
+    /* 逐条检查成就条件，返回本次新解锁的成就数组 */
+    checkAch() {
+      const d = this.d, st = d.stats, got = [];
+      (LD.ACHIEVEMENTS || []).forEach(a => {
+        if (d.ach[a.id]) return;
+        if (a.cond(d, st)) { d.ach[a.id] = true; got.push(a); }
+      });
+      return got;
+    },
+    setTitle(id) {
+      const t = LD.TITLES ? LD.TITLES.find(x => x.id === id) : null;
+      if (t && !this.achUnlocked(t.ach)) return false;
+      this.d.title = id || ""; this.save(); return true;
+    },
+    dailyKey() {
+      const now = new Date();
+      return now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0") + "-" + String(now.getDate()).padStart(2, "0");
+    },
+    dailyBest() { return this.d.daily[this.dailyKey()] || null; },
+    setDailyBest(sec) {
+      const k = this.dailyKey(), best = this.d.daily[k];
+      if (best == null || sec < best) { this.d.daily[k] = sec; this.save(); return true; }
+      return false;
+    },
+
     /* ---------------- 外观读取（绘制用） ---------------- */
     look() {
       const e = this.d.equip;
@@ -188,9 +289,9 @@
       const u = LD.part(e.upper) || LD.part(LD.FREE.upper);
       const l = LD.part(e.lower) || LD.part(LD.FREE.lower);
       return {
-        head: { model: h.model, c1: h.c1, c2: h.c2, c3: h.c3 },
-        upper: { c1: u.c1, c2: u.c2 },
-        lower: { c1: l.c1, c2: l.c2 }
+        head: { model: h.model, c1: h.c1, c2: h.c2, c3: h.c3, img: h.img },
+        upper: { c1: u.c1, c2: u.c2, img: u.img },
+        lower: { c1: l.c1, c2: l.c2, img: l.img }
       };
     }
   };

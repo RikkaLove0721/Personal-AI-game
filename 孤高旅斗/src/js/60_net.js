@@ -14,7 +14,8 @@
     queue: [], lastSend: 0, sendInt: 1 / 30,
     snapPrev: null, snapCur: null, snapT: 0, snapInt: 1 / 30,
     started: false, peerLook: null, peerLoadout: null,   // peerLook/peerLoadout 兼容 1v1 旧字段
-    remoteCtrls: {}                  // 座位 → 虚拟手柄（房主用）
+    remoteCtrls: {},                 // 座位 → 虚拟手柄（房主用）
+    lanUrls: [], lanLoading: false   // 服务器告知的「朋友该打开的网址」列表
   };
 
   Net.on = function (k, fn) { (this.handlers[k] = this.handlers[k] || []).push(fn); };
@@ -27,6 +28,7 @@
   Net.connect = function () {
     if (this.ws && (this.ws.readyState === 0 || this.ws.readyState === 1)) return;
     if (!location.protocol.startsWith("http")) { this.emit("status", { ok: false, why: "file" }); return; }
+    this.fetchLanUrls();
     let ws;
     try { ws = new WebSocket(this.url()); } catch (e) { this.emit("status", { ok: false, why: "err" }); return; }
     this.ws = ws;
@@ -40,6 +42,29 @@
     ws.onmessage = e => { let m; try { m = JSON.parse(e.data); } catch (x) { return; } this.handle(m); };
     ws.onclose = () => { this.ok = false; this.peerIn = false; this.queue.length = 0; this.emit("status", { ok: false, why: "closed" }); };
     ws.onerror = () => { this.emit("status", { ok: false, why: "err" }); };
+  };
+
+  /* 向服务器要局域网地址列表：服务端知道自己监听的端口，
+     而客户端地址栏里的 localhost 发给朋友是连不上的。取不到就退回 location.origin */
+  Net.fetchLanUrls = function () {
+    if (this.lanUrls.length || this.lanLoading) return;
+    if (!location.protocol.startsWith("http") || typeof fetch !== "function") return;
+    this.lanLoading = true;
+    const done = list => {
+      this.lanUrls = list && list.length ? list : [location.origin];
+      this.lanLoading = false;
+      this.emit("lan", this.lanUrls);
+    };
+    try {
+      fetch(location.protocol + "//" + location.host + "/api/lanip", { cache: "no-store" })
+        .then(r => (r.ok ? r.json() : Promise.reject(new Error("bad"))))
+        .then(j => {
+          const port = j && j.port;
+          const ips = (j && j.ips) || [];
+          done(port ? ips.map(ip => location.protocol + "//" + ip + ":" + port) : null);
+        })
+        .catch(() => done(null));
+    } catch (e) { this.lanLoading = false; done(null); }
   };
 
   Net.send = function (o) {
@@ -112,6 +137,7 @@
     });
     if (d.dd) rc.dodge = { x: d.dd[0], y: d.dd[1] };   // 双击闪避请求
     if (d.lk) rc.lockNext = d.lk;                      // V 键索敌切换
+    if (d.it) rc.press.interact = true;                // v3.3 P 键交互
     // 时间戳用于延迟估算
     if (d.ts) this.ping = Math.max(0, Math.round(Date.now() - d.ts));
   };
@@ -122,9 +148,10 @@
     const anyPress = p.some(k => ctrl.press[k]);
     const dd = ctrl.dodge || null;
     const lk = ctrl.lockNext || 0;
+    const it = ctrl.press.interact ? 1 : 0;
     if (dd) ctrl.dodge = null;
     if (lk) ctrl.lockNext = 0;
-    if (this.lastSend < this.sendInt && !anyPress && !dd && !lk) return;
+    if (this.lastSend < this.sendInt && !anyPress && !dd && !lk && !it) return;
     this.lastSend = 0;
     this.toPeer({
       t: "i", ts: Date.now(),          // 注意：时间戳字段必须与消息类型 t 区分开
@@ -133,9 +160,10 @@
       h: p.map(k => ctrl.hold[k] ? 1 : 0),
       p: p.map(k => ctrl.press[k] ? 1 : 0),
       dd: dd ? [Math.round(dd.x * 100) / 100, Math.round(dd.y * 100) / 100] : null,
-      lk: lk
+      lk: lk, it: it
     });
     p.forEach(k => { ctrl.press[k] = false; });
+    ctrl.press.interact = false;
   };
 
   /* ---------------- 快照 ---------------- */
@@ -156,7 +184,9 @@
       f.kind === "dragon" ? [f.mode, r(f.charge, 2), r(f.chargeMax, 2), f.rageStage || 0] : null,
       r(f.blind || 0, 2), f.overlord ? 1 : 0, f.team == null ? -1 : f.team, f.lock == null ? -1 : f.lock,
       r(f.stealthT || 0, 2),
-      f.kind === "hero" ? [f.loadout.skill1 || "", f.loadout.skill2 || "", f.loadout.ult || ""].join("|") : ""
+      f.kind === "hero" ? [f.loadout.skill1 || "", f.loadout.skill2 || "", f.loadout.ult || ""].join("|") : "",
+      Math.round(f.maxHp), f.isZombie ? 1 : 0,      // v2.7：血上限（猎人 800 / 霸主 ×1.5）+ 僵尸标记
+      (f.hideProp || f.rideCar) ? 1 : 0             // v3.3：躲在柜子 / 坐在车上（客机据此不画人）
     ];
     function r(v, n) { return n ? Math.round(v * Math.pow(10, n)) / Math.pow(10, n) : Math.round(v); }
   }
@@ -179,8 +209,14 @@
         Math.round(z.life * 100) / 100, Math.round((z.max || 0) * 100) / 100, z.warn || 0,
         Math.round(z.x0 || 0), Math.round(z.y0 || 0), Math.round(z.x1 || 0), Math.round(z.y1 || 0)]),
       sc: B.score.slice(), rw: B.roundWinner, mw: B.matchWinner,
+      w: (B.wScore || []).slice(),                    // v2.7 乱斗热身：击杀分
       g: (B.gifts || []).map(g => [Math.round(g.x), Math.round(g.y), g.kind === "ult" ? 1 : 0, g.id,
-        Math.round((g.t || 0) * 100) / 100, g.landed ? 1 : 0, Math.round((g.born || 0) * 100) / 100])
+        Math.round((g.t || 0) * 100) / 100, g.landed ? 1 : 0, Math.round((g.born || 0) * 100) / 100]),
+      /* v3.0 地形：只同步会变化的部分（是否被打碎 / 方块位置 / 剩余血量），
+         布局本身由房主下发的 mapCfg 种子在两端各生成一份，完全一致 */
+      tm: B.terrain ? B.terrain.props.map(o => [o.dead ? 1 : 0, Math.round(o.x), Math.round(o.y),
+        Math.round(o.hp || 0), Math.round(o.fuel || 0), o.driver ? o.driver.side : -1,
+        o.carried ? 1 : 0, o.cargo ? 1 : 0, o.occupant ? o.occupant.side : -1]) : null
     };
   };
 
@@ -215,6 +251,13 @@
       if (f.loadout.skill2 !== (parts[1] || null)) f.loadout.skill2 = parts[1] || null;
       if (f.loadout.ult !== (parts[2] || null)) f.loadout.ult = parts[2] || null;
     }
+    if (a[34] != null) f.maxHp = a[34];               // v2.7：血量上限随快照同步
+    f.hiddenNet = !!a[36];                            // v3.3：躲藏 / 驾驶中，客机不画小人
+    /* v2.7 追猎：猎人的身份靠 team（9）判断，客机不需要自己抽签 */
+    if (B.rule === "hunt" && f.kind === "hero") {
+      f.huntRole = f.team === 9 ? "hunter" : "runner";
+      f.huntCrown = f.huntRole === "hunter";
+    }
     if (!wasDead && f.dead) { LD.FX.shake(14); LD.FX.burst(f.x, f.y - 26, 34, ["#fff", "#fb7185"], { speed: 340, life: 0.9 }); }
   }
 
@@ -229,6 +272,30 @@
     if (s.ct != null) B.countdown = s.ct;
     if (s.rt) B.roundT = s.rt;
     B.score = s.sc; B.roundWinner = s.rw; B.matchWinner = s.mw;
+    if (s.w) B.wScore = s.w.slice();                  // v2.7 乱斗热身计分板
+    if (s.tm && B.terrain && B.terrain.props) {
+      s.tm.forEach((a, i) => {
+        const o = B.terrain.props[i];
+        if (!o) return;
+        o.dead = !!a[0];
+        if (o.maxHp > 0) o.hp = a[3];
+        if (o.kind === "pushable" || o.kind === "car" || o.kind === "mud") { o.x = a[1]; o.y = a[2]; }
+        if (o.kind === "car") {
+          o.fuel = a[4] || 0;
+          o.driver = a[5] >= 0 ? (B.fighters.find(f => f.side === a[5]) || null) : null;
+        }
+        if (o.kind === "mud") {
+          /* v3.3：泥土被搬起 / 正在飞行 / 已落地，客机要跟着同步，否则会看到它原地不动 */
+          o.carried = !!a[6];
+          o.cargo = !!a[7];
+          if (!o.cargo) o.landed = true;
+          o.vx = 0; o.vy = 0;
+        }
+        if (o.kind === "locker") {
+          o.occupant = a[8] >= 0 ? (B.fighters.find(f => f.side === a[8]) || null) : null;
+        }
+      });
+    }
     /* 客机补胜者特写：权威端 endRound 播放大招式演出，客机靠快照里 roundWinner 的变化本地触发 */
     if (s.rw !== this._lastRW) {
       if (s.rw != null && s.rw >= 0 && B.state === "roundEnd") {
@@ -239,7 +306,15 @@
       }
       this._lastRW = s.rw;
     }
-    s.f.forEach((a, i) => { if (B.fighters[i]) unpackFighter(B.fighters[i], a); });
+    s.f.forEach((a, i) => {
+      /* v2.7：房主多出来的实体（僵尸永远追加在数组末尾）按需在客机侧补出外壳 */
+      if (!B.fighters[i]) {
+        if (!(a && a[35])) return;
+        B.fighters[i] = B.mkZombieShell();
+      }
+      unpackFighter(B.fighters[i], a);
+    });
+    if (B.fighters.length > s.f.length) B.fighters.length = s.f.length;   // 房主清场后同步裁掉多余僵尸
     // 天外来物掉落物：直接重建（拾取与置换由房主权威结算，客机只管渲染）
     B.gifts = (s.g || []).map(a => ({
       x: a[0], y: a[1], kind: a[2] ? "ult" : "skill", id: a[3], t: a[4], landed: !!a[5], born: a[6]
@@ -247,7 +322,7 @@
     // 弹道：直接重建
     B.projs = s.p.map(a => ({
       x: a[0], y: a[1], vx: a[2], vy: a[3], r: a[4], life: a[5], maxLife: a[10], side: a[6], reflect: !!a[7],
-      type: a[8], color: a[9], core: "#fff", owner: B.fighters[a[6]] || B.fighters[0], pierce: false,
+      type: a[8], color: a[9], core: "#fff", owner: B.fighters.find(x => x.side === a[6]) || B.fighters[0], pierce: false,
       data: { R: a[11], timer: a[17] || 0, boomR: 150, dmg: 28 }, tick: 0, hits: {}, absorb: 0, absorbed: 0, spin: 0,
       trail: !!a[12], basic: !!a[13], kindTag: a[14] === 0 ? "basic" : a[14] === 2 ? "ult" : "skill",
       stun: a[15] || 0, blind: a[16] || 0,
@@ -270,6 +345,8 @@
     const k = 1 - Math.exp(-22 * dt);
     B.fighters.forEach(f => {
       if (f._tx == null) return;
+      /* v2.6：误差超过 90px（闪避 / 传送 / 出生点差异）直接吸附，避免长时间回弹 */
+      if (Math.abs(f._tx - f.x) > 90 || Math.abs(f._ty - f.y) > 90) { f.x = f._tx; f.y = f._ty; return; }
       f.x += (f._tx - f.x) * k;
       f.y += (f._ty - f.y) * k;
       f.hitFlash = Math.max(0, f.hitFlash - dt);
@@ -345,7 +422,8 @@
       dr.side = fighters.length; dr.id = dr.side; dr.team = -1;
       fighters.push(dr);
     }
-    B.setup({ mode: "net", rule: cfg.rule || "brawl", isHost: cfg.isHost, mySide: me, fighters, theme: {} });
+    B.setup({ mode: "net", rule: cfg.rule || "brawl", isHost: cfg.isHost, mySide: me, fighters, theme: {},
+      mods: cfg.mods || [], matchT: cfg.matchT || 120, mapCfg: cfg.mapCfg || null });
     B.authoritative = !!cfg.isHost;
     fighters.forEach((f, i) => {
       if (f.kind !== "hero") return;

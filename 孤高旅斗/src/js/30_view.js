@@ -42,6 +42,45 @@
   const SKIN = { boy: "#f6d0b0", girl: "#fbdcc8", jianghu: "#e8c9a0", tophat: "#f2cfae" };
 
   /* ==========================================================
+   *  v2.8 图片皮肤（LD_SKIN_IMG 由 build.py 内嵌 data URI）
+   *  统一规格（颈面锚点制，见 scripts/proc_skin.py）：
+   *    头部底边锚 (0,-40)｜上身顶边锚 (0,-40)｜下身底边锚 (0,0)｜中轴 x=0
+   *    绘制顺序 下身 → 上身 → 头部；3x 贴图按 1/3 缩放
+   *  ========================================================== */
+  const IMG_CACHE = {};
+  function skinImg(key) {
+    if (!key) return null;
+    const hit = IMG_CACHE[key];
+    if (hit) return hit.ok ? hit.el : null;
+    const entry = { el: null, ok: false };
+    IMG_CACHE[key] = entry;
+    try {
+      const src = (typeof window !== "undefined" && window.LD_SKIN_IMG) ? window.LD_SKIN_IMG[key] : null;
+      if (src && typeof Image !== "undefined") {          // 无头测试环境没有 Image，静默降级
+        const el = new Image();
+        el.onload = () => { entry.ok = true; if (V.onSkinImgLoad) V.onSkinImgLoad(); };
+        el.src = src;
+        entry.el = el;
+      }
+    } catch (e) { /* 忽略：降级为程序化绘制 */ }
+    return null;
+  }
+  V.onSkinImgLoad = null;   // UI 可注册：贴图加载完成后刷新预览
+
+  /* mode: "bottom"=画布底边中点锚在 (0,y)，"top"=顶边中点锚在 (0,y)；y 为游戏坐标。
+   * 注意 translate 用游戏单位：先移到锚点，再 scale(1/3) 让 3x 贴图落到游戏尺寸。 */
+  function drawImgPart(ctx, key, y, mode, flip) {
+    const el = skinImg(key);
+    if (!el) return false;
+    ctx.save();
+    ctx.translate(0, y);
+    ctx.scale(flip / 3, 1 / 3);
+    ctx.drawImage(el, -el.width / 2, mode === "top" ? 0 : -el.height);
+    ctx.restore();
+    return true;
+  }
+
+  /* ==========================================================
    *  Q版三段式角色：头部 + 上身 + 下身
    *  origin 在角色「脚下」；向上为负 y
    * ========================================================== */
@@ -73,51 +112,75 @@
 
     /* ---------- 腿 ---------- */
     const lsw = moving ? Math.sin(phase) * 5 : 0;
-    [[-7, lsw], [7, -lsw]].forEach(([lx, off]) => {
-      ctx.fillStyle = L.c1;
-      rr(ctx, lx - 5 + off * 0.35, -legH, 10, legH + 1, 4); ctx.fill();
-      ctx.fillStyle = L.c2;                                 // 鞋
-      rr(ctx, lx - 6.5 + off * 0.5, -5.5, 13, 6.5, 3); ctx.fill();
-    });
+    if (L.img && drawImgPart(ctx, L.img, 0, "bottom", flip)) {
+      /* 图片下身：底边锚在地面（规格 v2），贴图自带腿脚造型 */
+    } else {
+      [[-7, lsw], [7, -lsw]].forEach(([lx, off]) => {
+        ctx.fillStyle = L.c1;
+        rr(ctx, lx - 5 + off * 0.35, -legH, 10, legH + 1, 4); ctx.fill();
+        ctx.fillStyle = L.c2;                                 // 鞋
+        rr(ctx, lx - 6.5 + off * 0.5, -5.5, 13, 6.5, 3); ctx.fill();
+      });
+    }
 
-    /* ---------- 躯干 ---------- */
-    ctx.fillStyle = U.c1;
-    rr(ctx, -torsoW / 2, -legH - torsoH, torsoW, torsoH + 3, 7); ctx.fill();
-    // 衣领 / 装饰条
-    ctx.fillStyle = U.c2;
-    rr(ctx, -torsoW / 2 + 3, -legH - torsoH + 2, torsoW - 6, 4.5, 2); ctx.fill();
-    ctx.globalAlpha = 0.5;
-    rr(ctx, -3, -legH - torsoH + 8, 6, torsoH - 8, 3); ctx.fill();
-    ctx.globalAlpha = 1;
-
-    /* ---------- 手臂 ---------- */
+    /* ---------- 躯干 + 手臂 ---------- */
     const shoulderY = -legH - torsoH + 7;
     const armSw = moving ? Math.sin(phase + Math.PI) * 4 : 0;
-    // 后手
-    ctx.fillStyle = V.shade(U.c1, -26);
-    rr(ctx, -torsoW / 2 - 6.5, shoulderY + armSw * 0.5, 8, 17, 4); ctx.fill();
-    // 前手（挥砍时抬起）
-    ctx.save();
-    ctx.translate(torsoW / 2 + 3, shoulderY + 3);
-    ctx.rotate(flip * (-1.35 * swing + 0.12) + (moving ? Math.sin(phase) * 0.14 : 0));
-    ctx.fillStyle = U.c1;
-    rr(ctx, -4, -3, 8, 19, 4); ctx.fill();
-    // 武器（斩击时可见）
-    if (st.weapon) {
+    if (U.img && drawImgPart(ctx, U.img, -40, "top", flip)) {
+      /* 图片上身：顶边锚在颈面 -40（规格 v2），贴图自带手臂造型 */
+      if (st.weapon) {                          // 武器光效仍要画（ approximate 前手位置）
+        ctx.save();
+        ctx.translate(torsoW / 2 + 2, shoulderY + 6);
+        ctx.rotate(flip * (-1.35 * swing + 0.12) * 0.6);
+        ctx.translate(0, 12);
+        ctx.rotate(flip * 0.5);
+        ctx.globalCompositeOperation = "lighter";
+        const wc2 = st.weaponColor || "#7fe6f7";
+        glow(ctx, 0, 0, 20, wc2, 0.85);
+        ctx.fillStyle = "#eafcff";
+        ctx.beginPath(); ctx.moveTo(-2.5, 4); ctx.lineTo(2.5, 4); ctx.lineTo(0, -30); ctx.closePath(); ctx.fill();
+        ctx.restore();
+      }
+    } else {
+      /* ---------- 躯干 ---------- */
+      ctx.fillStyle = U.c1;
+      rr(ctx, -torsoW / 2, -legH - torsoH, torsoW, torsoH + 3, 7); ctx.fill();
+      // 衣领 / 装饰条
+      ctx.fillStyle = U.c2;
+      rr(ctx, -torsoW / 2 + 3, -legH - torsoH + 2, torsoW - 6, 4.5, 2); ctx.fill();
+      ctx.globalAlpha = 0.5;
+      rr(ctx, -3, -legH - torsoH + 8, 6, torsoH - 8, 3); ctx.fill();
+      ctx.globalAlpha = 1;
+
+      /* ---------- 手臂 ---------- */
+      // 后手
+      ctx.fillStyle = V.shade(U.c1, -26);
+      rr(ctx, -torsoW / 2 - 6.5, shoulderY + armSw * 0.5, 8, 17, 4); ctx.fill();
+      // 前手（挥砍时抬起）
       ctx.save();
-      ctx.translate(0, 15);
-      ctx.rotate(flip * 0.5);
-      ctx.globalCompositeOperation = "lighter";
-      const wc = st.weaponColor || "#7fe6f7";
-      glow(ctx, 0, 0, 20, wc, 0.85);
-      ctx.fillStyle = "#eafcff";
-      ctx.beginPath(); ctx.moveTo(-2.5, 4); ctx.lineTo(2.5, 4); ctx.lineTo(0, -30); ctx.closePath(); ctx.fill();
+      ctx.translate(torsoW / 2 + 3, shoulderY + 3);
+      ctx.rotate(flip * (-1.35 * swing + 0.12) + (moving ? Math.sin(phase) * 0.14 : 0));
+      ctx.fillStyle = U.c1;
+      rr(ctx, -4, -3, 8, 19, 4); ctx.fill();
+      // 武器（斩击时可见）
+      if (st.weapon) {
+        ctx.save();
+        ctx.translate(0, 15);
+        ctx.rotate(flip * 0.5);
+        ctx.globalCompositeOperation = "lighter";
+        const wc = st.weaponColor || "#7fe6f7";
+        glow(ctx, 0, 0, 20, wc, 0.85);
+        ctx.fillStyle = "#eafcff";
+        ctx.beginPath(); ctx.moveTo(-2.5, 4); ctx.lineTo(2.5, 4); ctx.lineTo(0, -30); ctx.closePath(); ctx.fill();
+        ctx.restore();
+      }
       ctx.restore();
     }
-    ctx.restore();
 
     /* ---------- 头 ---------- */
-    drawHead(ctx, 0, headLocalY, headR, H, flip, back, t, st);
+    if (!(H.img && drawImgPart(ctx, H.img, -40 + bob, "bottom", flip))) {
+      drawHead(ctx, 0, headLocalY, headR, H, flip, back, t, st);
+    }
 
     // 受击白闪
     if (st.flash > 0) {
@@ -139,6 +202,9 @@
   };
 
   function drawHead(ctx, cx, cy, r, H, flip, back, t, st) {
+    /* v3.5：图片皮肤贴图没加载 / 老数据缺 model 时兜底成普通少年，别画成无头人 */
+    H = H || {};
+    if (!H.model) H = Object.assign({}, H, { model: "boy" });
     const blink = st.blinkAmt == null ? 1 : st.blinkAmt;
     ctx.save();
     ctx.translate(cx, cy);
@@ -492,7 +558,7 @@
   /* ==========================================================
    *  场景
    * ========================================================== */
-  V.arena = function (ctx, W, H, t, theme) {
+  V.arena = function (ctx, W, H, t, theme, world) {
     theme = theme || {};
     const g = ctx.createLinearGradient(0, 0, 0, H);
     g.addColorStop(0, theme.top || "#0d1428");
@@ -508,28 +574,31 @@
     ctx.fillStyle = "rgba(13,20,40,.75)";
     circle(ctx, W * 0.78 - 14, 98, 34); ctx.fill();
 
-    // 透视网格地面
-    const hy = H * 0.42;
-    ctx.save(); ctx.globalAlpha = 0.42;
-    ctx.strokeStyle = theme.grid || "rgba(34,211,238,.42)"; ctx.lineWidth = 1;
-    for (let i = 0; i <= 22; i++) {
-      const x = (i / 22) * W;
-      ctx.beginPath(); ctx.moveTo(x, H); ctx.lineTo(W / 2 + (x - W / 2) * 0.16, hy); ctx.stroke();
-    }
-    for (let i = 0; i < 13; i++) {
-      const p = i / 12, yy = hy + Math.pow(p, 2.1) * (H - hy);
-      ctx.globalAlpha = 0.42 * (0.25 + p * 0.75);
-      ctx.beginPath(); ctx.moveTo(0, yy); ctx.lineTo(W, yy); ctx.stroke();
-    }
-    ctx.restore();
+    // v2.6 大地图模式：透视网格与边界移入世界空间（V.ground），这里只画天空与远景
+    if (!world) {
+      // 透视网格地面
+      const hy = H * 0.42;
+      ctx.save(); ctx.globalAlpha = 0.42;
+      ctx.strokeStyle = theme.grid || "rgba(34,211,238,.42)"; ctx.lineWidth = 1;
+      for (let i = 0; i <= 22; i++) {
+        const x = (i / 22) * W;
+        ctx.beginPath(); ctx.moveTo(x, H); ctx.lineTo(W / 2 + (x - W / 2) * 0.16, hy); ctx.stroke();
+      }
+      for (let i = 0; i < 13; i++) {
+        const p = i / 12, yy = hy + Math.pow(p, 2.1) * (H - hy);
+        ctx.globalAlpha = 0.42 * (0.25 + p * 0.75);
+        ctx.beginPath(); ctx.moveTo(0, yy); ctx.lineTo(W, yy); ctx.stroke();
+      }
+      ctx.restore();
 
-    // 赛场边界
-    ctx.save();
-    ctx.strokeStyle = "rgba(120,160,255,.30)"; ctx.lineWidth = 2;
-    ctx.setLineDash([10, 8]);
-    rr(ctx, 26, hy + 6, W - 52, H - hy - 34, 16); ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.restore();
+      // 赛场边界
+      ctx.save();
+      ctx.strokeStyle = "rgba(120,160,255,.30)"; ctx.lineWidth = 2;
+      ctx.setLineDash([10, 8]);
+      rr(ctx, 26, hy + 6, W - 52, H - hy - 34, 16); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
 
     // 飘浮粒子
     ctx.save(); ctx.globalCompositeOperation = "lighter";
@@ -544,6 +613,78 @@
     }
     ctx.restore();
   };
+
+  /* ==========================================================
+   *  v2.6 世界空间地面：滚动正交网格 + 世界边界（跟随摄像机移动）
+   * ========================================================== */
+  V.ground = function (ctx, world, t, noGrid) {
+    const w = world || { w: 960, h: 600, pt: 192 };
+    ctx.save();
+    // 网格（v3.0：已有地面材质时跳过网格，只保留边界）
+    if (!noGrid) {
+      ctx.globalAlpha = 0.30;
+      ctx.strokeStyle = "#22d3ee"; ctx.lineWidth = 1;
+      const step = 80;
+      ctx.beginPath();
+      for (let x = 0; x <= w.w; x += step) { ctx.moveTo(x, w.pt - 40); ctx.lineTo(x, w.h - 20); }
+      for (let y = w.pt - 40; y <= w.h - 20; y += step) { ctx.moveTo(0, y); ctx.lineTo(w.w, y); }
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    // 世界边界
+    ctx.strokeStyle = "rgba(120,160,255,.45)"; ctx.lineWidth = 2;
+    ctx.setLineDash([12, 9]);
+    ctx.lineDashOffset = -(t || 0) * 14;
+    rr(ctx, 12, w.pt - 60, w.w - 24, w.h - w.pt + 36, 18); ctx.stroke();
+    ctx.setLineDash([]);
+    // 上边界装饰线（天空与场地分界）
+    const gd = ctx.createLinearGradient(0, w.pt - 70, 0, w.pt - 20);
+    gd.addColorStop(0, "rgba(13,20,40,0)");
+    gd.addColorStop(1, "rgba(13,20,40,.55)");
+    ctx.fillStyle = gd;
+    ctx.fillRect(0, w.pt - 70, w.w, 52);
+    ctx.restore();
+  };
+
+  /* ==========================================================
+   *  v2.6 杂兵（机械蜂等小型召唤物）
+   * ========================================================== */
+  V.minion = function (ctx, m, t) {
+    const bob = Math.sin((t || 0) * 9 + (m.walkPhase || 0)) * 3;
+    ctx.save();
+    // 阴影
+    ctx.globalAlpha = 0.28; ctx.fillStyle = "#000";
+    ctx.beginPath(); ctx.ellipse(m.x, m.y + 4, 10, 4, 0, 0, TAU); ctx.fill();
+    ctx.globalAlpha = 1;
+    const cy = m.y - 14 + bob;
+    // 翅膀
+    const wf = Math.sin((t || 0) * 40 + (m.walkPhase || 0)) * 0.8;
+    ctx.fillStyle = "rgba(190,242,100,.65)";
+    ctx.beginPath(); ctx.ellipse(m.x - 9, cy - 4, 8, 3.4, -0.5 + wf, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(m.x + 9, cy - 4, 8, 3.4, 0.5 - wf, 0, TAU); ctx.fill();
+    // 身体
+    ctx.fillStyle = m.hitFlash > 0 ? "#fff" : "#4d7c0f";
+    ctx.beginPath(); ctx.ellipse(m.x, cy, 9, 7.4, 0, 0, TAU); ctx.fill();
+    ctx.strokeStyle = "#1a2e05"; ctx.lineWidth = 1.2; ctx.stroke();
+    // 条纹
+    ctx.strokeStyle = "#a3e635"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(m.x - 3, cy - 6); ctx.lineTo(m.x - 3, cy + 6); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(m.x + 2, cy - 6.6); ctx.lineTo(m.x + 2, cy + 6.6); ctx.stroke();
+    // 眼睛（朝向）
+    ctx.fillStyle = "#fb7185";
+    const ex = (m.facing && m.facing.x >= 0) ? 4 : -4;
+    ctx.beginPath(); ctx.arc(m.x + ex, cy - 2, 2.2, 0, TAU); ctx.fill();
+    // 尾针
+    ctx.strokeStyle = "#e2e8f0"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(m.x - ex * 0.6, cy + 5); ctx.lineTo(m.x - ex * 1.8, cy + 10); ctx.stroke();
+    // 剩余寿命环
+    ctx.strokeStyle = "rgba(163,230,53,.5)"; ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.arc(m.x, cy, 13, -Math.PI / 2, -Math.PI / 2 + TAU * Math.max(0, m.lifeT) / 12);
+    ctx.stroke();
+    ctx.restore();
+  };
+
 
   /* ==========================================================
    *  特效系统
