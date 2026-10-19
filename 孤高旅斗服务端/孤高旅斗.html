@@ -773,7 +773,7 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     W: 960, H: 600,
     hero: { hp: 200, speed: 195, r: 15 },
     // 能量：命中敌人、被击中都回能，另加少量自然回复
-    energy: { max: 150, onHit: 12, onHurt: 10, regen: 2.2 },   // 大招需攒满 150
+    energy: { max: 150, onHit: 12, onHurt: 10, regen: 2.2, packGain: 60 },   // 大招需攒满 150
     critRate: 0.10, critMul: 2,
     dodge: { cd: 2.5, dist: 96 },                              // 双击方向键闪避
     parry: { cdBasic: 2, cdSkill: 8 },                         // 格挡反制：挡普攻 / 挡技能大招
@@ -1092,8 +1092,10 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
         desc: "开启后 6 秒内，自己造成伤害的 50% 转化为治疗量，但期间造成的伤害减少 25%。越凶越难死，但爆发力也会打折扣。" });
 
   add({ id: "thousandSwords", kind: "ult", name: "千剑杀", icon: "⚔️", price: 10, cd: 1.0, dmg: 10,
-        tags: ["大招"], dur: 4.0, interval: 0.28, proj: { speed: 840, r: 12, life: 1.6 },
-        desc: "施放瞬间锁定朝向，4 秒内向前方直线倾泻高速剑气（每把 10 点伤害），弹道不追踪，靠走位把对手压进火力线。" });
+        tags: ["大招", "穿透"], dur: 4.0, interval: 0.28, proj: { speed: 840, r: 12, life: 1.6 },
+        /* v3.9 剑气穿透：命中后不消失，继续贯穿后面的目标（同一个人只吃一次） */
+        pierce: true,
+        desc: "施放瞬间锁定朝向，4 秒内向前方直线倾泻高速剑气（每把 10 点伤害），弹道不追踪。剑气自带穿透，命中后不会消失，会继续贯穿它后面的一切——把对手和后排一起串成一条线，才是这一招的正确用法。" });
 
   add({ id: "prison", kind: "ult", name: "绝望囚牢", icon: "⛓️", price: 10, cd: 1.0, dmg: 0,
         tags: ["大招", "控场"], dur: 4.0, zoneR: 180, formT: 0.8,
@@ -1407,9 +1409,31 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     spotT: 2.0,         // 柜子 / 草丛藏超过 2 秒 → 被 AI 察觉（隐匿技能不受此限）
     spotAggro: 0.55,    // 被察觉的躲藏者在 AI 选敌时的距离权重（越小越优先）
     ejectStun: 2.0,     // 躲在柜子里挨打被揪出来后的眩晕
+    noCarT: 5.0,        // v3.9 被远程打下车（震出）后，这段时间内禁止再上车
+    noHideT: 5.0,       // v3.9 被从柜子里揪出来（或柜子被打碎）后，这段时间内禁止再躲进柜子
     mudDmg: 22,         // 泥土砸中伤害
     mudSpeed: 430,      // 泥土投掷初速
     refreshEvery: 30    // 「物资刷新」修饰符的间隔
+  };
+
+  /* v3.9 通用「长按蓄力」配置：能量包开包 / 霸主加冕共用一套 charge 框架。
+   * need = 需要的秒数，keep = 允许离目标的最远距离（超出即中断）。 */
+  LD.CHARGE = {
+    pack:  { need: 5.0, keep: 60, label: "开启能量包", color: "#818cf8" },
+    crown: { need: 3.0, keep: 70, label: "加冕中", color: "#fcd34d" }
+  };
+
+  /* v3.9 霸主争霸改版：天上掉皇冠取代巨龙
+   * 开局 warnT 秒预告 → 皇冠落地 → 靠近按交互键蓄力 need 秒（受击中断）
+   * → 加冕者血量 x hpMul、技能 CD 乘 cdMul → 持有 holdT 秒后剥夺并重新预告 */
+  LD.CROWN = {
+    warnT: 5.0,         // 天降预警时长（也是开局到第一顶皇冠落地的时间）
+    fallT: 0.9,         // 皇冠从天而降的下落动画时长
+    holdT: 30,          // 霸主有效时长
+    nextWarnT: 5.0,     // 效果清除后，下一顶皇冠的预警时长
+    hpMul: 2,           // 血量翻倍
+    cdMul: 0.7,         // 技能 CD 缩短 30%
+    range: 40           // 交互距离（比默认宽，皇冠落在地上不好贴）
   };
 
   /* ---------------------------------------------------------- v3.3 可驾驶车辆
@@ -1506,12 +1530,14 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     xp: { minion: 20, hero: 120, tower: 120, levels: [0, 100, 240, 420, 640, 900] },   // 6 级
     levelHp: 40,
     levelDmg: 0.04,
-    respawn: { base: 8, perLv: 2.2, max: 28, invuln: 2.0 },
+    /* v3.9 复活：5 秒 + 等级 × 5 秒（1 级 10s、5 级 30s） */
+    respawn: { base: 5, perLv: 5, max: 30, invuln: 2.0 },
     wave: { first: 10, every: 32, count: 6, spread: 34 },
     minion: { hp: 67, dmg: 9, atk: 1.15, range: 40, aggro: 190, speed: 62, r: 12,
               gold: 32, xp: 20, scalePerTower: 0.15 },
-    tower: { hp: 1500, dmg: 26, range: 300, atk: 1.05, projSpeed: 1100, homing: 3.4, r: 46, h: 96 },
-    crystal: { hp: 3000, dmg: 34, range: 340, atk: 1.2, projSpeed: 1050, homing: 3.8, r: 58, h: 110 },
+    /* v3.9 血量下调到原值的 80%：塔 1200 / 水晶 2400 */
+    tower: { hp: 1200, dmg: 26, range: 300, atk: 1.05, projSpeed: 1100, homing: 3.4, r: 46, h: 96 },
+    crystal: { hp: 2400, dmg: 34, range: 340, atk: 1.2, projSpeed: 1050, homing: 3.8, r: 58, h: 110 },
     structurePower: 1,
     structDmgMul: 3.0,       // 英雄对建筑的伤害倍率（不吃这个倍率的话 1000 血的塔要拆太久）
     minionStructMul: 2.0,    // 小兵对建筑的伤害倍率
@@ -1650,7 +1676,7 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
   LD.RULES = [
     { id: "brawl", name: "经典乱斗", icon: "⚔", short: "乱斗", desc: "所有人互相为敌，最后站着的赢下回合。" },
     { id: "team", name: "阵营模式", icon: "🏳", short: "阵营", desc: "红黄蓝绿四队，同队之间互不造成伤害，最后只剩一个阵营时获胜。" },
-    { id: "overlord", name: "霸主争霸", icon: "👑", short: "霸主", desc: "所有人 + 巨龙同场混战。巨龙被击败会爆出能量石并飞向随机位置，第一个抢到的人成为霸主：血量上限与当前血量翻 1.5 倍，头顶加皇冠；人机仇恨会转向霸主。霸主阵亡后能量石直接消散，不再掉落。" },
+    { id: "overlord", name: "霸主争霸", icon: "👑", short: "霸主", desc: "所有人混战争夺一份滚动出现的加冕资格。开局 5 秒后，一顶皇冠自天而降（落地前 5 秒有预告与落点提示）；靠近皇冠按住交互键加冕 3 秒，期间不能移动、不能出手，一旦被击中就得重头再来。加冕成功者成为霸主：血量翻倍、所有技能冷却缩短 30%，头顶加冕特效且人机仇恨优先转向他。霸主效果持续 30 秒，到期自动剥夺（血量减半、冷却复原），随后再次进入落地预告，如此循环直到场上只剩一人。" },
     { id: "gifts", name: "天外来物", icon: "☄️", short: "天外", desc: "开局只有普攻，技能与大招全靠天上降落：每 10 秒落技能、20 秒落大招，落地后按 P 拾取；技能满两格时置换最早获得的那格，被换下的留在原地。最后活着的人获胜。" },
     { id: "ring", name: "缩圈乱斗", icon: "⭕", short: "缩圈", desc: "开局只有普攻，技能与大招全靠天上掉落（技能最多同时 6 个、大招 3 个）。地图上只有几个大圈是安全区，圈外全是毒，还会掉血包——想捡就得冒险出圈。安全圈会一个个消失、并持续缩小，最终只剩一个小圈，逼所有人正面开打。最后活着的人获胜。" },
     { id: "auction", name: "丧尸危机", icon: "💰", short: "丧尸", desc: "不限时，开局只有普攻，场地不断刷出僵尸（100 血、移速 110%，固定「突刺 + 撕咬」两个技能，没有普攻 / 大招 / 闪避）骚扰全场。你可以绕开它们，也可以杀掉爆局内金币；点战斗界面右上角的商店按钮（电脑按 B）打开局内商店，花金币买血包、血量加成、移速加成（商品只在当局有效）。商店开着时战斗照常进行，最后活着的人获胜。" },
@@ -5952,6 +5978,8 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     if (this.rule === "ring") this.initRing();
     /* v3.7 塔防：分队 / 等级 / 金币 / 禁大招 */
     if (this.rule === "tower" && this.initTower) this.initTower();
+    /* v3.9 霸主争霸：天降皇冠循环从这里起步（每回合重来） */
+    if (this.rule === "overlord" && this.initCrown) this.initCrown();
     return this;
   };
 
@@ -6045,6 +6073,9 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
       f.giftPending = { skill: null, ult: null }; f.giftSwap = null; f.giftTarget = null;
       /* v3.3 交互：车辆 / 柜子 / 泥土 / 技能获得顺序 */
       f.rideCar = null; f.hideProp = null; f.carryMud = null;
+      /* v3.9 被震下车后的上车禁令 / 被揪出柜子的躲藏禁令 / 能量包蓄力状态 */
+      f.noCarT = 0; f._noCarSaidT = 0; f.chg = null;
+      f.noHideT = 0; f._noHideSaidT = 0;
       f.carTarget = null; f.hideT = 0; f.interactCd = 0; f.giftLock = 0;
       f.hideTimer = 0; f.hideSpotted = false; f.bushTimer = 0; f._stealthFlash = false;
       f.skillGot = { skill1: 0, skill2: 0 };
@@ -6097,6 +6128,8 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     if (this.rule === "ring") this.initRing();
     /* v2.7 追猎时刻：每回合重新抽猎人 + 重置大毒圈（客机等房主快照，不自行抽签） */
     if (this.rule === "hunt" && this.isHost) this.initHunt();
+    /* v3.9 霸主争霸：每回合重新开始皇冠循环 */
+    if (this.rule === "overlord" && this.initCrown) this.initCrown();
     this.dragonCorpseT = 0;
     /* v2.6 / v2.7 各规则回合限时：
      * 追猎 90 秒（时间到生存者胜）；缩圈无限时（毒圈就是时钟）；
@@ -6237,6 +6270,8 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     tgt.hp = Math.max(0, tgt.hp - dmg);
     tgt.hitFlash = 0.16;
     tgt.dmgTaken += dmg;
+    /* v3.9 正在开启能量包时挨打 → 蓄力中断，需要重新按交互键再来一次 */
+    if (tgt.chg && this.cancelCharge) this.cancelCharge(tgt, "被打断！");
     /* v3.2 世界末日：对僵尸造成的实际伤害计入得分（溢出伤害不算） */
     if (this.rule === "doomsday" && src && src.kind === "hero" && !src.isZombie && tgt.isZombie) {
       const si = this.fighters.indexOf(src);
@@ -6520,14 +6555,9 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
       this.finish(bossesLeft.length === 0);
       return;
     }
-    // 霸主争霸：巨龙被击败 → 爆出能量石（尸体 3 秒后消失）
-    if (this.rule === "overlord" && f.kind === "dragon") { this.spawnStone(f.x, f.y); this.dragonCorpseT = 0; return; }
-    // 霸主争霸：霸主阵亡 → 能量石直接消散（v2.5：不再掉回场上，避免强者恒强）
+    // v3.9 霸主争霸已无巨龙：霸主阵亡 → 效果当场结束，并排下一顶皇冠
     if (this.rule === "overlord" && f.overlord) {
-      f.overlord = false;
-      FX.ring(f.x, f.y - 26, 110, "rgba(252,211,77,.9)", 6, 0.6);
-      FX.float(f.x, f.y - 72, "能量石消散", "#fcd34d", 17);
-      this.ev.push(["h", f.x, f.y - 72, "能量石消散", "#fcd34d"]);
+      if (this.stripOverlord) this.stripOverlord(f, true);
     }
     // 霸主争霸：场上只剩一名存活勇者（巨龙不算）时回合结束
     if (this.rule === "overlord") {
@@ -6562,51 +6592,112 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     return t ? t.side : 0;
   };
 
-  /* ---------------- 霸主争霸：能量石 ---------------- */
-  B.spawnStone = function (x, y) {
-    /* 能量石大距离随机散落：初速更快，保证飞出足够远而不是原地落下 */
-    const a = Math.random() * TAU, sp = rand(560, 860);
-    this.stone = { x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0, landed: false, holder: null };
-    FX.ring(x, y - 26, 90, "rgba(252,211,77,.95)", 6, 0.5);
-    FX.burst(x, y - 26, 30, ["#fcd34d", "#fff7d6", "#fbbf24"], { speed: 340 });
-    FX.float(x, y - 70, "能量石！", "#fcd34d", 18);
-    this.ev.push(["h", x, y - 70, "能量石！", "#fcd34d"]);
+  /* ==========================================================
+   *  v3.9 霸主争霸：天降皇冠（取代原来的「打巨龙爆能量石」）
+   *  预警 → 落地 → 靠近蓄力 need 秒（受击中断）→ 加冕（血量 x2 / CD -30%）
+   *  → 持有 holdT 秒后剥夺（血量减半 / CD 复原）→ 重新预警，循环
+   * ========================================================== */
+  B.initCrown = function () {
+    const C = LD.CROWN || {};
+    this.crown = { phase: "warn", warnT: C.warnT || 5, x: 0, y: 0, holder: null, holdT: 0, t: 0, landT: 0 };
+    /* 落点在预警时就抽好，好让预警圈画在将要落下的位置 */
+    const spot = this.crownSpot();
+    this.crown.x = spot.x; this.crown.y = spot.y;
   };
 
-  B.updateStone = function (dt) {
-    const s = this.stone;
-    if (!s) return;
-    s.life += dt;
-    if (!s.landed) {
-      s.x += s.vx * dt; s.y += s.vy * dt;
-      const damp = Math.exp(-2.2 * dt); s.vx *= damp; s.vy *= damp;
-      FX.trail(s.x, s.y, "#fcd34d", 6, 0.3);
-      if (Math.hypot(s.vx, s.vy) < 40) { s.landed = true; s.vx = s.vy = 0; s.y = Math.max(s.y, B.world.pt); }
-      s.x = clamp(s.x, 40, B.world.w - 40);
-      s.y = clamp(s.y, B.world.pt, B.world.h - 46);
+  /* 随机落点：地图中段，避开障碍且不贴边 */
+  B.crownSpot = function () {
+    const w = this.world || { w: 1600, h: 1600, pt: 80 };
+    for (let i = 0; i < 40; i++) {
+      const x = rand(w.pt + 120, w.w - w.pt - 120);
+      const y = rand(w.pt + 120, w.h - w.pt - 120);
+      if (!this.terrain || LD.Terrain.clearAt(this.terrain, x, y, 34)) return { x: x, y: y };
+    }
+    return { x: w.w / 2, y: w.h / 2 };
+  };
+
+  B.updateCrown = function (dt) {
+    const C = LD.CROWN || {};
+    const c = this.crown;
+    if (!c) return;
+    c.t += dt;
+    if (c.phase === "warn") {
+      c.warnT -= dt;
+      /* 预警：直接把落点画出来（HUD 也有倒计时） */
+      if (Math.random() < dt * 8) FX.trail(c.x + rand(-26, 26), c.y - rand(10, 40), "#fcd34d", 4, 0.4);
+      if (c.warnT <= 0) {
+        c.phase = "fallen"; c.landT = 0; c.warnT = 0;
+        FX.ring(c.x, c.y, 120, "rgba(252,211,77,.95)", 8, 0.6);
+        FX.burst(c.x, c.y - 10, 30, ["#fcd34d", "#fff7d6", "#fbbf24"], { speed: 320 });
+        FX.shake(10);
+        FX.float(c.x, c.y - 70, "皇冠降临！", "#fcd34d", 20);
+        this.ev.push(["h", c.x, c.y - 70, "皇冠降临！", "#fcd34d"]);
+      }
       return;
     }
-    if (s.life % 0.1 < dt) FX.trail(s.x + rand(-10, 10), s.y - rand(6, 26), "#fcd34d", 4, 0.5);
-    // 拾取判定
-    for (const f of this.fighters) {
-      if (f.dead || f.kind !== "hero" || f.isZombie) continue;
-      if (Math.hypot(f.x - s.x, f.y - s.y) < f.r + 26) {
-        this.becomeOverlord(f);
-        this.stone = null;
-        return;
-      }
+    if (c.phase === "fallen") {
+      c.landT += dt;
+      if (Math.random() < dt * 6) FX.trail(c.x + rand(-12, 12), c.y - rand(6, 24), "#fcd34d", 4, 0.5);
+      return;
+    }
+    if (c.phase === "held") {
+      const h = c.holder;
+      c.holdT -= dt;
+      /* 霸主自己死了：效果直接结束并立即开始下一轮预警 */
+      if (!h || h.dead) { this.stripOverlord(h, true); return; }
+      if (c.holdT <= 0) this.stripOverlord(h, false);
     }
   };
 
-  B.becomeOverlord = function (f) {
+  /* 加冕完成 → 成为霸主 */
+  B.finishCrown = function (f, cw) {
+    if (!f || f.dead) return;
+    if (!this.crown || this.crown !== cw || this.crown.phase !== "fallen") return;
+    const C = LD.CROWN || {};
+    const mul = C.hpMul != null ? C.hpMul : 2;
+    /* 幂等：先把上一次的加成还原，避免反复加冕把血量一层层叠上去 */
+    this.stripOverlord(f, true);
     f.overlord = true;
-    f.maxHp = Math.round(f.maxHp * 1.5);
-    f.hp = Math.min(f.maxHp, Math.round(f.hp * 1.5));
-    FX.ring(f.x, f.y - 26, 110, "rgba(252,211,77,.95)", 8, 0.6);
+    f.maxHp = Math.round(f.maxHp * mul);
+    f.hp = Math.min(f.maxHp, Math.round(f.hp * mul));
+    f.cdM = C.cdMul != null ? C.cdMul : 0.7;      // 技能 CD 缩短 30%
+    this.crown.phase = "held";
+    this.crown.holder = f;
+    this.crown.holdT = C.holdT || 30;
+    FX.ring(f.x, f.y - 26, 120, "rgba(252,211,77,.95)", 8, 0.6);
     FX.burst(f.x, f.y - 26, 36, ["#fcd34d", "#fff", "#fbbf24"], { speed: 340 });
     FX.flash(0.22, "252,211,77"); FX.shake(14);
     FX.float(f.x, f.y - 74, "霸主诞生！", "#fcd34d", 20);
     this.ev.push(["h", f.x, f.y - 74, "霸主诞生！", "#fcd34d"]);
+  };
+
+  /* 剥夺霸主：血量减半、CD 复原。silent=true 用于阵亡 / 重新加冕前的静默还原 */
+  B.stripOverlord = function (f, silent) {
+    const C = LD.CROWN || {};
+    if (f) {
+      if (f.overlord) {
+        const mul = C.hpMul != null ? C.hpMul : 2;
+        f.maxHp = Math.max(1, Math.round(f.maxHp / mul));
+        f.hp = Math.max(1, Math.min(f.maxHp, Math.round(f.hp / mul)));
+      }
+      f.overlord = false;
+      f.cdM = 1;
+      if (!silent) {
+        FX.ring(f.x, f.y - 26, 110, "rgba(252,211,77,.9)", 6, 0.6);
+        FX.float(f.x, f.y - 72, "霸主效果结束", "#fcd34d", 17);
+        this.ev.push(["h", f.x, f.y - 72, "霸主效果结束", "#fcd34d"]);
+      }
+    }
+    /* 立刻排下一顶皇冠 */
+    if (this.crown) {
+      const spot = this.crownSpot();
+      this.crown.phase = "warn";
+      this.crown.warnT = C.nextWarnT != null ? C.nextWarnT : 5;
+      this.crown.holder = null;
+      this.crown.holdT = 0;
+      this.crown.x = spot.x; this.crown.y = spot.y;
+      this.crown.landT = 0;
+    }
   };
 
   /* ==========================================================
@@ -7129,12 +7220,14 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
       const pk = this.pickups[i];
       pk.t += dt;
       if (pk.t > 26) { this.pickups.splice(i, 1); continue; }
+      /* v3.9 能量包不再「走过去自动吃掉」：必须靠近按交互键原地蓄力 5 秒。
+       * 血包 / 移速包保持原来的接触即生效。 */
       for (const f of this.fighters) {
         if (f.dead || f.bench || f.kind !== "hero") continue;
         if (Math.hypot(f.x - pk.x, f.y - pk.y) > f.r + 24) continue;
-        const label = pk.kind === "heal" ? "生命 +35" : pk.kind === "energy" ? "大招能量 +60" : "移速提升 5 秒";
+        if (pk.kind === "energy") continue;
+        const label = pk.kind === "heal" ? "生命 +35" : "移速提升 5 秒";
         if (pk.kind === "heal") this.heal(f, 35);
-        else if (pk.kind === "energy") f.energy = Math.min(f.maxEnergy, f.energy + 60);
         else f.speedBoostT = Math.max(f.speedBoostT || 0, 5);
         FX.float(f.x, f.y - 64, label, pk.kind === "heal" ? "#7ff0c4" : pk.kind === "energy" ? "#a5b4fc" : "#fcd34d", 14);
         FX.burst(pk.x, pk.y - 10, 12, ["#7dd3fc", "#fff"], { speed: 180 });
@@ -8591,7 +8684,10 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
         B.spawnProj({ x: f.x + Math.cos(a) * 26, y: f.y - 26 + Math.sin(a) * 14,
           vx: Math.cos(a) * sk.proj.speed, vy: Math.sin(a) * sk.proj.speed,
           r: sk.proj.r, dmg: sk.dmg, life: sk.proj.life, owner: f, color: "#a5f3fc", core: "#f0feff",
-          type: "sword", kindTag: "ult", trail: true });
+          type: "sword", kindTag: "ult", trail: true,
+          /* v3.9 剑气穿透：命中后继续前行，可以一口气贯穿一整条线上的目标。
+           * pierceOnce = 同一目标只结算一次，否则弹道贴着人飞时会每帧都扣一次血。 */
+          pierce: !!sk.pierce, data: { pierceOnce: !!sk.pierce } });
         FX.burst(f.x, f.y - 26, 4, "#a5f3fc", { speed: 120, dir: a });
       }
       if (s.t >= sk.dur) B.endSlot(f, slot, sk.cd);
@@ -9492,6 +9588,30 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     FX.float(f.x, f.y - 56, "空槽位", "#9fb3dd", 12);
   }
 
+  /* v3.9 皇冠图标：三尖一带的金色小皇冠，alpha 用于天降时的淡入 */
+  function drawCrownIcon(ctx, x, y, s, alpha) {
+    ctx.save();
+    ctx.globalAlpha = alpha == null ? 1 : alpha;
+    ctx.translate(x, y);
+    ctx.scale(s, s);
+    ctx.beginPath();
+    ctx.moveTo(-14, 8); ctx.lineTo(-14, -6);
+    ctx.lineTo(-7, 1); ctx.lineTo(0, -9);
+    ctx.lineTo(7, 1); ctx.lineTo(14, -6);
+    ctx.lineTo(14, 8);
+    ctx.closePath();
+    const g = ctx.createLinearGradient(0, -10, 0, 10);
+    g.addColorStop(0, "#fff7d6"); g.addColorStop(0.5, "#fbbf24"); g.addColorStop(1, "#b45309");
+    ctx.fillStyle = g; ctx.fill();
+    ctx.strokeStyle = "#78350f"; ctx.lineWidth = 1.2; ctx.stroke();
+    /* 三颗宝石 */
+    [[-9, 4], [0, 4], [9, 4]].forEach(p => {
+      ctx.beginPath(); ctx.arc(p[0], p[1], 1.7, 0, TAU);
+      ctx.fillStyle = p[0] === 0 ? "#f87171" : "#60a5fa"; ctx.fill();
+    });
+    ctx.restore();
+  }
+
   function Cine_paused() { return LD.Cine.active; }
 
   B.ctrlFire = function (f, ctrl, dt) {
@@ -9580,6 +9700,8 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     this.updateProjs(dt);
     if (this.terrain) LD.Terrain.update(this.terrain, dt, this);
     this.updatePickups(dt);
+    /* v3.9 能量包蓄力：进度推进与中断判定（锁移动 / 锁技能在角色循环里） */
+    if (this.updateCharging) this.updateCharging(dt);
     this.updateZones(dt);
     if (this.giftRule()) this.updateGifts(dt);
     /* ---- v2.7 血包与掉落补给 ---- */
@@ -9623,11 +9745,7 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
         this.fighters.splice(i, 1);
       }
     }
-    if (this.rule === "overlord") {
-      this.updateStone(dt);
-      const dg = this.fighters.find(f => f.kind === "dragon");
-      if (dg && dg.dead) this.dragonCorpseT = (this.dragonCorpseT || 0) + dt;   // 尸体 3 秒后消失
-    }
+    if (this.rule === "overlord" && this.updateCrown) this.updateCrown(dt);
     /* v2.6 双子剑客：每 8 秒换位 + 真身标记互换 */
     if (this.twinSwapT != null) {
       this.twinSwapT -= dt;
@@ -9804,9 +9922,14 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
       ctrl.press.interact = false;
       if (this.doInteract) this.doInteract(f);
     }
-    if (this.state === "fight" && !f.hideProp && !f.rideCar) this.ctrlFire(f, ctrl, dt);
-    /* 躲进柜子 / 坐在车上：不能移动、不能闪避（相机与朝向照旧） */
-    if (f.hideProp || f.rideCar) {
+    if (this.state === "fight" && !f.hideProp && !f.rideCar && !f.chg) this.ctrlFire(f, ctrl, dt);
+    /* v3.9 蓄力期间（能量包 / 皇冠）：不能移动也不能出手，按键直接吞掉 */
+    if (f.chg) {
+      ctrl.mx = 0; ctrl.my = 0;
+      if (ctrl.press) { ctrl.press.basic = false; ctrl.press.skill1 = false; ctrl.press.skill2 = false; ctrl.press.ult = false; }
+    }
+    /* 躲进柜子 / 坐在车上 / 开能量包：不能移动、不能闪避（相机与朝向照旧） */
+    if (f.hideProp || f.rideCar || f.chg) {
       f.moving = false;
       f.atkAnim = Math.max(0, f.atkAnim - dt);
       /* v3.4 躲藏计时：超过 spotT 秒 AI 就会察觉；这里给玩家一个「被发现了」的提示 */
@@ -10180,6 +10303,14 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
           continue;
         }
 
+        /* v3.9 千剑杀的穿透剑气：同一个目标只结算一次，弹道继续往前飞。
+         * 记的是目标本身而不是 side —— 小兵 / 僵尸整队共用一个 side，
+         * 按 side 记会让一把剑扫过一整波时只有第一只吃到伤害。 */
+        if (p.pierce && p.data && p.data.pierceOnce) {
+          const hs = p.data.pierceHits || (p.data.pierceHits = []);
+          if (hs.indexOf(f) >= 0) continue;
+          hs.push(f);
+        }
         this.damage(p.owner, f, p.dmg, { type: p.kindTag === "ult" ? "ult" : "skill", proj: true,
           basic: !!p.basic, kb: p.pierce ? 90 : 130, from: p.owner,
           hitDir: Math.atan2(p.vy, p.vx), root: p.root, stun: p.stun, blind: p.blind });
@@ -10564,6 +10695,59 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
           ctx.lineTo(pk.x - 8, pk.y - 12 + bob);
           ctx.closePath(); ctx.fill();
         }
+        ctx.restore();
+      });
+      /* v3.9 霸主争霸：皇冠预警圈（地面）与落下的皇冠 */
+      if (this.rule === "overlord" && this.crown && this.crown.phase !== "held") {
+        const cw = this.crown, C = LD.CROWN || {};
+        ctx.save();
+        const bob = Math.sin(this.t * 4) * 3;
+        if (cw.phase === "warn") {
+          /* 落点：收缩的金色圆环 + 倒计时 */
+          const p = 1 - Math.max(0, cw.warnT) / (C.warnT || 5);
+          ctx.globalAlpha = 0.5 + Math.sin(this.t * 9) * 0.2;
+          ctx.strokeStyle = "#fcd34d"; ctx.lineWidth = 3;
+          ctx.beginPath(); ctx.ellipse(cw.x, cw.y, 46, 22, 0, 0, TAU); ctx.stroke();
+          ctx.setLineDash([6, 6]);
+          ctx.globalAlpha = 0.9; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.ellipse(cw.x, cw.y, 46 + (1 - p) * 40, 22 + (1 - p) * 19, 0, 0, TAU); ctx.stroke();
+          ctx.setLineDash([]);
+          /* 天上的皇冠随倒计时下降 */
+          const drop = Math.max(0, 1 - cw.warnT / (C.warnT || 5));
+          const cy = cw.y - 260 * (1 - drop);
+          drawCrownIcon(ctx, cw.x, cy, 1.1, 0.55 + drop * 0.45);
+          ctx.fillStyle = "#fde68a"; ctx.font = "bold 13px ui-monospace,Menlo,Consolas,monospace";
+          ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+          ctx.fillText("皇冠 " + Math.ceil(Math.max(0, cw.warnT)) + "s", cw.x, cy - 22);
+        } else if (cw.phase === "fallen") {
+          ctx.globalAlpha = 0.85;
+          V.glow(ctx, cw.x, cw.y - 14, 44, "rgba(252,211,77,.55)", 1);
+          ctx.fillStyle = "rgba(0,0,0,.28)";
+          ctx.beginPath(); ctx.ellipse(cw.x, cw.y + 6, 22, 8, 0, 0, TAU); ctx.fill();
+          ctx.globalAlpha = 1;
+          drawCrownIcon(ctx, cw.x, cw.y - 18 + bob, 1.35, 1);
+        }
+        ctx.restore();
+      }
+
+      /* v3.9 蓄力进度条（能量包开包 / 霸主加冕）：头顶进度 + 剩余秒数 */
+      this.fighters.forEach(f => {
+        if (!f.chg || f.dead) return;
+        const cfg = (LD.CHARGE || {})[f.chg.kind] || { need: 5, label: "蓄力", color: "#818cf8" };
+        const p = Math.max(0, Math.min(1, f.chg.t / cfg.need));
+        const bw = 74, bh = 7, bx = f.x - bw / 2, by = f.y - 84;
+        ctx.save();
+        ctx.fillStyle = "rgba(10,12,22,.72)";
+        ctx.fillRect(bx - 2, by - 2, bw + 4, bh + 4);
+        ctx.fillStyle = "rgba(148,163,184,.28)";
+        ctx.fillRect(bx, by, bw, bh);
+        ctx.fillStyle = cfg.color;
+        ctx.fillRect(bx, by, bw * p, bh);
+        ctx.strokeStyle = "rgba(226,232,240,.9)"; ctx.lineWidth = 1;
+        ctx.strokeRect(bx - 0.5, by - 0.5, bw + 1, bh + 1);
+        ctx.fillStyle = "#e2e8f0"; ctx.font = "11px ui-monospace,Menlo,Consolas,monospace";
+        ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+        ctx.fillText(cfg.label + " " + (cfg.need - f.chg.t).toFixed(1) + "s", f.x, by - 4);
         ctx.restore();
       });
       (this.coins || []).forEach(c => {                 // 军备竞赛：局内金币
@@ -12015,6 +12199,21 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
         take({ type: "gift", prop: g, label: "拾取", gap: gap, lim: lim });
       });
     }
+    /* v3.9 需要蓄力的目标：能量包（血包 / 移速包仍是接触即生效）、霸主皇冠 */
+    if (this.pickups && this.pickups.length) {
+      const lim = CFG.openRange != null ? CFG.openRange : 34;
+      this.pickups.forEach(pk => {
+        if (pk.kind !== "energy") return;
+        const gap = Math.hypot(f.x - pk.x, f.y - pk.y) - f.r;
+        take({ type: "chg", prop: pk, kind: "pack", label: "开包", gap: gap, lim: lim });
+      });
+    }
+    if (this.crown && this.crown.phase === "fallen") {
+      const cw = this.crown;
+      const lim = (LD.CROWN || {}).range || 40;
+      const gap = Math.hypot(f.x - cw.x, f.y - cw.y) - f.r;
+      take({ type: "chg", prop: cw, kind: "crown", label: "加冕", gap: gap, lim: lim });
+    }
     if (this.terrain && this.terrain.props) {
       for (let i = 0; i < this.terrain.props.length; i++) {
         const o = this.terrain.props[i];
@@ -12024,10 +12223,14 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
           take({ type: "mud", prop: o, label: "拾取", gap: gap, lim: rangeOf("mudRange") });
         } else if (o.kind === "locker") {
           if (o.occupant) continue;
+          /* v3.9 躲藏冷却期间：柜子不进交互目标，P 框也不显示「躲藏」（与上车禁令一致） */
+          if ((f.noHideT || 0) > 0) continue;
           const gap = propGap(f, o);
           take({ type: "locker", prop: o, label: "躲藏", gap: gap, lim: rangeOf("range") });
         } else if (o.kind === "car") {
           if (o.driver) continue;
+          /* v3.9 上车禁令期间：车根本不出现在交互目标里，P 框也不显示「上车」 */
+          if ((f.noCarT || 0) > 0) continue;
           const gap = propGap(f, o);
           const label = (o.fuel || 0) > 0 ? "驾驶" : "进入";
           take({ type: "car", prop: o, label: label, gap: gap, lim: rangeOf("range") + 12 });
@@ -12057,6 +12260,7 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     const tgt = this.interactTarget(f);
     if (!tgt) return false;
     if (tgt.type === "gift") { this.pickGift(f, tgt.prop); return true; }
+    if (tgt.type === "chg") { this.startCharge(f, tgt.kind, tgt.prop); return true; }
     if (tgt.type === "locker") { this.enterLocker(f, tgt.prop); return true; }
     if (tgt.type === "car") { this.enterCar(f, tgt.prop); return true; }
     if (tgt.type === "mud") { this.pickMud(f, tgt.prop); return true; }
@@ -12075,6 +12279,7 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     }
     const t = this.interactTarget(f);
     if (!t) return "";
+    if (t.type === "chg") return t.kind === "crown" ? "争夺皇冠" : "开启能量包";
     if (t.type === "car") return "上车";
     if (t.type === "locker") return "躲藏";
     if (t.type === "gift") return "拾取";
@@ -12129,6 +12334,14 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
    * ========================================================== */
   B.enterLocker = function (f, o) {
     if (!o || o.dead || o.occupant) return false;
+    /* v3.9 与上车禁令同规格：刚被揪出来 / 柜子刚被打碎的一段时间内不许再躲 */
+    if ((f.noHideT || 0) > 0) {
+      if (f._noHideSaidT == null || this.t - f._noHideSaidT > 1.2) {
+        f._noHideSaidT = this.t;
+        FX.float(f.x, f.y - 62, "还差 " + Math.ceil(f.noHideT) + "s 才能躲藏", "#fca5a5", 13);
+      }
+      return false;
+    }
     o.occupant = f;
     f.hideProp = o;
     f.x = o.x; f.y = o.y + (CFG.hideY || 8);
@@ -12158,6 +12371,9 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
       /* 柜子被打碎 = 同样是被攻击波及：眩晕 2 秒（与挨打被揪出来一致） */
       f.stun = Math.max(f.stun || 0, CFG.ejectStun || 2);
       f.invuln = Math.max(f.invuln || 0, 0.25);
+      /* v3.9 与上车禁令同规格：柜碎后同样挂上躲藏冷却，防止原地爬回下一个柜子 */
+      f.noHideT = CFG.noHideT != null ? CFG.noHideT : 5;
+      f._noHideSaidT = 0;
       FX.float(f.x, f.y - 60, "柜子碎了！", "#f87171", 15);
       FX.shake(5);
     } else {
@@ -12178,10 +12394,13 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     f.x = p.x; f.y = p.y;
     f.stun = Math.max(f.stun || 0, CFG.ejectStun || 2);
     f.invuln = Math.max(f.invuln || 0, 0.25);
+    /* v3.9 与上车禁令同规格：被揪出来后 5 秒内不能再躲进柜子，否则原地爬回去毫无代价 */
+    f.noHideT = CFG.noHideT != null ? CFG.noHideT : 5;
+    f._noHideSaidT = 0;
     FX.ring(o.x, o.y - 10, Math.max(o.w, o.h) * 0.7, "rgba(248,113,113,.9)", 4, 0.4);
     FX.burst(o.x, o.y - 12, 14, ["#fca5a5", "#fde68a", "#fff"], { speed: 240 });
     FX.shake(7);
-    FX.float(f.x, f.y - 62, "被揪出柜子！眩晕 2s", "#f87171", 16);
+    FX.float(f.x, f.y - 62, "被揪出柜子！眩晕 2s · " + Math.round(f.noHideT) + "s 内不能躲藏", "#f87171", 16);
     this.ev.push(["h", f.x, f.y - 62, "被揪出柜子！", "#f87171"]);
     LD.Audio && LD.Audio.beep && LD.Audio.beep(150, 0.14, "square", 0.06);
     return true;
@@ -12241,8 +12460,87 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
   /* ==========================================================
    *  车辆：上下车 / 驾驶 / 撞击 / 油量
    * ========================================================== */
+  /* ==========================================================
+   *  v3.9 通用「长按蓄力」：能量包开包 / 霸主加冕共用
+   *  - 按交互键起手，蓄力 CHARGE[kind].need 秒，期间不能移动、不能出手
+   *  - 受到伤害 / 被眩晕 / 目标消失 / 离得太远 / 死亡 → 中断，进度清零重来
+   * ========================================================== */
+  const chgCfg = (kind) => (LD.CHARGE || {})[kind] || { need: 5, keep: 60, label: "蓄力", color: "#818cf8" };
+  /* 蓄力目标的存活判定（各自保证目标还在场上） */
+  function chgAlive(B, c) {
+    if (c.kind === "pack") return !!B.pickups && B.pickups.indexOf(c.tgt) >= 0;
+    if (c.kind === "crown") return !!B.crown && B.crown === c.tgt && B.crown.phase === "fallen";
+    return false;
+  }
+  function chgPos(c) {
+    return c.kind === "crown" ? { x: c.tgt.x, y: c.tgt.y } : { x: c.tgt.x, y: c.tgt.y };
+  }
+
+  B.startCharge = function (f, kind, tgt) {
+    if (!f || f.dead || !tgt || f.chg) return false;
+    if (f.rideCar || f.hideProp || f.carryMud) return false;
+    if ((f.stun || 0) > 0 || (f.root || 0) > 0) return false;
+    const c = { kind: kind, tgt: tgt, t: 0 };
+    if (!chgAlive(this, c)) return false;
+    f.chg = c;
+    f.vx = 0; f.vy = 0; f.moving = false;
+    FX.ring(f.x, f.y - 20, 54, chgCfg(kind).color, 4, 0.35);
+    return true;
+  };
+
+  B.cancelCharge = function (f, why) {
+    if (!f || !f.chg) return false;
+    f.chg = null;
+    if (why) {
+      FX.float(f.x, f.y - 66, why, "#f87171", 14);
+      this.ev.push(["t", f.x, f.y - 66, why, "#f87171"]);
+    }
+    return true;
+  };
+
+  B.updateCharging = function (dt) {
+    for (let i = 0; i < this.fighters.length; i++) {
+      const f = this.fighters[i];
+      const c = f.chg;
+      if (!c) continue;
+      const cfg = chgCfg(c.kind);
+      if (!chgAlive(this, c)) { this.cancelCharge(f, "目标已消失"); continue; }
+      if (f.dead) { this.cancelCharge(f, null); continue; }
+      if ((f.stun || 0) > 0 || (f.root || 0) > 0) { this.cancelCharge(f, "被打断！"); continue; }
+      if (f.rideCar || f.hideProp) { this.cancelCharge(f, "中断了"); continue; }
+      const p = chgPos(c);
+      if (Math.hypot(f.x - p.x, f.y - p.y) > f.r + cfg.keep) { this.cancelCharge(f, "离得太远，中断！"); continue; }
+      c.t += dt;
+      if (Math.random() < dt * 12) FX.trail(f.x + rand(-10, 10), f.y - rand(4, 26), cfg.color, 3, 0.3);
+      if (c.t >= cfg.need) {
+        f.chg = null;
+        if (c.kind === "pack") this.finishPack(f, c.tgt);
+        else if (c.kind === "crown") this.finishCrown(f, c.tgt);
+      }
+    }
+  };
+
+  B.finishPack = function (f, pk) {
+    const idx = (this.pickups || []).indexOf(pk);
+    if (idx >= 0) this.pickups.splice(idx, 1);
+    const gain = (LD.CONF && LD.CONF.energy && LD.CONF.energy.packGain) || 60;
+    f.energy = Math.min(f.maxEnergy, f.energy + gain);
+    FX.ring(f.x, f.y - 26, 78, "rgba(165,180,252,.95)", 6, 0.45);
+    FX.burst(f.x, f.y - 26, 20, ["#a5b4fc", "#fff", "#818cf8"], { speed: 240 });
+    FX.float(f.x, f.y - 70, "大招能量 +" + gain, "#a5b4fc", 16);
+    LD.Audio && LD.Audio.beep && LD.Audio.beep(560, 0.12, "triangle", 0.05);
+  };
+
   B.enterCar = function (f, o) {
     if (!o || o.dead || o.driver) return false;
+    /* v3.9 被远程震下车后有 5 秒 CD，这段时间按 P / AI 主动上车都会被拒 */
+    if ((f.noCarT || 0) > 0) {
+      if (f._noCarSaidT == null || this.t - f._noCarSaidT > 1.2) {
+        f._noCarSaidT = this.t;
+        FX.float(f.x, f.y - 62, "还差 " + Math.ceil(f.noCarT) + "s 才能上车", "#fca5a5", 13);
+      }
+      return false;
+    }
     o.driver = f;
     o.free = false; o.vx = 0; o.vy = 0;
     f.rideCar = o;
@@ -12274,6 +12572,8 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
       FX.burst(o.x, o.y - 10, 20, ["#fca5a5", "#fff", "#fbbf24"], { speed: 280 });
       FX.shake(9);
       FX.float(f.x, f.y - 62, "被撞出车外！眩晕 2s", "#f87171", 16);
+      /* v3.9 震出追加：5 秒内不得再上车，避免刚落地就爬回去（AI 也不会再抢车） */
+      f.noCarT = CFG.noCarT != null ? CFG.noCarT : 5;
       this.ev.push(["h", f.x, f.y - 62, "被撞出车外！", "#f87171"]);
     } else {
       FX.float(f.x, f.y - 54, "下车", "#9fb3dd", 12);
@@ -12287,6 +12587,15 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     this.fighters.forEach(f => {
       if (f.interactCd > 0) f.interactCd = Math.max(0, f.interactCd - dt);
       if (f.giftLock > 0) f.giftLock = Math.max(0, f.giftLock - dt);
+      /* v3.9 被震下车的上车禁令 / 被揪出柜子的躲藏禁令 */
+      if (f.noCarT > 0) {
+        f.noCarT = Math.max(0, f.noCarT - dt);
+        if (f.noCarT === 0) f._noCarSaidT = 0;
+      }
+      if (f.noHideT > 0) {
+        f.noHideT = Math.max(0, f.noHideT - dt);
+        if (f.noHideT === 0) f._noHideSaidT = 0;
+      }
     });
     if (!this.terrain || !this.terrain.props) return;
     const VCFG = LD.VEHICLE_CFG || {};
@@ -12769,6 +13078,46 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     return { x: dx, y: dy };
   };
 
+  /* v3.9：只回血、不造成伤害的技能（冥思这类）——推塔 / 冲脸时不该按，
+   * 否则人机满血也会原地打坐，还把自己定住。新增的回复技能只要有 heal 且无 dmg 就自动纳入。 */
+  AI.healOnly = function (s) {
+    return !!(s && (s.heal || 0) > 0 && !(s.dmg || 0) && !s.shield && !s.dash);
+  };
+
+  /* ------------------------------------------------------------
+   *  v3.9 塔防：别一个人顶着塔硬冲
+   *  塔的仇恨有「小兵优先」（距离 ×0.72），有兵线时它打兵，英雄能安全输出；
+   *  没兵线时塔只盯着英雄，开局就冲进去等于白送 —— 这就是为什么人机开局爱往塔里钻。
+   * ------------------------------------------------------------ */
+
+  /** AI 此刻正压在哪座敌方建筑的火力圈里（不在任何塔的射程内则为 null） */
+  AI.towerOn = function (f) {
+    if (B.rule !== "tower" || !B.terrain) return null;
+    const C = LD.TOWER || {};
+    for (const o of B.terrain.props) {
+      if (o.dead || o.side === f.team) continue;
+      if (o.kind !== "tower" && o.kind !== "crystal") continue;
+      const S = o.kind === "crystal" ? (C.crystal || {}) : (C.tower || {});
+      const r = (S.range || 300) + (S.r || 46);
+      const d = Math.hypot(o.x - f.x, o.y - f.y);
+      if (d < r) return { o: o, r: r, d: d };
+    }
+    return null;
+  };
+
+  /** 一座防御塔 / 水晶的火力圈半径（射程 + 体积，与 updateStructures 的判定一致） */
+  AI.structRange = function (o) {
+    const C = LD.TOWER || {};
+    const S = o && o.kind === "crystal" ? (C.crystal || {}) : (C.tower || {});
+    return (S.range || 300) + (S.r || 46);
+  };
+
+  /** 这座建筑的火力圈里有没有我方兵线顶着（有兵就不算孤军深入） */
+  AI.laneIn = function (o, team, r) {
+    return (B.fighters || []).some(m => m.kind === "laneMinion" && !m.dead &&
+      m.team === team && Math.hypot(m.x - o.x, m.y - o.y) < (r || 300) + 30);
+  };
+
   AI.pushTower = function (f, p, ctrl, dt) {
     if (!p || p.dead) return false;
     ctrl.mx = ctrl.my = 0;
@@ -12786,23 +13135,34 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
         return true;
       }
     }
+    /* 撤出塔圈的判定统一放在 tickHero 开头（对拼时也生效），这里只管「别主动站进去」。 */
+    const pR = AI.structRange(p);
+    const noLane = !AI.laneIn(p, f.team, pR);
+
     const basic = LD.skill(f.loadout.basic);
     const ranged = !!(basic && (basic.proj || basic.speed));
     const dx = p.x - f.x, dy = p.y - f.y;
     const d = Math.hypot(dx, dy) || 1;
     f.aimProp = p;
     const size = Math.max(p.w || 60, p.h || 60) * 0.5;
-    const stop = size + (ranged ? 200 : 52);
+    let stop = size + (ranged ? 200 : 52);
+    /* v3.9 没有兵线时不要站进塔的火力圈：停在圈外等兵线，别一个人扛塔。
+     * 远程本来就停在 200 左右、多数情况够得着塔，这里只是把它拉到火力圈外一点点。 */
+    if (noLane) stop = Math.max(stop, pR + 46);
     if (d > stop) {
       const st = AI.steer(f, dx / d, dy / d, p);        // 绕过挡在路上的车 / 另一座塔
       ctrl.mx = st.x; ctrl.my = st.y;
     } else if (d < stop - 26) { ctrl.mx = -dx / d * 0.6; ctrl.my = -dy / d * 0.6; }
-    /* 有 CD 就放：普攻优先，技能跟上 */
+    /* 有 CD 就放：普攻优先，技能跟上。
+     * v3.9：推塔时不放纯回复类技能（冥思）——旧代码 CD 一好就按，导致人机满血也站着冥想，
+     * 既推不了塔又把自己定在原地挨打。这类技能交给主流程的血量判定去决定。 */
     const atkRange = ranged ? 460 : 100;
     if (d < atkRange + size) {
       if (f.cd.basic <= 0) ctrl.press.basic = true;
-      if (f.loadout.skill1 && f.cd.skill1 <= 0 && d < 420 + size) ctrl.press.skill1 = true;
-      else if (f.loadout.skill2 && f.cd.skill2 <= 0 && d < 420 + size) ctrl.press.skill2 = true;
+      const s1 = LD.skill(f.loadout.skill1), s2 = LD.skill(f.loadout.skill2);
+      const canPush = s => !!s && !AI.healOnly(s);
+      if (f.loadout.skill1 && f.cd.skill1 <= 0 && d < 420 + size && canPush(s1)) ctrl.press.skill1 = true;
+      else if (f.loadout.skill2 && f.cd.skill2 <= 0 && d < 420 + size && canPush(s2)) ctrl.press.skill2 = true;
     }
     return true;
   };
@@ -12908,9 +13268,12 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     {
       const nearFoe = foe ? Math.hypot(foe.x - f.x, foe.y - f.y) : Infinity;
       f.useTarget = null;
-      if (!f.isZombie && !coinNear) {
-        /* 1) 残血且附近没有敌人 → 找柜子躲起来 */
-        if (f.hp < f.maxHp * 0.4 && nearFoe > 200 && B.terrain) {
+      /* v3.9 塔防对战不找柜子 / 车 / 泥土：那条线是推塔，钻柜子、开车只会让 AI 脱离兵线乱跑，
+       * 而且塔防图上一旦刷了车，AI 会在「上车」和「推塔」之间反复横跳。 */
+      if (!f.isZombie && !coinNear && B.rule !== "tower") {
+        /* 1) 残血且附近没有敌人 → 找柜子躲起来
+         * v3.9 刚被从柜子里揪出来时（f.noHideT > 0）不再找柜子，否则 AI 会在柜子边上原地转 */
+        if (f.hp < f.maxHp * 0.4 && nearFoe > 200 && (f.noHideT || 0) <= 0 && B.terrain) {
           let best = null, bd = 340;
           B.terrain.props.forEach(o => {
             if (o.kind !== "locker" || o.dead || o.occupant) return;
@@ -12919,8 +13282,9 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
           });
           if (best) f.useTarget = { type: "locker", prop: best };
         }
-        /* 2) 血量不高或敌人很远 → 找一辆有油的车 */
-        if (!f.useTarget && (f.hp < f.maxHp * 0.62 || nearFoe > 330) && B.terrain) {
+        /* 2) 血量不高或敌人很远 → 找一辆有油的车
+         * v3.9 刚被打下车时（f.noCarT > 0）不找车，否则 AI 会在车边上原地打转 */
+        if (!f.useTarget && (f.noCarT || 0) <= 0 && (f.hp < f.maxHp * 0.62 || nearFoe > 330) && B.terrain) {
           let best = null, bd = 470;
           B.terrain.props.forEach(o => {
             if (o.kind !== "car" || o.dead || o.driver || (o.fuel || 0) <= 0) return;
@@ -12954,6 +13318,50 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
         }
       }
     }
+    /* ----------------------------------------------------------
+     *  v3.9 塔下别硬顶：踩在敌方建筑火力圈里、身边又没有自家兵线时，挨打就先退出来。
+     *  放在推塔与对拼判定之前 —— 没有兵线顶着的时候，站在塔下跟人换血永远亏，
+     *  旧逻辑只有残血才回家，于是人机开局就站在塔里对拼、血掉得莫名其妙。
+     * ---------------------------------------------------------- */
+    b.towerBackT = Math.max(0, (b.towerBackT || 0) - dt);
+    const hotT = AI.towerOn(f);
+    if (hotT && !AI.laneIn(hotT.o, f.team, hotT.r)) {
+      if (B.t - (f.lastHurtAt || -99) < 1.5) b.towerBackT = 1.6;
+      if (b.towerBackT > 0) {
+        const rx = f.x - hotT.o.x, ry = f.y - hotT.o.y, rd = Math.hypot(rx, ry) || 1;
+        if (rd < hotT.r + 40) {
+          b.towerBackT = Math.max(b.towerBackT, 0.6);      // 没退干净就继续退，别在圈边上反复横跳
+          const st = AI.steer(f, rx / rd, ry / rd, hotT.o);
+          ctrl.mx = st.x; ctrl.my = st.y;
+          f.aimProp = foe && !foe.dead ? foe : null;        // 边撤边盯着人，退完能立刻回头打
+          return;
+        }
+      }
+    }
+
+    /* ==========================================================
+     *  v3.7 塔防对战：优先推塔 / 拆水晶
+     *  v3.9 提到「没有敌人」的早退之前 —— 旧代码放在 foe 判空之后，
+     *  于是场面一空（对面英雄全在复活、兵线被清完的间隙）人机就站着不动，
+     *  明明塔就在眼前也不推，看起来就是发呆。
+     * ========================================================== */
+    if (B.rule === "tower" && B.enemyStructure && !f.useTarget) {
+      const ord = B.enemyStructure(f.team === 1 ? 1 : 0, f.x, f.y, 2000);
+      if (ord) {
+        const hd = foe && foe.kind === "hero" ? Math.hypot(foe.x - f.x, foe.y - f.y) : Infinity;
+        const md = foe && foe.kind === "laneMinion" ? Math.hypot(foe.x - f.x, foe.y - f.y) : Infinity;
+        /* v3.9 修：enemyStructure 返回的是 prop，上面没有 .d 字段（旧代码 ord.d 恒为 undefined，
+         * 导致 atTower 永远是 false，「塔下优先推塔」形同虚设 —— 推掉两塔后只剩水晶时，
+         * 人机贴到水晶边上反而切回去按 235 的远程距离追人，看起来就是在原地发呆）。 */
+        const atTower = Math.hypot(ord.x - f.x, ord.y - f.y) < 430;
+        /* v3.8 塔下优先推塔：只要没有敌方英雄贴身（150 内）就先拆塔；
+         * 赶路时只要没有被英雄（300 内）或小兵（140 内）挡路，也直奔下一座塔。 */
+        if ((atTower && hd > 150) || (!atTower && hd > 300 && md > 140)) {
+          if (AI.pushTower(f, ord, ctrl, dt)) return;
+        }
+      }
+    }
+
     if (!foe) {
       /* 场上暂时没有敌人（末日两波空档）：有交互目标 / 金币就去拿，别站着发呆 */
       if (f.useTarget) {
@@ -12983,24 +13391,6 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     const blocked = !!b._los && b._los !== foe.rideCar && !(foe.hideProp && B.aiCanSee(f, foe));
     /* 目标在车上：贴上去打，普攻 / 技能 CD 一好就放，尽快把人从车上打下来 */
     const foeCar = !!foe.rideCar;
-
-    /* ==========================================================
-     *  v3.7 塔防对战：身边没有敌人时优先推塔 / 拆水晶
-     *  只在「最近的敌人超过 260px」时执行，避免和正常对拼逻辑打架。
-     * ========================================================== */
-    if (B.rule === "tower" && B.enemyStructure) {
-      const ord = B.enemyStructure(f.team === 1 ? 1 : 0, f.x, f.y, 2000);
-      if (ord) {
-        const hd = foe && foe.kind === "hero" ? Math.hypot(foe.x - f.x, foe.y - f.y) : Infinity;
-        const md = foe && foe.kind === "laneMinion" ? Math.hypot(foe.x - f.x, foe.y - f.y) : Infinity;
-        const atTower = ord.d < 430;
-        /* v3.8 塔下优先推塔：只要没有敌方英雄贴身（150 内）就先拆塔；
-         * 赶路时只要没有被英雄（300 内）或小兵（140 内）挡路，也直奔下一座塔。 */
-        if ((atTower && hd > 150) || (!atTower && hd > 300 && md > 140)) {
-          if (AI.pushTower(f, ord, ctrl, dt)) return;
-        }
-      }
-    }
 
     // ---- 木桩：完全不动 ----
     if (cf.aggr <= 0) { ctrl.mx = ctrl.my = 0; return; }
@@ -13063,11 +13453,17 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     }
 
     // ---- 移动 ----
+    /* v3.9 能量石已随巨龙删除，这里统一用 crown（下面 refill 到 stone 供绕障判断复用） */
+    let stone = null;
     let mx = 0, my = 0;
-    const stone = B.rule === "overlord" ? B.stone : null;
-    if (stone) {                       // 能量石在场：优先冲过去抢
-      const sx = stone.x - f.x, sy = stone.y - f.y, sd = Math.hypot(sx, sy) || 1;
-      mx += sx / sd * 1.6; my += sy / sd * 1.6;
+    /* v3.9 霸主争霸：皇冠落地后所有人冲过去抢（预警阶段先占位） */
+    const crown = B.rule === "overlord" && B.crown && B.crown.phase !== "held" ? B.crown : null;
+    if (crown) stone = crown;
+    if (crown) {
+      const sx = crown.x - f.x, sy = crown.y - f.y, sd = Math.hypot(sx, sy) || 1;
+      if (sd > ((LD.CROWN || {}).range || 40) - 6) { mx += sx / sd * 1.6; my += sy / sd * 1.6; }
+      /* 落地了就按交互键加冕（3 秒蓄力期间角色循环会锁住移动，AI 自然站住不动） */
+      if (crown.phase === "fallen" && sd < f.r + ((LD.CROWN || {}).range || 40) - 4) ctrl.press.interact = true;
     } else if (B.giftRule() && f.giftTarget) {   // 天外来物 / 缩圈乱斗：优先去捡掉落物（圈外也敢去）
       const g = f.giftTarget;
       if (g.landed || !f.loadout.skill1 || !f.loadout.skill2 || !f.loadout.ult) {
@@ -13125,7 +13521,7 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
       }
     }
     /* v3.0 视线被挡：不硬顶，绕到障碍侧面再接近（没有掉落物 / 血包这类更高优先级时） */
-    if (blocked && !stone && !f.giftTarget && !f.healTarget) {
+    if (blocked && !stone && !crown && !f.giftTarget && !f.healTarget) {
       const o = b._los;
       const cross = dx * (o.y - f.y) - dy * (o.x - f.x);
       const px = cross > 0 ? uy : -uy;
@@ -14194,7 +14590,7 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
       '<li><b>世界末日</b>：所有玩家<b>同一阵容、互不伤害</b>，出生在地图正中的<b>石墙庇护所</b>里（左右各一个两格宽门洞）。庇护所外会不断刷出僵尸，<b>存活玩家越多刷得越快</b>，僵尸会直冲门洞闯进来；<b>门洞外有一圈青色减速带</b>，僵尸进圈后移速减半。墙外是红圈，待在外面每 0.6 秒掉 4 血。对僵尸造成的伤害与击杀都计入个人分数（1 伤 = 1 分、击杀 +10 分），击杀还掉局内金币，可按 <span class="k">B</span> 买血包 / 血量 / 移速 / 能量球。最后存活的玩家获胜；时间到时仍有多人存活，则<b>分数最高者获胜</b>（不看剩余血量）。</li>',
       '<li><b>车轮战</b>：排队单挑，擂台上每次只有两人对决，败者永久出局，胜者回血 30% 迎接下一位挑战者。（仅本地面板可用）</li>',      '<li><b>追猎时刻</b>：开局<b>随机抽一名玩家当猎人</b>——先播一段猎人特写，猎人头顶加皇冠、血量 <b>800</b>、全部 CD 减半，且<b>伤害随存活幸存者数提升</b>（每多一名 +20%）；其余人是生存者，各自保留自己选的技能、互相同队。开场就有一个大毒圈并缓慢收缩（90 秒过去仍有大片走位空间）。猎人要在 90 秒内清场，生存者撑到倒计时结束就赢。</li>',
       '<li><b>乱斗热身</b>：限时刷分。对局时长在房间界面的「对局时间」里统一选 <b>60 / 120 / 180 秒</b>，阵亡不淘汰、1.6 秒后在随机位置复活，每次击杀得 1 分，时间到分数最高者获胜。不计回合、没有淘汰，纯粹练手。</li>',
-      '<li><b>塔防对战</b>：3v3 单线推塔，<b>没有时间限制</b>，一直打到一方水晶爆掉。地图 2800×600，左右镜像，红蓝一塔之间留出一大片中心战区。双方每 32 秒刷 6 只机器人小兵沿兵线推进，拆掉敌塔后自家小兵变强。防御塔（1500 血 / 射程 300）与水晶（3000 血 / 射程 340）会发射<b>高速追踪弹</b>，走进敌方范围时会显示一圈红圈警告；<b>防御塔没拆完水晶免疫伤害</b>。击杀小兵 / 英雄 / 助攻都给<b>局内金币</b>，按 <span class="k">B</span> 买被动装备（生命 / 攻击 / 护盾 / 能量 / 回血 / 霸体 / 闪避等，每件一次）、<b>主动装备</b>（最多 1 件，按 <span class="k">P</span> 释放）、可重复购买的<b>小兵强化</b>，以及开车时才能买的<b>汽油桶</b>（80 金，+2000 油，不限次数）。英雄 1–6 级，升级加血加伤害；阵亡后在原地立<b>墓碑</b>显示复活倒计时，倒计时结束回基地复活，基地回血圈每秒回复 12% 生命。房间界面可以选红队 / 蓝队。</li>',
+      '<li><b>塔防对战</b>：3v3 单线推塔，<b>没有时间限制</b>，一直打到一方水晶爆掉。地图 2800×600，左右镜像，红蓝一塔之间留出一大片中心战区。双方每 32 秒刷 6 只机器人小兵沿兵线推进，拆掉敌塔后自家小兵变强。防御塔（1200 血 / 射程 300）与水晶（2400 血 / 射程 340）会发射<b>高速追踪弹</b>，走进敌方范围时会显示一圈红圈警告；<b>防御塔没拆完水晶免疫伤害</b>。击杀小兵 / 英雄 / 助攻都给<b>局内金币</b>，按 <span class="k">B</span> 买被动装备（生命 / 攻击 / 护盾 / 能量 / 回血 / 霸体 / 闪避等，每件一次）、<b>主动装备</b>（最多 1 件，按 <span class="k">P</span> 释放）、可重复购买的<b>小兵强化</b>，以及开车时才能买的<b>汽油桶</b>（80 金，+2000 油，不限次数）。英雄 1–6 级，升级加血加伤害；阵亡后在原地立<b>墓碑</b>显示复活倒计时（<b>5 秒 + 等级 × 5 秒</b>，1 级 10 秒、5 级 30 秒），倒计时结束回基地复活，基地回血圈每秒回复 12% 生命。房间界面可以选红队 / 蓝队。</li>',
       '<li>单人「勇者格斗」的房间就是角色卡房间：第一张卡是你（可直接换装扮 / 技能），后面的人机卡可增删（最多 5 个，塔防会自动补满 5 个凑 3v3）、可选难度（木桩 / 普通 / 困难）与配装。</li>',
       '</ul>',
       '<h3>规则修饰符（可多选叠加）</h3>',
@@ -14295,10 +14691,11 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     if (B.rule === "auction") myTags.push("<i class='coin'></i> " + (me.bcoins || 0));
     if (B.rule === "warmup") myTags.push("得分 " + (B.wScore[B.fighters.indexOf(me)] || 0));
     if (B.rule === "ring") myTags.push(B.inPoison(me.x, me.y) ? "☠ 毒圈中" : "🛡 安全区");
+    /* v3.9 顺序统一为 血条 → 能量条 → 击杀/死亡；塔防也要显示能量条（之前被整条跳过） */
     pb.innerHTML = (myTags.length ? '<div class="tag me">你 · ' + myTags.join(" · ") + '</div>' : "") +
       bar("HP", me.hp, me.maxHp, "hp") +
-      '<div class="kd">击杀 <b style="color:#ffd98a">' + (me.kills || 0) + '</b> · 死亡 <b style="color:#fca5a5">' + (me.deaths || 0) + '</b></div>' +
-      (B.rule === "tower" ? "" : bar("能量", me.energy, me.maxEnergy, "en" + (me.energy >= me.maxEnergy ? " full" : "")));
+      bar("能量", me.energy, me.maxEnergy, "en" + (me.energy >= me.maxEnergy ? " full" : "")) +
+      '<div class="kd">击杀 <b style="color:#ffd98a">' + (me.kills || 0) + '</b> · 死亡 <b style="color:#fca5a5">' + (me.deaths || 0) + '</b></div>';
     /* 敌方：除自己以外的参战者（僵尸 / 杂兵 / 分身不占血条位，只在下面报数量）
      * v2.7 修复：以前只收 kind === "hero"，导致闯关里的巨龙（kind === "dragon"）
      * 在困难模式下血厚、玩家需要盯着血条打时却完全没有血条显示。 */
@@ -14313,7 +14710,7 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
         if (foe.huntRole === "hunter") tags.push("👑 猎人");
         if (foe.huntRole === "runner") tags.push("生存者");
         if (B.rule === "warmup") tags.push((B.wScore[B.fighters.indexOf(foe)] || 0) + " 分");
-        if (B.rule === "overlord" && B.stone && !B.stone.holder) tags.push("石头已掉落");
+        /* 霸主标记只在 crown.holder 身上：foe.overlord 由 finishCrown/stripOverlord 维护，勿按 crown.phase 全员加冠 */
         if (foe.name) tags.push(nameHtml(foe));
         if (foe.dead) tags.push(foe.respawnT > 0 && B.rule === "warmup" ? "复活中" : "已倒下");
       }
@@ -14433,7 +14830,16 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     } else if (B.rule === "gifts") {
       subs.push("天降技能 <b>" + (B.gifts || []).length + "</b> 个");
     } else if (B.rule === "overlord") {
-      subs.push(B.stone ? "能量石已掉落！" : "击败巨龙夺取能量石");
+      const cw = B.crown;
+      if (cw && cw.phase === "held") {
+        const who = cw.holder;
+        const nm = who ? (who.name || ("玩家" + (who.side + 1))) : "-";
+        subs.push("霸主 <b>" + nm + "</b> · 剩余 <b>" + Math.ceil(Math.max(0, cw.holdT)) + "s</b>");
+      } else if (cw && cw.phase === "fallen") {
+        subs.push('<span class="big">👑 皇冠已落地！靠近按交互键争夺</span>');
+      } else if (cw && cw.phase === "warn") {
+        subs.push('<span class="big">👑 皇冠将在 ' + Math.ceil(Math.max(0, cw.warnT)) + "s 后降落</span>");
+      }
     }
     if (B.mods && B.mods.length) {
       subs.push('<span style="color:#c4b5fd">' + B.mods.map(id => {
@@ -15556,11 +15962,7 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
       bot.team = room.rule === "team" ? botTeam(i) : -1;
       fighters.push(bot);
     });
-    if (room.rule === "overlord") {
-      const dr = B.mkDragon({ diff: room.bots.some(b => b.level === "hard") ? LD.DIFF.hard : LD.DIFF.normal });
-      dr.side = fighters.length; dr.id = dr.side; dr.team = -1;
-      fighters.push(dr);
-    }
+    /* v3.9 霸主争霸不再放巨龙：改由天降皇冠决定霸主归属（见 B.initCrown） */
     /* v3.8 塔防：按房间选的红/蓝分队，并自动平衡成 3v3 */
     let teams = null;
     if (room.rule === "tower") {

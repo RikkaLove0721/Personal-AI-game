@@ -61,6 +61,21 @@
         take({ type: "gift", prop: g, label: "拾取", gap: gap, lim: lim });
       });
     }
+    /* v3.9 需要蓄力的目标：能量包（血包 / 移速包仍是接触即生效）、霸主皇冠 */
+    if (this.pickups && this.pickups.length) {
+      const lim = CFG.openRange != null ? CFG.openRange : 34;
+      this.pickups.forEach(pk => {
+        if (pk.kind !== "energy") return;
+        const gap = Math.hypot(f.x - pk.x, f.y - pk.y) - f.r;
+        take({ type: "chg", prop: pk, kind: "pack", label: "开包", gap: gap, lim: lim });
+      });
+    }
+    if (this.crown && this.crown.phase === "fallen") {
+      const cw = this.crown;
+      const lim = (LD.CROWN || {}).range || 40;
+      const gap = Math.hypot(f.x - cw.x, f.y - cw.y) - f.r;
+      take({ type: "chg", prop: cw, kind: "crown", label: "加冕", gap: gap, lim: lim });
+    }
     if (this.terrain && this.terrain.props) {
       for (let i = 0; i < this.terrain.props.length; i++) {
         const o = this.terrain.props[i];
@@ -70,10 +85,14 @@
           take({ type: "mud", prop: o, label: "拾取", gap: gap, lim: rangeOf("mudRange") });
         } else if (o.kind === "locker") {
           if (o.occupant) continue;
+          /* v3.9 躲藏冷却期间：柜子不进交互目标，P 框也不显示「躲藏」（与上车禁令一致） */
+          if ((f.noHideT || 0) > 0) continue;
           const gap = propGap(f, o);
           take({ type: "locker", prop: o, label: "躲藏", gap: gap, lim: rangeOf("range") });
         } else if (o.kind === "car") {
           if (o.driver) continue;
+          /* v3.9 上车禁令期间：车根本不出现在交互目标里，P 框也不显示「上车」 */
+          if ((f.noCarT || 0) > 0) continue;
           const gap = propGap(f, o);
           const label = (o.fuel || 0) > 0 ? "驾驶" : "进入";
           take({ type: "car", prop: o, label: label, gap: gap, lim: rangeOf("range") + 12 });
@@ -103,6 +122,7 @@
     const tgt = this.interactTarget(f);
     if (!tgt) return false;
     if (tgt.type === "gift") { this.pickGift(f, tgt.prop); return true; }
+    if (tgt.type === "chg") { this.startCharge(f, tgt.kind, tgt.prop); return true; }
     if (tgt.type === "locker") { this.enterLocker(f, tgt.prop); return true; }
     if (tgt.type === "car") { this.enterCar(f, tgt.prop); return true; }
     if (tgt.type === "mud") { this.pickMud(f, tgt.prop); return true; }
@@ -121,6 +141,7 @@
     }
     const t = this.interactTarget(f);
     if (!t) return "";
+    if (t.type === "chg") return t.kind === "crown" ? "争夺皇冠" : "开启能量包";
     if (t.type === "car") return "上车";
     if (t.type === "locker") return "躲藏";
     if (t.type === "gift") return "拾取";
@@ -175,6 +196,14 @@
    * ========================================================== */
   B.enterLocker = function (f, o) {
     if (!o || o.dead || o.occupant) return false;
+    /* v3.9 与上车禁令同规格：刚被揪出来 / 柜子刚被打碎的一段时间内不许再躲 */
+    if ((f.noHideT || 0) > 0) {
+      if (f._noHideSaidT == null || this.t - f._noHideSaidT > 1.2) {
+        f._noHideSaidT = this.t;
+        FX.float(f.x, f.y - 62, "还差 " + Math.ceil(f.noHideT) + "s 才能躲藏", "#fca5a5", 13);
+      }
+      return false;
+    }
     o.occupant = f;
     f.hideProp = o;
     f.x = o.x; f.y = o.y + (CFG.hideY || 8);
@@ -204,6 +233,9 @@
       /* 柜子被打碎 = 同样是被攻击波及：眩晕 2 秒（与挨打被揪出来一致） */
       f.stun = Math.max(f.stun || 0, CFG.ejectStun || 2);
       f.invuln = Math.max(f.invuln || 0, 0.25);
+      /* v3.9 与上车禁令同规格：柜碎后同样挂上躲藏冷却，防止原地爬回下一个柜子 */
+      f.noHideT = CFG.noHideT != null ? CFG.noHideT : 5;
+      f._noHideSaidT = 0;
       FX.float(f.x, f.y - 60, "柜子碎了！", "#f87171", 15);
       FX.shake(5);
     } else {
@@ -224,10 +256,13 @@
     f.x = p.x; f.y = p.y;
     f.stun = Math.max(f.stun || 0, CFG.ejectStun || 2);
     f.invuln = Math.max(f.invuln || 0, 0.25);
+    /* v3.9 与上车禁令同规格：被揪出来后 5 秒内不能再躲进柜子，否则原地爬回去毫无代价 */
+    f.noHideT = CFG.noHideT != null ? CFG.noHideT : 5;
+    f._noHideSaidT = 0;
     FX.ring(o.x, o.y - 10, Math.max(o.w, o.h) * 0.7, "rgba(248,113,113,.9)", 4, 0.4);
     FX.burst(o.x, o.y - 12, 14, ["#fca5a5", "#fde68a", "#fff"], { speed: 240 });
     FX.shake(7);
-    FX.float(f.x, f.y - 62, "被揪出柜子！眩晕 2s", "#f87171", 16);
+    FX.float(f.x, f.y - 62, "被揪出柜子！眩晕 2s · " + Math.round(f.noHideT) + "s 内不能躲藏", "#f87171", 16);
     this.ev.push(["h", f.x, f.y - 62, "被揪出柜子！", "#f87171"]);
     LD.Audio && LD.Audio.beep && LD.Audio.beep(150, 0.14, "square", 0.06);
     return true;
@@ -287,8 +322,87 @@
   /* ==========================================================
    *  车辆：上下车 / 驾驶 / 撞击 / 油量
    * ========================================================== */
+  /* ==========================================================
+   *  v3.9 通用「长按蓄力」：能量包开包 / 霸主加冕共用
+   *  - 按交互键起手，蓄力 CHARGE[kind].need 秒，期间不能移动、不能出手
+   *  - 受到伤害 / 被眩晕 / 目标消失 / 离得太远 / 死亡 → 中断，进度清零重来
+   * ========================================================== */
+  const chgCfg = (kind) => (LD.CHARGE || {})[kind] || { need: 5, keep: 60, label: "蓄力", color: "#818cf8" };
+  /* 蓄力目标的存活判定（各自保证目标还在场上） */
+  function chgAlive(B, c) {
+    if (c.kind === "pack") return !!B.pickups && B.pickups.indexOf(c.tgt) >= 0;
+    if (c.kind === "crown") return !!B.crown && B.crown === c.tgt && B.crown.phase === "fallen";
+    return false;
+  }
+  function chgPos(c) {
+    return c.kind === "crown" ? { x: c.tgt.x, y: c.tgt.y } : { x: c.tgt.x, y: c.tgt.y };
+  }
+
+  B.startCharge = function (f, kind, tgt) {
+    if (!f || f.dead || !tgt || f.chg) return false;
+    if (f.rideCar || f.hideProp || f.carryMud) return false;
+    if ((f.stun || 0) > 0 || (f.root || 0) > 0) return false;
+    const c = { kind: kind, tgt: tgt, t: 0 };
+    if (!chgAlive(this, c)) return false;
+    f.chg = c;
+    f.vx = 0; f.vy = 0; f.moving = false;
+    FX.ring(f.x, f.y - 20, 54, chgCfg(kind).color, 4, 0.35);
+    return true;
+  };
+
+  B.cancelCharge = function (f, why) {
+    if (!f || !f.chg) return false;
+    f.chg = null;
+    if (why) {
+      FX.float(f.x, f.y - 66, why, "#f87171", 14);
+      this.ev.push(["t", f.x, f.y - 66, why, "#f87171"]);
+    }
+    return true;
+  };
+
+  B.updateCharging = function (dt) {
+    for (let i = 0; i < this.fighters.length; i++) {
+      const f = this.fighters[i];
+      const c = f.chg;
+      if (!c) continue;
+      const cfg = chgCfg(c.kind);
+      if (!chgAlive(this, c)) { this.cancelCharge(f, "目标已消失"); continue; }
+      if (f.dead) { this.cancelCharge(f, null); continue; }
+      if ((f.stun || 0) > 0 || (f.root || 0) > 0) { this.cancelCharge(f, "被打断！"); continue; }
+      if (f.rideCar || f.hideProp) { this.cancelCharge(f, "中断了"); continue; }
+      const p = chgPos(c);
+      if (Math.hypot(f.x - p.x, f.y - p.y) > f.r + cfg.keep) { this.cancelCharge(f, "离得太远，中断！"); continue; }
+      c.t += dt;
+      if (Math.random() < dt * 12) FX.trail(f.x + rand(-10, 10), f.y - rand(4, 26), cfg.color, 3, 0.3);
+      if (c.t >= cfg.need) {
+        f.chg = null;
+        if (c.kind === "pack") this.finishPack(f, c.tgt);
+        else if (c.kind === "crown") this.finishCrown(f, c.tgt);
+      }
+    }
+  };
+
+  B.finishPack = function (f, pk) {
+    const idx = (this.pickups || []).indexOf(pk);
+    if (idx >= 0) this.pickups.splice(idx, 1);
+    const gain = (LD.CONF && LD.CONF.energy && LD.CONF.energy.packGain) || 60;
+    f.energy = Math.min(f.maxEnergy, f.energy + gain);
+    FX.ring(f.x, f.y - 26, 78, "rgba(165,180,252,.95)", 6, 0.45);
+    FX.burst(f.x, f.y - 26, 20, ["#a5b4fc", "#fff", "#818cf8"], { speed: 240 });
+    FX.float(f.x, f.y - 70, "大招能量 +" + gain, "#a5b4fc", 16);
+    LD.Audio && LD.Audio.beep && LD.Audio.beep(560, 0.12, "triangle", 0.05);
+  };
+
   B.enterCar = function (f, o) {
     if (!o || o.dead || o.driver) return false;
+    /* v3.9 被远程震下车后有 5 秒 CD，这段时间按 P / AI 主动上车都会被拒 */
+    if ((f.noCarT || 0) > 0) {
+      if (f._noCarSaidT == null || this.t - f._noCarSaidT > 1.2) {
+        f._noCarSaidT = this.t;
+        FX.float(f.x, f.y - 62, "还差 " + Math.ceil(f.noCarT) + "s 才能上车", "#fca5a5", 13);
+      }
+      return false;
+    }
     o.driver = f;
     o.free = false; o.vx = 0; o.vy = 0;
     f.rideCar = o;
@@ -320,6 +434,8 @@
       FX.burst(o.x, o.y - 10, 20, ["#fca5a5", "#fff", "#fbbf24"], { speed: 280 });
       FX.shake(9);
       FX.float(f.x, f.y - 62, "被撞出车外！眩晕 2s", "#f87171", 16);
+      /* v3.9 震出追加：5 秒内不得再上车，避免刚落地就爬回去（AI 也不会再抢车） */
+      f.noCarT = CFG.noCarT != null ? CFG.noCarT : 5;
       this.ev.push(["h", f.x, f.y - 62, "被撞出车外！", "#f87171"]);
     } else {
       FX.float(f.x, f.y - 54, "下车", "#9fb3dd", 12);
@@ -333,6 +449,15 @@
     this.fighters.forEach(f => {
       if (f.interactCd > 0) f.interactCd = Math.max(0, f.interactCd - dt);
       if (f.giftLock > 0) f.giftLock = Math.max(0, f.giftLock - dt);
+      /* v3.9 被震下车的上车禁令 / 被揪出柜子的躲藏禁令 */
+      if (f.noCarT > 0) {
+        f.noCarT = Math.max(0, f.noCarT - dt);
+        if (f.noCarT === 0) f._noCarSaidT = 0;
+      }
+      if (f.noHideT > 0) {
+        f.noHideT = Math.max(0, f.noHideT - dt);
+        if (f.noHideT === 0) f._noHideSaidT = 0;
+      }
     });
     if (!this.terrain || !this.terrain.props) return;
     const VCFG = LD.VEHICLE_CFG || {};

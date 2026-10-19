@@ -417,11 +417,7 @@
       bot.team = room.rule === "team" ? botTeam(i) : -1;
       fighters.push(bot);
     });
-    if (room.rule === "overlord") {
-      const dr = B.mkDragon({ diff: room.bots.some(b => b.level === "hard") ? LD.DIFF.hard : LD.DIFF.normal });
-      dr.side = fighters.length; dr.id = dr.side; dr.team = -1;
-      fighters.push(dr);
-    }
+    /* v3.9 霸主争霸不再放巨龙：改由天降皇冠决定霸主归属（见 B.initCrown） */
     /* v3.8 塔防：按房间选的红/蓝分队，并自动平衡成 3v3 */
     let teams = null;
     if (room.rule === "tower") {

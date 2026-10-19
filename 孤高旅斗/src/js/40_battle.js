@@ -269,6 +269,8 @@
     if (this.rule === "ring") this.initRing();
     /* v3.7 塔防：分队 / 等级 / 金币 / 禁大招 */
     if (this.rule === "tower" && this.initTower) this.initTower();
+    /* v3.9 霸主争霸：天降皇冠循环从这里起步（每回合重来） */
+    if (this.rule === "overlord" && this.initCrown) this.initCrown();
     return this;
   };
 
@@ -362,6 +364,9 @@
       f.giftPending = { skill: null, ult: null }; f.giftSwap = null; f.giftTarget = null;
       /* v3.3 交互：车辆 / 柜子 / 泥土 / 技能获得顺序 */
       f.rideCar = null; f.hideProp = null; f.carryMud = null;
+      /* v3.9 被震下车后的上车禁令 / 被揪出柜子的躲藏禁令 / 能量包蓄力状态 */
+      f.noCarT = 0; f._noCarSaidT = 0; f.chg = null;
+      f.noHideT = 0; f._noHideSaidT = 0;
       f.carTarget = null; f.hideT = 0; f.interactCd = 0; f.giftLock = 0;
       f.hideTimer = 0; f.hideSpotted = false; f.bushTimer = 0; f._stealthFlash = false;
       f.skillGot = { skill1: 0, skill2: 0 };
@@ -414,6 +419,8 @@
     if (this.rule === "ring") this.initRing();
     /* v2.7 追猎时刻：每回合重新抽猎人 + 重置大毒圈（客机等房主快照，不自行抽签） */
     if (this.rule === "hunt" && this.isHost) this.initHunt();
+    /* v3.9 霸主争霸：每回合重新开始皇冠循环 */
+    if (this.rule === "overlord" && this.initCrown) this.initCrown();
     this.dragonCorpseT = 0;
     /* v2.6 / v2.7 各规则回合限时：
      * 追猎 90 秒（时间到生存者胜）；缩圈无限时（毒圈就是时钟）；
@@ -554,6 +561,8 @@
     tgt.hp = Math.max(0, tgt.hp - dmg);
     tgt.hitFlash = 0.16;
     tgt.dmgTaken += dmg;
+    /* v3.9 正在开启能量包时挨打 → 蓄力中断，需要重新按交互键再来一次 */
+    if (tgt.chg && this.cancelCharge) this.cancelCharge(tgt, "被打断！");
     /* v3.2 世界末日：对僵尸造成的实际伤害计入得分（溢出伤害不算） */
     if (this.rule === "doomsday" && src && src.kind === "hero" && !src.isZombie && tgt.isZombie) {
       const si = this.fighters.indexOf(src);
@@ -837,14 +846,9 @@
       this.finish(bossesLeft.length === 0);
       return;
     }
-    // 霸主争霸：巨龙被击败 → 爆出能量石（尸体 3 秒后消失）
-    if (this.rule === "overlord" && f.kind === "dragon") { this.spawnStone(f.x, f.y); this.dragonCorpseT = 0; return; }
-    // 霸主争霸：霸主阵亡 → 能量石直接消散（v2.5：不再掉回场上，避免强者恒强）
+    // v3.9 霸主争霸已无巨龙：霸主阵亡 → 效果当场结束，并排下一顶皇冠
     if (this.rule === "overlord" && f.overlord) {
-      f.overlord = false;
-      FX.ring(f.x, f.y - 26, 110, "rgba(252,211,77,.9)", 6, 0.6);
-      FX.float(f.x, f.y - 72, "能量石消散", "#fcd34d", 17);
-      this.ev.push(["h", f.x, f.y - 72, "能量石消散", "#fcd34d"]);
+      if (this.stripOverlord) this.stripOverlord(f, true);
     }
     // 霸主争霸：场上只剩一名存活勇者（巨龙不算）时回合结束
     if (this.rule === "overlord") {
@@ -879,51 +883,112 @@
     return t ? t.side : 0;
   };
 
-  /* ---------------- 霸主争霸：能量石 ---------------- */
-  B.spawnStone = function (x, y) {
-    /* 能量石大距离随机散落：初速更快，保证飞出足够远而不是原地落下 */
-    const a = Math.random() * TAU, sp = rand(560, 860);
-    this.stone = { x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0, landed: false, holder: null };
-    FX.ring(x, y - 26, 90, "rgba(252,211,77,.95)", 6, 0.5);
-    FX.burst(x, y - 26, 30, ["#fcd34d", "#fff7d6", "#fbbf24"], { speed: 340 });
-    FX.float(x, y - 70, "能量石！", "#fcd34d", 18);
-    this.ev.push(["h", x, y - 70, "能量石！", "#fcd34d"]);
+  /* ==========================================================
+   *  v3.9 霸主争霸：天降皇冠（取代原来的「打巨龙爆能量石」）
+   *  预警 → 落地 → 靠近蓄力 need 秒（受击中断）→ 加冕（血量 x2 / CD -30%）
+   *  → 持有 holdT 秒后剥夺（血量减半 / CD 复原）→ 重新预警，循环
+   * ========================================================== */
+  B.initCrown = function () {
+    const C = LD.CROWN || {};
+    this.crown = { phase: "warn", warnT: C.warnT || 5, x: 0, y: 0, holder: null, holdT: 0, t: 0, landT: 0 };
+    /* 落点在预警时就抽好，好让预警圈画在将要落下的位置 */
+    const spot = this.crownSpot();
+    this.crown.x = spot.x; this.crown.y = spot.y;
   };
 
-  B.updateStone = function (dt) {
-    const s = this.stone;
-    if (!s) return;
-    s.life += dt;
-    if (!s.landed) {
-      s.x += s.vx * dt; s.y += s.vy * dt;
-      const damp = Math.exp(-2.2 * dt); s.vx *= damp; s.vy *= damp;
-      FX.trail(s.x, s.y, "#fcd34d", 6, 0.3);
-      if (Math.hypot(s.vx, s.vy) < 40) { s.landed = true; s.vx = s.vy = 0; s.y = Math.max(s.y, B.world.pt); }
-      s.x = clamp(s.x, 40, B.world.w - 40);
-      s.y = clamp(s.y, B.world.pt, B.world.h - 46);
+  /* 随机落点：地图中段，避开障碍且不贴边 */
+  B.crownSpot = function () {
+    const w = this.world || { w: 1600, h: 1600, pt: 80 };
+    for (let i = 0; i < 40; i++) {
+      const x = rand(w.pt + 120, w.w - w.pt - 120);
+      const y = rand(w.pt + 120, w.h - w.pt - 120);
+      if (!this.terrain || LD.Terrain.clearAt(this.terrain, x, y, 34)) return { x: x, y: y };
+    }
+    return { x: w.w / 2, y: w.h / 2 };
+  };
+
+  B.updateCrown = function (dt) {
+    const C = LD.CROWN || {};
+    const c = this.crown;
+    if (!c) return;
+    c.t += dt;
+    if (c.phase === "warn") {
+      c.warnT -= dt;
+      /* 预警：直接把落点画出来（HUD 也有倒计时） */
+      if (Math.random() < dt * 8) FX.trail(c.x + rand(-26, 26), c.y - rand(10, 40), "#fcd34d", 4, 0.4);
+      if (c.warnT <= 0) {
+        c.phase = "fallen"; c.landT = 0; c.warnT = 0;
+        FX.ring(c.x, c.y, 120, "rgba(252,211,77,.95)", 8, 0.6);
+        FX.burst(c.x, c.y - 10, 30, ["#fcd34d", "#fff7d6", "#fbbf24"], { speed: 320 });
+        FX.shake(10);
+        FX.float(c.x, c.y - 70, "皇冠降临！", "#fcd34d", 20);
+        this.ev.push(["h", c.x, c.y - 70, "皇冠降临！", "#fcd34d"]);
+      }
       return;
     }
-    if (s.life % 0.1 < dt) FX.trail(s.x + rand(-10, 10), s.y - rand(6, 26), "#fcd34d", 4, 0.5);
-    // 拾取判定
-    for (const f of this.fighters) {
-      if (f.dead || f.kind !== "hero" || f.isZombie) continue;
-      if (Math.hypot(f.x - s.x, f.y - s.y) < f.r + 26) {
-        this.becomeOverlord(f);
-        this.stone = null;
-        return;
-      }
+    if (c.phase === "fallen") {
+      c.landT += dt;
+      if (Math.random() < dt * 6) FX.trail(c.x + rand(-12, 12), c.y - rand(6, 24), "#fcd34d", 4, 0.5);
+      return;
+    }
+    if (c.phase === "held") {
+      const h = c.holder;
+      c.holdT -= dt;
+      /* 霸主自己死了：效果直接结束并立即开始下一轮预警 */
+      if (!h || h.dead) { this.stripOverlord(h, true); return; }
+      if (c.holdT <= 0) this.stripOverlord(h, false);
     }
   };
 
-  B.becomeOverlord = function (f) {
+  /* 加冕完成 → 成为霸主 */
+  B.finishCrown = function (f, cw) {
+    if (!f || f.dead) return;
+    if (!this.crown || this.crown !== cw || this.crown.phase !== "fallen") return;
+    const C = LD.CROWN || {};
+    const mul = C.hpMul != null ? C.hpMul : 2;
+    /* 幂等：先把上一次的加成还原，避免反复加冕把血量一层层叠上去 */
+    this.stripOverlord(f, true);
     f.overlord = true;
-    f.maxHp = Math.round(f.maxHp * 1.5);
-    f.hp = Math.min(f.maxHp, Math.round(f.hp * 1.5));
-    FX.ring(f.x, f.y - 26, 110, "rgba(252,211,77,.95)", 8, 0.6);
+    f.maxHp = Math.round(f.maxHp * mul);
+    f.hp = Math.min(f.maxHp, Math.round(f.hp * mul));
+    f.cdM = C.cdMul != null ? C.cdMul : 0.7;      // 技能 CD 缩短 30%
+    this.crown.phase = "held";
+    this.crown.holder = f;
+    this.crown.holdT = C.holdT || 30;
+    FX.ring(f.x, f.y - 26, 120, "rgba(252,211,77,.95)", 8, 0.6);
     FX.burst(f.x, f.y - 26, 36, ["#fcd34d", "#fff", "#fbbf24"], { speed: 340 });
     FX.flash(0.22, "252,211,77"); FX.shake(14);
     FX.float(f.x, f.y - 74, "霸主诞生！", "#fcd34d", 20);
     this.ev.push(["h", f.x, f.y - 74, "霸主诞生！", "#fcd34d"]);
+  };
+
+  /* 剥夺霸主：血量减半、CD 复原。silent=true 用于阵亡 / 重新加冕前的静默还原 */
+  B.stripOverlord = function (f, silent) {
+    const C = LD.CROWN || {};
+    if (f) {
+      if (f.overlord) {
+        const mul = C.hpMul != null ? C.hpMul : 2;
+        f.maxHp = Math.max(1, Math.round(f.maxHp / mul));
+        f.hp = Math.max(1, Math.min(f.maxHp, Math.round(f.hp / mul)));
+      }
+      f.overlord = false;
+      f.cdM = 1;
+      if (!silent) {
+        FX.ring(f.x, f.y - 26, 110, "rgba(252,211,77,.9)", 6, 0.6);
+        FX.float(f.x, f.y - 72, "霸主效果结束", "#fcd34d", 17);
+        this.ev.push(["h", f.x, f.y - 72, "霸主效果结束", "#fcd34d"]);
+      }
+    }
+    /* 立刻排下一顶皇冠 */
+    if (this.crown) {
+      const spot = this.crownSpot();
+      this.crown.phase = "warn";
+      this.crown.warnT = C.nextWarnT != null ? C.nextWarnT : 5;
+      this.crown.holder = null;
+      this.crown.holdT = 0;
+      this.crown.x = spot.x; this.crown.y = spot.y;
+      this.crown.landT = 0;
+    }
   };
 
   /* ==========================================================
@@ -1446,12 +1511,14 @@
       const pk = this.pickups[i];
       pk.t += dt;
       if (pk.t > 26) { this.pickups.splice(i, 1); continue; }
+      /* v3.9 能量包不再「走过去自动吃掉」：必须靠近按交互键原地蓄力 5 秒。
+       * 血包 / 移速包保持原来的接触即生效。 */
       for (const f of this.fighters) {
         if (f.dead || f.bench || f.kind !== "hero") continue;
         if (Math.hypot(f.x - pk.x, f.y - pk.y) > f.r + 24) continue;
-        const label = pk.kind === "heal" ? "生命 +35" : pk.kind === "energy" ? "大招能量 +60" : "移速提升 5 秒";
+        if (pk.kind === "energy") continue;
+        const label = pk.kind === "heal" ? "生命 +35" : "移速提升 5 秒";
         if (pk.kind === "heal") this.heal(f, 35);
-        else if (pk.kind === "energy") f.energy = Math.min(f.maxEnergy, f.energy + 60);
         else f.speedBoostT = Math.max(f.speedBoostT || 0, 5);
         FX.float(f.x, f.y - 64, label, pk.kind === "heal" ? "#7ff0c4" : pk.kind === "energy" ? "#a5b4fc" : "#fcd34d", 14);
         FX.burst(pk.x, pk.y - 10, 12, ["#7dd3fc", "#fff"], { speed: 180 });
@@ -2908,7 +2975,10 @@
         B.spawnProj({ x: f.x + Math.cos(a) * 26, y: f.y - 26 + Math.sin(a) * 14,
           vx: Math.cos(a) * sk.proj.speed, vy: Math.sin(a) * sk.proj.speed,
           r: sk.proj.r, dmg: sk.dmg, life: sk.proj.life, owner: f, color: "#a5f3fc", core: "#f0feff",
-          type: "sword", kindTag: "ult", trail: true });
+          type: "sword", kindTag: "ult", trail: true,
+          /* v3.9 剑气穿透：命中后继续前行，可以一口气贯穿一整条线上的目标。
+           * pierceOnce = 同一目标只结算一次，否则弹道贴着人飞时会每帧都扣一次血。 */
+          pierce: !!sk.pierce, data: { pierceOnce: !!sk.pierce } });
         FX.burst(f.x, f.y - 26, 4, "#a5f3fc", { speed: 120, dir: a });
       }
       if (s.t >= sk.dur) B.endSlot(f, slot, sk.cd);
@@ -3809,6 +3879,30 @@
     FX.float(f.x, f.y - 56, "空槽位", "#9fb3dd", 12);
   }
 
+  /* v3.9 皇冠图标：三尖一带的金色小皇冠，alpha 用于天降时的淡入 */
+  function drawCrownIcon(ctx, x, y, s, alpha) {
+    ctx.save();
+    ctx.globalAlpha = alpha == null ? 1 : alpha;
+    ctx.translate(x, y);
+    ctx.scale(s, s);
+    ctx.beginPath();
+    ctx.moveTo(-14, 8); ctx.lineTo(-14, -6);
+    ctx.lineTo(-7, 1); ctx.lineTo(0, -9);
+    ctx.lineTo(7, 1); ctx.lineTo(14, -6);
+    ctx.lineTo(14, 8);
+    ctx.closePath();
+    const g = ctx.createLinearGradient(0, -10, 0, 10);
+    g.addColorStop(0, "#fff7d6"); g.addColorStop(0.5, "#fbbf24"); g.addColorStop(1, "#b45309");
+    ctx.fillStyle = g; ctx.fill();
+    ctx.strokeStyle = "#78350f"; ctx.lineWidth = 1.2; ctx.stroke();
+    /* 三颗宝石 */
+    [[-9, 4], [0, 4], [9, 4]].forEach(p => {
+      ctx.beginPath(); ctx.arc(p[0], p[1], 1.7, 0, TAU);
+      ctx.fillStyle = p[0] === 0 ? "#f87171" : "#60a5fa"; ctx.fill();
+    });
+    ctx.restore();
+  }
+
   function Cine_paused() { return LD.Cine.active; }
 
   B.ctrlFire = function (f, ctrl, dt) {
@@ -3897,6 +3991,8 @@
     this.updateProjs(dt);
     if (this.terrain) LD.Terrain.update(this.terrain, dt, this);
     this.updatePickups(dt);
+    /* v3.9 能量包蓄力：进度推进与中断判定（锁移动 / 锁技能在角色循环里） */
+    if (this.updateCharging) this.updateCharging(dt);
     this.updateZones(dt);
     if (this.giftRule()) this.updateGifts(dt);
     /* ---- v2.7 血包与掉落补给 ---- */
@@ -3940,11 +4036,7 @@
         this.fighters.splice(i, 1);
       }
     }
-    if (this.rule === "overlord") {
-      this.updateStone(dt);
-      const dg = this.fighters.find(f => f.kind === "dragon");
-      if (dg && dg.dead) this.dragonCorpseT = (this.dragonCorpseT || 0) + dt;   // 尸体 3 秒后消失
-    }
+    if (this.rule === "overlord" && this.updateCrown) this.updateCrown(dt);
     /* v2.6 双子剑客：每 8 秒换位 + 真身标记互换 */
     if (this.twinSwapT != null) {
       this.twinSwapT -= dt;
@@ -4121,9 +4213,14 @@
       ctrl.press.interact = false;
       if (this.doInteract) this.doInteract(f);
     }
-    if (this.state === "fight" && !f.hideProp && !f.rideCar) this.ctrlFire(f, ctrl, dt);
-    /* 躲进柜子 / 坐在车上：不能移动、不能闪避（相机与朝向照旧） */
-    if (f.hideProp || f.rideCar) {
+    if (this.state === "fight" && !f.hideProp && !f.rideCar && !f.chg) this.ctrlFire(f, ctrl, dt);
+    /* v3.9 蓄力期间（能量包 / 皇冠）：不能移动也不能出手，按键直接吞掉 */
+    if (f.chg) {
+      ctrl.mx = 0; ctrl.my = 0;
+      if (ctrl.press) { ctrl.press.basic = false; ctrl.press.skill1 = false; ctrl.press.skill2 = false; ctrl.press.ult = false; }
+    }
+    /* 躲进柜子 / 坐在车上 / 开能量包：不能移动、不能闪避（相机与朝向照旧） */
+    if (f.hideProp || f.rideCar || f.chg) {
       f.moving = false;
       f.atkAnim = Math.max(0, f.atkAnim - dt);
       /* v3.4 躲藏计时：超过 spotT 秒 AI 就会察觉；这里给玩家一个「被发现了」的提示 */
@@ -4497,6 +4594,14 @@
           continue;
         }
 
+        /* v3.9 千剑杀的穿透剑气：同一个目标只结算一次，弹道继续往前飞。
+         * 记的是目标本身而不是 side —— 小兵 / 僵尸整队共用一个 side，
+         * 按 side 记会让一把剑扫过一整波时只有第一只吃到伤害。 */
+        if (p.pierce && p.data && p.data.pierceOnce) {
+          const hs = p.data.pierceHits || (p.data.pierceHits = []);
+          if (hs.indexOf(f) >= 0) continue;
+          hs.push(f);
+        }
         this.damage(p.owner, f, p.dmg, { type: p.kindTag === "ult" ? "ult" : "skill", proj: true,
           basic: !!p.basic, kb: p.pierce ? 90 : 130, from: p.owner,
           hitDir: Math.atan2(p.vy, p.vx), root: p.root, stun: p.stun, blind: p.blind });
@@ -4881,6 +4986,59 @@
           ctx.lineTo(pk.x - 8, pk.y - 12 + bob);
           ctx.closePath(); ctx.fill();
         }
+        ctx.restore();
+      });
+      /* v3.9 霸主争霸：皇冠预警圈（地面）与落下的皇冠 */
+      if (this.rule === "overlord" && this.crown && this.crown.phase !== "held") {
+        const cw = this.crown, C = LD.CROWN || {};
+        ctx.save();
+        const bob = Math.sin(this.t * 4) * 3;
+        if (cw.phase === "warn") {
+          /* 落点：收缩的金色圆环 + 倒计时 */
+          const p = 1 - Math.max(0, cw.warnT) / (C.warnT || 5);
+          ctx.globalAlpha = 0.5 + Math.sin(this.t * 9) * 0.2;
+          ctx.strokeStyle = "#fcd34d"; ctx.lineWidth = 3;
+          ctx.beginPath(); ctx.ellipse(cw.x, cw.y, 46, 22, 0, 0, TAU); ctx.stroke();
+          ctx.setLineDash([6, 6]);
+          ctx.globalAlpha = 0.9; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.ellipse(cw.x, cw.y, 46 + (1 - p) * 40, 22 + (1 - p) * 19, 0, 0, TAU); ctx.stroke();
+          ctx.setLineDash([]);
+          /* 天上的皇冠随倒计时下降 */
+          const drop = Math.max(0, 1 - cw.warnT / (C.warnT || 5));
+          const cy = cw.y - 260 * (1 - drop);
+          drawCrownIcon(ctx, cw.x, cy, 1.1, 0.55 + drop * 0.45);
+          ctx.fillStyle = "#fde68a"; ctx.font = "bold 13px ui-monospace,Menlo,Consolas,monospace";
+          ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+          ctx.fillText("皇冠 " + Math.ceil(Math.max(0, cw.warnT)) + "s", cw.x, cy - 22);
+        } else if (cw.phase === "fallen") {
+          ctx.globalAlpha = 0.85;
+          V.glow(ctx, cw.x, cw.y - 14, 44, "rgba(252,211,77,.55)", 1);
+          ctx.fillStyle = "rgba(0,0,0,.28)";
+          ctx.beginPath(); ctx.ellipse(cw.x, cw.y + 6, 22, 8, 0, 0, TAU); ctx.fill();
+          ctx.globalAlpha = 1;
+          drawCrownIcon(ctx, cw.x, cw.y - 18 + bob, 1.35, 1);
+        }
+        ctx.restore();
+      }
+
+      /* v3.9 蓄力进度条（能量包开包 / 霸主加冕）：头顶进度 + 剩余秒数 */
+      this.fighters.forEach(f => {
+        if (!f.chg || f.dead) return;
+        const cfg = (LD.CHARGE || {})[f.chg.kind] || { need: 5, label: "蓄力", color: "#818cf8" };
+        const p = Math.max(0, Math.min(1, f.chg.t / cfg.need));
+        const bw = 74, bh = 7, bx = f.x - bw / 2, by = f.y - 84;
+        ctx.save();
+        ctx.fillStyle = "rgba(10,12,22,.72)";
+        ctx.fillRect(bx - 2, by - 2, bw + 4, bh + 4);
+        ctx.fillStyle = "rgba(148,163,184,.28)";
+        ctx.fillRect(bx, by, bw, bh);
+        ctx.fillStyle = cfg.color;
+        ctx.fillRect(bx, by, bw * p, bh);
+        ctx.strokeStyle = "rgba(226,232,240,.9)"; ctx.lineWidth = 1;
+        ctx.strokeRect(bx - 0.5, by - 0.5, bw + 1, bh + 1);
+        ctx.fillStyle = "#e2e8f0"; ctx.font = "11px ui-monospace,Menlo,Consolas,monospace";
+        ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+        ctx.fillText(cfg.label + " " + (cfg.need - f.chg.t).toFixed(1) + "s", f.x, by - 4);
         ctx.restore();
       });
       (this.coins || []).forEach(c => {                 // 军备竞赛：局内金币

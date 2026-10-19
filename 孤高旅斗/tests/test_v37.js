@@ -117,7 +117,7 @@ console.log("=== 1. 配置 / 地图 / 分队 ===");
   check("英雄出生在自家基地附近", hs[0].x < 260 && hs[5].x > B.world.w - 260,
     Math.round(hs[0].x) + " / " + Math.round(hs[5].x));
   check("中心没有猴子了", propsOf("monkey").length === 0);
-  check("塔 1500 血 / 水晶 3000 血", C.tower.hp === 1500 && C.crystal.hp === 3000);
+  check("塔 1200 血 / 水晶 2400 血", C.tower.hp === 1200 && C.crystal.hp === 2400);
   check("塔/水晶射程 300 / 340", C.tower.range === 300 && C.crystal.range === 340);
   check("建筑弹道高速且带追踪", C.tower.projSpeed >= 1000 && C.tower.homing > 0 && C.crystal.homing > 0);
   check("地图会生成随机设施（含车辆/坦克的可能）",
@@ -281,7 +281,9 @@ console.log("\n=== 7. 复活 / 墓碑 ===");
   me.team = 0; foe.team = 1;
   me.hp = 1; me.x = 800; me.y = C.laneY;
   B.damage(foe, me, 999, { type: "skill" });
-  check("阵亡进入复活倒计时（8 + 等级×2.2）", me.dead && me.respawnT >= 9.9, me.respawnT.toFixed(1) + "s");
+  /* v3.9 复活改为 5 秒 + 等级 × 5 秒：1 级 10s、5 级 30s */
+  check("阵亡进入复活倒计时（5 + 等级×5）",
+    me.dead && Math.abs(me.respawnT - (5 + (me.level || 1) * 5)) < 0.2, me.respawnT.toFixed(1) + "s");
   check("原地留下墓碑", (B.graves || []).some(g => g.hero === me && Math.abs(g.x - 800) < 1));
   const waitFrames = Math.ceil(me.respawnT * 60) + 12;   // 先算好帧数，别在循环条件里读会变化的 respawnT
   for (let i = 0; i < waitFrames; i++) step();
@@ -295,6 +297,150 @@ console.log("\n=== 7. 复活 / 墓碑 ===");
   const before = me2.hp;
   stepN(60);
   check("基地回血 12% / 秒", me2.hp - before >= me2.maxHp * 0.11, Math.round(me2.hp - before) + " / " + Math.round(me2.maxHp));
+
+  /* 5 级阵亡：5 + 5×5 = 30 秒 */
+  const hs5 = field(2, false);
+  const h5 = hs5[0];
+  h5.team = 0; h5.level = 5; h5.hp = 1; h5.x = 800; h5.y = C.laneY;
+  B.damage(hs5[1], h5, 999, { type: "skill" });
+  check("5 级阵亡复活 30 秒", h5.dead && Math.abs(h5.respawnT - 30) < 0.2, h5.respawnT.toFixed(1) + "s");
+}
+
+console.log("\n=== 7.5 推掉两塔后 AI 仍会推水晶 / 满血不冥想 ===");
+{
+  const MEDI = { basic: "slash", skill1: "meditate", skill2: "chain", ult: "bloodRage" };
+  const hs = [];
+  for (let i = 0; i < 6; i++) {
+    const f = mkHero(i, i === 3 ? MEDI : null);
+    LD.AI.mkBot(f, "normal");
+    hs.push(f);
+  }
+  B.setup({ mode: "duel", rule: "tower", fighters: hs, isHost: true, mySide: 0, matchT: 600 });
+  B.resetRound(false);
+  B.state = "fight"; B.countdown = 0; B.roundT = 0;
+  hs.forEach(f => { f.invuln = 0; });
+
+  /* 蓝队两座塔全拆掉，只剩水晶 */
+  B.terrain.props.filter(o => o.kind === "tower" && o.side === 1).forEach(o => { o.dead = true; o.hp = 0; });
+  const cry = B.terrain.props.find(o => o.kind === "crystal" && o.side === 1);
+  const red = hs.filter(f => f.team === 0);
+  red.forEach(f => { f.x = cry.x - 300; f.y = C.laneY; f.hp = f.maxHp; });
+  /* 守方拉到兵线上方远处：贴脸时 AI 理应先打人，这里测的是「没人贴身就专心推水晶」 */
+  hs.filter(f => f.team === 1).forEach(f => { f.x = cry.x; f.y = 110; f.hp = f.maxHp; });
+
+  /* 关键：enemyStructure 返回的是 prop，上面没有 .d —— 距离要自己算 */
+  const ord = B.enemyStructure(0, red[0].x, red[0].y, 2000);
+  check("推掉两塔后目标是水晶", ord && ord.kind === "crystal", ord && ord.kind);
+  check("距离由调用方计算（prop 上没有 .d）", ord && ord.d === undefined);
+
+  /* v3.9 新规则：没有兵线顶着时 AI 不会一个人钻进水晶火力圈，所以这里持续补兵压到水晶前。
+   * 小兵 dmg 设为 0 —— 水晶掉下来的血必须来自英雄，否则这条断言会被兵线蒙混过关。 */
+  const topLane = () => {
+    const mins = B.fighters.filter(f => f.kind === "laneMinion" && f.team === 0 && !f.dead);
+    if (mins.length < 3) B.spawnTowerWave(0);
+    B.fighters.filter(f => f.kind === "laneMinion" && f.team === 0 && !f.dead).forEach((m, i) => {
+      m.x = cry.x - 170 - (i % 3) * 22;
+      m.y = C.laneY + (Math.floor(i / 3) * 22 - 11);
+      m.dmg = 0;
+    });
+  };
+  topLane();
+
+  let aimed = 0;                                    // 累计有多少帧有人在瞄水晶（瞬时采样会被残血回家打断）
+  for (let i = 0; i < 60 * 20; i++) {
+    hs.forEach(f => { if (!f.dead) LD.AI.tickHero(f, 1 / 60); });
+    step();
+    if (i % 90 === 0) topLane();                    // 兵线会被水晶点掉，持续补兵才像真实的推进
+    if (red.some(f => f.aimProp === cry)) aimed++;
+  }
+  check("AI 会真的去打水晶", cry.hp < cry.maxHp, Math.round(cry.hp) + "/" + Math.round(cry.maxHp));
+  check("AI 会瞄准水晶", aimed > 0, aimed + " 帧");
+
+  /* 满血的人机不应该按冥想 */
+  const medi = hs[3];
+  let used = 0;
+  const _ts = B.trySlot;
+  B.trySlot = function (f, slot, ctrl) {
+    if (f === medi && slot === "skill1" && f.hp >= f.maxHp * 0.999) used++;
+    return _ts.apply(this, arguments);
+  };
+  medi.hp = medi.maxHp;
+  medi.cd.skill1 = 0;
+  for (let i = 0; i < 60 * 20; i++) {
+    hs.forEach(f => { if (!f.dead) LD.AI.tickHero(f, 1 / 60); });
+    step();
+    medi.hp = medi.maxHp;                       // 全程满血
+  }
+  check("满血时不会按冥想（推塔不再乱放回复技）", used === 0, used + " 次");
+  B.trySlot = _ts;
+}
+
+console.log("\n=== 7.6 v3.9 无兵线不顶塔 / 塔下挨打先撤出塔圈 ===");
+{
+  const d = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+  const towerR = C.tower.range + C.tower.r;          // 塔的火力圈半径
+  const mkField = () => {
+    const hs = [];
+    for (let i = 0; i < 6; i++) { const f = mkHero(i); LD.AI.mkBot(f, "normal"); hs.push(f); }
+    B.setup({ mode: "duel", rule: "tower", fighters: hs, isHost: true, mySide: 0, matchT: 600 });
+    B.resetRound(false);
+    B.state = "fight"; B.countdown = 0; B.roundT = 0;
+    hs.forEach(f => { f.invuln = 0; });
+    return hs;
+  };
+
+  /* A. 开局没有兵线：AI 停在塔火力圈外等兵，不一个人钻进去挨打 */
+  {
+    const hs = mkField();
+    const red = hs.filter(f => f.team === 0);
+    const blue = hs.filter(f => f.team === 1);
+    B.fighters = B.fighters.filter(f => f.kind !== "laneMinion");
+    blue.forEach((f, i) => { f.x = 2500 + i * 26; f.y = 290; });   // 守方缩在自家水晶边
+    const tw = propsOf("tower").filter(o => o.side === 1).sort((a, b) => a.x - b.x)[0];
+    let minD = 1e9, inside = 0, lost = 0;
+    const hp0 = red.map(f => f.hp);
+    for (let i = 0; i < 60 * 12; i++) {
+      red.forEach(f => { if (!f.dead) LD.AI.tickHero(f, 1 / 60); });
+      step();
+      B.fighters = B.fighters.filter(f => f.kind !== "laneMinion");   // 全程不放兵线
+      red.forEach(f => { const dd = d(f, tw); if (dd < minD) minD = dd; if (dd < towerR) inside++; });
+    }
+    lost = red.reduce((s, f, i2) => s + Math.max(0, hp0[i2] - f.hp), 0);
+    check("没有兵线时 AI 不踏进塔的火力圈", inside === 0, "最近 " + Math.round(minD) + "px / 火力圈 " + towerR + "px");
+    check("没有兵线时推塔不掉血", lost === 0, Math.round(lost) + " 血");
+    check("停在火力圈外一点点（不是原地不动）", minD < towerR + 120, Math.round(minD - towerR) + "px 余量");
+  }
+
+  /* B. 兵线打光、人还站在塔圈里挨打 → 优先撤出塔圈，而不是等到残血才回家 */
+  {
+    const hs = mkField();
+    const red = hs.filter(f => f.team === 0);
+    const blue = hs.filter(f => f.team === 1);
+    B.fighters = B.fighters.filter(f => f.kind !== "laneMinion");
+    blue.forEach((f, i) => { f.x = 2500 + i * 26; f.y = 290; f.hp = f.maxHp; });
+    const tw = propsOf("tower").filter(o => o.side === 1).sort((a, b) => a.x - b.x)[0];
+    const me = red[0];
+    red.slice(1).forEach((f, i) => { f.x = 700 + i * 30; f.y = 290; f.hp = f.maxHp; });
+    me.x = tw.x - 160; me.y = tw.y + 20; me.hp = me.maxHp; me.invuln = 0;
+    let outT = -1;
+    for (let i = 0; i < 60 * 8; i++) {
+      red.forEach(f => { if (!f.dead) LD.AI.tickHero(f, 1 / 60); });
+      step();
+      B.fighters = B.fighters.filter(f => f.kind !== "laneMinion");
+      if (outT < 0 && d(me, tw) > towerR + 20) outT = i / 60;
+    }
+    check("塔圈里挨打会撤出来", outT >= 0, outT >= 0 ? outT.toFixed(2) + "s" : "8 秒没撤");
+    check("撤得早（不是掉到残血才回家）", outT >= 0 && outT < 4 && me.hp > me.maxHp * 0.5,
+      outT >= 0 ? "剩 " + Math.round(me.hp) + "/" + me.maxHp + " 血" : "—");
+  }
+
+  /* C. 塔防里不去找柜子 / 车 / 泥土：有塔要推，别脱离兵线乱跑 */
+  {
+    const hs = mkField();
+    stepN(30);
+    hs.forEach(f => { if (!f.dead) LD.AI.tickHero(f, 1 / 60); });
+    check("塔防模式下 AI 不产生交互目标（柜子/车/泥土）", hs.every(f => !f.useTarget));
+  }
 }
 
 console.log("\n=== 8. 无时限 ===");

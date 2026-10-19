@@ -169,6 +169,46 @@
     return { x: dx, y: dy };
   };
 
+  /* v3.9：只回血、不造成伤害的技能（冥思这类）——推塔 / 冲脸时不该按，
+   * 否则人机满血也会原地打坐，还把自己定住。新增的回复技能只要有 heal 且无 dmg 就自动纳入。 */
+  AI.healOnly = function (s) {
+    return !!(s && (s.heal || 0) > 0 && !(s.dmg || 0) && !s.shield && !s.dash);
+  };
+
+  /* ------------------------------------------------------------
+   *  v3.9 塔防：别一个人顶着塔硬冲
+   *  塔的仇恨有「小兵优先」（距离 ×0.72），有兵线时它打兵，英雄能安全输出；
+   *  没兵线时塔只盯着英雄，开局就冲进去等于白送 —— 这就是为什么人机开局爱往塔里钻。
+   * ------------------------------------------------------------ */
+
+  /** AI 此刻正压在哪座敌方建筑的火力圈里（不在任何塔的射程内则为 null） */
+  AI.towerOn = function (f) {
+    if (B.rule !== "tower" || !B.terrain) return null;
+    const C = LD.TOWER || {};
+    for (const o of B.terrain.props) {
+      if (o.dead || o.side === f.team) continue;
+      if (o.kind !== "tower" && o.kind !== "crystal") continue;
+      const S = o.kind === "crystal" ? (C.crystal || {}) : (C.tower || {});
+      const r = (S.range || 300) + (S.r || 46);
+      const d = Math.hypot(o.x - f.x, o.y - f.y);
+      if (d < r) return { o: o, r: r, d: d };
+    }
+    return null;
+  };
+
+  /** 一座防御塔 / 水晶的火力圈半径（射程 + 体积，与 updateStructures 的判定一致） */
+  AI.structRange = function (o) {
+    const C = LD.TOWER || {};
+    const S = o && o.kind === "crystal" ? (C.crystal || {}) : (C.tower || {});
+    return (S.range || 300) + (S.r || 46);
+  };
+
+  /** 这座建筑的火力圈里有没有我方兵线顶着（有兵就不算孤军深入） */
+  AI.laneIn = function (o, team, r) {
+    return (B.fighters || []).some(m => m.kind === "laneMinion" && !m.dead &&
+      m.team === team && Math.hypot(m.x - o.x, m.y - o.y) < (r || 300) + 30);
+  };
+
   AI.pushTower = function (f, p, ctrl, dt) {
     if (!p || p.dead) return false;
     ctrl.mx = ctrl.my = 0;
@@ -186,23 +226,34 @@
         return true;
       }
     }
+    /* 撤出塔圈的判定统一放在 tickHero 开头（对拼时也生效），这里只管「别主动站进去」。 */
+    const pR = AI.structRange(p);
+    const noLane = !AI.laneIn(p, f.team, pR);
+
     const basic = LD.skill(f.loadout.basic);
     const ranged = !!(basic && (basic.proj || basic.speed));
     const dx = p.x - f.x, dy = p.y - f.y;
     const d = Math.hypot(dx, dy) || 1;
     f.aimProp = p;
     const size = Math.max(p.w || 60, p.h || 60) * 0.5;
-    const stop = size + (ranged ? 200 : 52);
+    let stop = size + (ranged ? 200 : 52);
+    /* v3.9 没有兵线时不要站进塔的火力圈：停在圈外等兵线，别一个人扛塔。
+     * 远程本来就停在 200 左右、多数情况够得着塔，这里只是把它拉到火力圈外一点点。 */
+    if (noLane) stop = Math.max(stop, pR + 46);
     if (d > stop) {
       const st = AI.steer(f, dx / d, dy / d, p);        // 绕过挡在路上的车 / 另一座塔
       ctrl.mx = st.x; ctrl.my = st.y;
     } else if (d < stop - 26) { ctrl.mx = -dx / d * 0.6; ctrl.my = -dy / d * 0.6; }
-    /* 有 CD 就放：普攻优先，技能跟上 */
+    /* 有 CD 就放：普攻优先，技能跟上。
+     * v3.9：推塔时不放纯回复类技能（冥思）——旧代码 CD 一好就按，导致人机满血也站着冥想，
+     * 既推不了塔又把自己定在原地挨打。这类技能交给主流程的血量判定去决定。 */
     const atkRange = ranged ? 460 : 100;
     if (d < atkRange + size) {
       if (f.cd.basic <= 0) ctrl.press.basic = true;
-      if (f.loadout.skill1 && f.cd.skill1 <= 0 && d < 420 + size) ctrl.press.skill1 = true;
-      else if (f.loadout.skill2 && f.cd.skill2 <= 0 && d < 420 + size) ctrl.press.skill2 = true;
+      const s1 = LD.skill(f.loadout.skill1), s2 = LD.skill(f.loadout.skill2);
+      const canPush = s => !!s && !AI.healOnly(s);
+      if (f.loadout.skill1 && f.cd.skill1 <= 0 && d < 420 + size && canPush(s1)) ctrl.press.skill1 = true;
+      else if (f.loadout.skill2 && f.cd.skill2 <= 0 && d < 420 + size && canPush(s2)) ctrl.press.skill2 = true;
     }
     return true;
   };
@@ -308,9 +359,12 @@
     {
       const nearFoe = foe ? Math.hypot(foe.x - f.x, foe.y - f.y) : Infinity;
       f.useTarget = null;
-      if (!f.isZombie && !coinNear) {
-        /* 1) 残血且附近没有敌人 → 找柜子躲起来 */
-        if (f.hp < f.maxHp * 0.4 && nearFoe > 200 && B.terrain) {
+      /* v3.9 塔防对战不找柜子 / 车 / 泥土：那条线是推塔，钻柜子、开车只会让 AI 脱离兵线乱跑，
+       * 而且塔防图上一旦刷了车，AI 会在「上车」和「推塔」之间反复横跳。 */
+      if (!f.isZombie && !coinNear && B.rule !== "tower") {
+        /* 1) 残血且附近没有敌人 → 找柜子躲起来
+         * v3.9 刚被从柜子里揪出来时（f.noHideT > 0）不再找柜子，否则 AI 会在柜子边上原地转 */
+        if (f.hp < f.maxHp * 0.4 && nearFoe > 200 && (f.noHideT || 0) <= 0 && B.terrain) {
           let best = null, bd = 340;
           B.terrain.props.forEach(o => {
             if (o.kind !== "locker" || o.dead || o.occupant) return;
@@ -319,8 +373,9 @@
           });
           if (best) f.useTarget = { type: "locker", prop: best };
         }
-        /* 2) 血量不高或敌人很远 → 找一辆有油的车 */
-        if (!f.useTarget && (f.hp < f.maxHp * 0.62 || nearFoe > 330) && B.terrain) {
+        /* 2) 血量不高或敌人很远 → 找一辆有油的车
+         * v3.9 刚被打下车时（f.noCarT > 0）不找车，否则 AI 会在车边上原地打转 */
+        if (!f.useTarget && (f.noCarT || 0) <= 0 && (f.hp < f.maxHp * 0.62 || nearFoe > 330) && B.terrain) {
           let best = null, bd = 470;
           B.terrain.props.forEach(o => {
             if (o.kind !== "car" || o.dead || o.driver || (o.fuel || 0) <= 0) return;
@@ -354,6 +409,50 @@
         }
       }
     }
+    /* ----------------------------------------------------------
+     *  v3.9 塔下别硬顶：踩在敌方建筑火力圈里、身边又没有自家兵线时，挨打就先退出来。
+     *  放在推塔与对拼判定之前 —— 没有兵线顶着的时候，站在塔下跟人换血永远亏，
+     *  旧逻辑只有残血才回家，于是人机开局就站在塔里对拼、血掉得莫名其妙。
+     * ---------------------------------------------------------- */
+    b.towerBackT = Math.max(0, (b.towerBackT || 0) - dt);
+    const hotT = AI.towerOn(f);
+    if (hotT && !AI.laneIn(hotT.o, f.team, hotT.r)) {
+      if (B.t - (f.lastHurtAt || -99) < 1.5) b.towerBackT = 1.6;
+      if (b.towerBackT > 0) {
+        const rx = f.x - hotT.o.x, ry = f.y - hotT.o.y, rd = Math.hypot(rx, ry) || 1;
+        if (rd < hotT.r + 40) {
+          b.towerBackT = Math.max(b.towerBackT, 0.6);      // 没退干净就继续退，别在圈边上反复横跳
+          const st = AI.steer(f, rx / rd, ry / rd, hotT.o);
+          ctrl.mx = st.x; ctrl.my = st.y;
+          f.aimProp = foe && !foe.dead ? foe : null;        // 边撤边盯着人，退完能立刻回头打
+          return;
+        }
+      }
+    }
+
+    /* ==========================================================
+     *  v3.7 塔防对战：优先推塔 / 拆水晶
+     *  v3.9 提到「没有敌人」的早退之前 —— 旧代码放在 foe 判空之后，
+     *  于是场面一空（对面英雄全在复活、兵线被清完的间隙）人机就站着不动，
+     *  明明塔就在眼前也不推，看起来就是发呆。
+     * ========================================================== */
+    if (B.rule === "tower" && B.enemyStructure && !f.useTarget) {
+      const ord = B.enemyStructure(f.team === 1 ? 1 : 0, f.x, f.y, 2000);
+      if (ord) {
+        const hd = foe && foe.kind === "hero" ? Math.hypot(foe.x - f.x, foe.y - f.y) : Infinity;
+        const md = foe && foe.kind === "laneMinion" ? Math.hypot(foe.x - f.x, foe.y - f.y) : Infinity;
+        /* v3.9 修：enemyStructure 返回的是 prop，上面没有 .d 字段（旧代码 ord.d 恒为 undefined，
+         * 导致 atTower 永远是 false，「塔下优先推塔」形同虚设 —— 推掉两塔后只剩水晶时，
+         * 人机贴到水晶边上反而切回去按 235 的远程距离追人，看起来就是在原地发呆）。 */
+        const atTower = Math.hypot(ord.x - f.x, ord.y - f.y) < 430;
+        /* v3.8 塔下优先推塔：只要没有敌方英雄贴身（150 内）就先拆塔；
+         * 赶路时只要没有被英雄（300 内）或小兵（140 内）挡路，也直奔下一座塔。 */
+        if ((atTower && hd > 150) || (!atTower && hd > 300 && md > 140)) {
+          if (AI.pushTower(f, ord, ctrl, dt)) return;
+        }
+      }
+    }
+
     if (!foe) {
       /* 场上暂时没有敌人（末日两波空档）：有交互目标 / 金币就去拿，别站着发呆 */
       if (f.useTarget) {
@@ -383,24 +482,6 @@
     const blocked = !!b._los && b._los !== foe.rideCar && !(foe.hideProp && B.aiCanSee(f, foe));
     /* 目标在车上：贴上去打，普攻 / 技能 CD 一好就放，尽快把人从车上打下来 */
     const foeCar = !!foe.rideCar;
-
-    /* ==========================================================
-     *  v3.7 塔防对战：身边没有敌人时优先推塔 / 拆水晶
-     *  只在「最近的敌人超过 260px」时执行，避免和正常对拼逻辑打架。
-     * ========================================================== */
-    if (B.rule === "tower" && B.enemyStructure) {
-      const ord = B.enemyStructure(f.team === 1 ? 1 : 0, f.x, f.y, 2000);
-      if (ord) {
-        const hd = foe && foe.kind === "hero" ? Math.hypot(foe.x - f.x, foe.y - f.y) : Infinity;
-        const md = foe && foe.kind === "laneMinion" ? Math.hypot(foe.x - f.x, foe.y - f.y) : Infinity;
-        const atTower = ord.d < 430;
-        /* v3.8 塔下优先推塔：只要没有敌方英雄贴身（150 内）就先拆塔；
-         * 赶路时只要没有被英雄（300 内）或小兵（140 内）挡路，也直奔下一座塔。 */
-        if ((atTower && hd > 150) || (!atTower && hd > 300 && md > 140)) {
-          if (AI.pushTower(f, ord, ctrl, dt)) return;
-        }
-      }
-    }
 
     // ---- 木桩：完全不动 ----
     if (cf.aggr <= 0) { ctrl.mx = ctrl.my = 0; return; }
@@ -463,11 +544,17 @@
     }
 
     // ---- 移动 ----
+    /* v3.9 能量石已随巨龙删除，这里统一用 crown（下面 refill 到 stone 供绕障判断复用） */
+    let stone = null;
     let mx = 0, my = 0;
-    const stone = B.rule === "overlord" ? B.stone : null;
-    if (stone) {                       // 能量石在场：优先冲过去抢
-      const sx = stone.x - f.x, sy = stone.y - f.y, sd = Math.hypot(sx, sy) || 1;
-      mx += sx / sd * 1.6; my += sy / sd * 1.6;
+    /* v3.9 霸主争霸：皇冠落地后所有人冲过去抢（预警阶段先占位） */
+    const crown = B.rule === "overlord" && B.crown && B.crown.phase !== "held" ? B.crown : null;
+    if (crown) stone = crown;
+    if (crown) {
+      const sx = crown.x - f.x, sy = crown.y - f.y, sd = Math.hypot(sx, sy) || 1;
+      if (sd > ((LD.CROWN || {}).range || 40) - 6) { mx += sx / sd * 1.6; my += sy / sd * 1.6; }
+      /* 落地了就按交互键加冕（3 秒蓄力期间角色循环会锁住移动，AI 自然站住不动） */
+      if (crown.phase === "fallen" && sd < f.r + ((LD.CROWN || {}).range || 40) - 4) ctrl.press.interact = true;
     } else if (B.giftRule() && f.giftTarget) {   // 天外来物 / 缩圈乱斗：优先去捡掉落物（圈外也敢去）
       const g = f.giftTarget;
       if (g.landed || !f.loadout.skill1 || !f.loadout.skill2 || !f.loadout.ult) {
@@ -525,7 +612,7 @@
       }
     }
     /* v3.0 视线被挡：不硬顶，绕到障碍侧面再接近（没有掉落物 / 血包这类更高优先级时） */
-    if (blocked && !stone && !f.giftTarget && !f.healTarget) {
+    if (blocked && !stone && !crown && !f.giftTarget && !f.healTarget) {
       const o = b._los;
       const cross = dx * (o.y - f.y) - dy * (o.x - f.x);
       const px = cross > 0 ? uy : -uy;

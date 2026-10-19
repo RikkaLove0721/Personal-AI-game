@@ -359,46 +359,77 @@ console.log("\n=== 8. 规则：阵营 ===");
   check("阵营：存活阵营只剩 1 个", B.teamsAlive() === 1, B.teamsAlive());
 }
 
-console.log("\n=== 9. 规则：霸主争霸 ===");
+console.log("\n=== 9. 规则：霸主争霸（v3.9 天降皇冠）===");
 {
+  const C = LD.CROWN;
   const f = mkBattle("overlord", null, 2);
-  const dr = B.mkDragon({ diff: LD.DIFF.normal });
-  dr.side = 2; dr.id = 2; dr.team = -1;
-  B.fighters.push(dr); B.score.push(0);
-  B.state = "fight";
-  B.kill(dr, f[0]);
-  check("霸主：巨龙被击败 → 掉落能量石", !!B.stone, B.stone ? "stone@(" + Math.round(B.stone.x) + "," + Math.round(B.stone.y) + ")" : "无");
-  check("霸主：能量石会飞出去（随机散落，初速 > 500）", !!B.stone && Math.hypot(B.stone.vx, B.stone.vy) > 500, B.stone ? Math.round(Math.hypot(B.stone.vx, B.stone.vy)) : "-");
+  check("霸主：不再有巨龙同场", !B.fighters.some(x => x.kind === "dragon"));
+  check("霸主：开局进入皇冠预警", !!B.crown && B.crown.phase === "warn", B.crown && B.crown.phase);
+  check("霸主：预警时长 5 秒", !!B.crown && Math.abs(B.crown.warnT - C.warnT) < 0.2, B.crown && B.crown.warnT.toFixed(2));
+  const warnPos = B.crown ? { x: B.crown.x, y: B.crown.y } : null;
 
-  // 让石头落地并把 0 号放上去
-  for (let i = 0; i < 120 && B.stone && !B.stone.landed; i++) step(S, 1);
-  check("霸主：能量石最终落地静止", B.stone && B.stone.landed, B.stone ? "landed=" + B.stone.landed : "已消失");
+  /* 预警结束 → 落地 */
+  for (let i = 0; i < 400 && B.crown.phase === "warn"; i++) step(S, 1);
+  check("霸主：预警结束皇冠落地", B.crown.phase === "fallen", B.crown.phase);
+  check("霸主：落点与预警点一致", Math.hypot(B.crown.x - warnPos.x, B.crown.y - warnPos.y) < 1);
+
+  /* 靠近后才能起手加冕 */
+  f[0].x = B.crown.x + 400; f[0].y = B.crown.y;
+  f[0].interactCd = 0;
+  B.doInteract(f[0]);
+  check("霸主：离得远无法起手加冕", !f[0].chg);
+
   const hp0 = f[0].maxHp;
-  f[0].x = B.stone.x; f[0].y = B.stone.y;
-  step(S, 2);
-  check("霸主：拾取后石头消失", !B.stone);
-  check("霸主：成为霸主", f[0].overlord === true);
-  check("霸主：血量上限 ×1.5", f[0].maxHp === Math.round(hp0 * 1.5), hp0 + " → " + f[0].maxHp);
-  check("霸主：当前血量同步 ×1.5（不超过上限）", f[0].hp <= f[0].maxHp && f[0].hp > 0, "hp=" + f[0].hp);
+  f[0].x = B.crown.x; f[0].y = B.crown.y;
+  f[0].interactCd = 0;
+  B.doInteract(f[0]);
+  check("霸主：靠近后可起手加冕", !!f[0].chg && f[0].chg.kind === "crown", f[0].chg && f[0].chg.kind);
+  check("霸主：加冕需要 3 秒", C.need === undefined && (LD.CHARGE.crown.need === 3), LD.CHARGE.crown.need);
 
-  // 非霸主人机仇恨转向霸主
+  /* 蓄力途中挨打 → 中断，进度清零 */
+  step(S, 60);
+  check("霸主：蓄力中尚未加冕", !f[0].overlord && f[0].chg.t > 0.5, f[0].chg ? f[0].chg.t.toFixed(2) : "null");
+  B.damage(f[1], f[0], 10, { type: "basic", basic: true });
+  check("霸主：受击立即中断蓄力", !f[0].chg);
+  check("霸主：中断后仍未加冕", f[0].overlord !== true && f[0].maxHp === hp0, "maxHp=" + f[0].maxHp);
+
+  /* 不受干扰地加冕 3 秒 */
+  f[0].x = B.crown.x; f[0].y = B.crown.y; f[0].interactCd = 0;
+  B.doInteract(f[0]);
+  for (let i = 0; i < 220 && !f[0].overlord; i++) step(S, 1);
+  check("霸主：加冕成功", f[0].overlord === true);
+  check("霸主：血量上限 x2", f[0].maxHp === hp0 * C.hpMul, hp0 + " → " + f[0].maxHp);
+  check("霸主：技能 CD 缩短 30%", f[0].cdM === C.cdMul, "cdM=" + f[0].cdM);
+  check("霸主：皇冠进入持有状态", B.crown.phase === "held" && B.crown.holder === f[0], B.crown.phase);
+  check("霸主：持有计时 = 30 秒", Math.abs(B.crown.holdT - C.holdT) < 1.5, B.crown.holdT.toFixed(1));
+
+  /* 30 秒后剥夺：血量减半、CD 复原，并重新进入预警 */
+  for (let i = 0; i < 2000 && B.crown.phase === "held"; i++) step(S, 1);
+  check("霸主：30 秒后自动剥夺", f[0].overlord === false, "overlord=" + f[0].overlord);
+  check("霸主：剥夺后血量减半", f[0].maxHp === hp0, f[0].maxHp + " (原 " + hp0 + ")");
+  check("霸主：剥夺后 CD 复原", (f[0].cdM || 1) === 1, "cdM=" + f[0].cdM);
+  check("霸主：随即重新进入预警", B.crown.phase === "warn", B.crown.phase);
+  check("霸主：新的预警时长 5 秒", Math.abs(B.crown.warnT - C.nextWarnT) < 0.2, B.crown.warnT.toFixed(2));
+
+  /* 非霸主人机仇恨转向霸主 */
   const g = mkBattle("overlord", null, 2);
-  const dr2 = B.mkDragon({ diff: LD.DIFF.normal });
-  dr2.side = 2; dr2.id = 2; dr2.team = -1;
-  B.fighters.push(dr2); B.score.push(0);
-  B.state = "fight";
+  for (let i = 0; i < 400 && B.crown.phase === "warn"; i++) step(S, 1);
+  g[0].x = B.crown.x; g[0].y = B.crown.y;
+  B.finishCrown(g[0], B.crown);
   LD.AI.mkBot(g[1], "normal");
   g[0].x = 200; g[0].y = 300; g[1].x = 800; g[1].y = 300;
-  B.becomeOverlord(g[0]);
   LD.AI.tickHero(g[1], 0.016);
   check("霸主：非霸主人机仇恨转向霸主", g[1].lock === g[0].side, "bot.lock=" + g[1].lock + " overlord.side=" + g[0].side);
 
-  // 霸主阵亡 → 能量石直接消散（v2.5：不再掉回场上）
+  /* 霸主阵亡 → 效果当场结束，不再掉落任何东西 */
   const h = mkBattle("overlord", null, 2);
-  B.becomeOverlord(h[0]);
+  for (let i = 0; i < 400 && B.crown.phase === "warn"; i++) step(S, 1);
+  h[0].x = B.crown.x; h[0].y = B.crown.y;
+  B.finishCrown(h[0], B.crown);
   B.state = "fight";
   B.kill(h[0], h[1]);
-  check("霸主：霸主阵亡后能量石消散，不再掉落（v2.5）", !B.stone && h[0].overlord === false, "stone=" + !!B.stone);
+  check("霸主：霸主阵亡后效果清除", h[0].overlord === false, "overlord=" + h[0].overlord);
+  check("霸主：阵亡后无残留可拾取物", !B.crown || B.crown.phase !== "fallen", B.crown && B.crown.phase);
 }
 
 /* ============================================================
@@ -439,7 +470,9 @@ console.log("\n=== 10. 角色卡房间 ===");
   UI.room.bots.length = 0;
   UI.room.bots.push({ level: "normal", loadout: LD.AI.randomLoadout(), look: LD.Profile.look() });
   UI.roomStart();
-  check("霸主争霸单人房：场上会生成巨龙", B.fighters.some(x => x.kind === "dragon"), "kind=" + B.fighters.map(x => x.kind).join(","));
+  /* v3.9 霸主争霸已移除巨龙：房间里只该有玩家与人机，且开局就排好皇冠预警 */
+  check("霸主争霸单人房：不再生成巨龙", !B.fighters.some(x => x.kind === "dragon"), "kind=" + B.fighters.map(x => x.kind).join(","));
+  check("霸主争霸单人房：开局排好皇冠预警", !!B.crown && B.crown.phase === "warn", B.crown && B.crown.phase);
   check("霸主争霸单人房：规则已生效", B.rule === "overlord" && B.roundT === 0, B.rule + " roundT=" + B.roundT);
   UI.room.rule = "brawl";
 }

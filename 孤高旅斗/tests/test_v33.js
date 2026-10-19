@@ -155,10 +155,14 @@ console.log("\n=== 3. 柜子：O 躲藏 / 隐匿 / 离开 ===");
   check("揪出来眩晕 2 秒", me.stun >= 1.9, me.stun.toFixed(2));
   check("被揪出来后站在柜子下方", me.y > lk.y);
 
-  /* 再躲一次：环境伤害不能被柜子白嫖，且不会被揪出来 */
+  /* v3.9：被揪出来后 5 秒内不能再躲（与上车禁令同规格），得先等冷却 */
   me.stun = 0; me.invuln = 0; me.hp = hp0; me.x = lk.x - lk.w / 2 - 16; me.y = lk.y; me.interactCd = 0;
+  check("被揪出后 5 秒内不能再躲", (me.noHideT || 0) > 0 && B.doInteract(me) === false && !me.hideProp,
+    (me.noHideT || 0).toFixed(2));
+  /* 再躲一次：环境伤害不能被柜子白嫖，且不会被揪出来 */
+  me.noHideT = 0; me.interactCd = 0;
   B.doInteract(me);
-  check("可以重新躲进柜子", !!me.hideProp);
+  check("冷却结束后可以重新躲进柜子", !!me.hideProp);
   B.damage(null, me, 4, { type: "dot", noSrc: true });
   check("躲藏不能免疫毒圈 / 红圈伤害", me.hp === hp0 - 4, me.hp + "/" + hp0);
   check("环境伤害不会把人揪出柜子", !!me.hideProp);
@@ -175,6 +179,7 @@ console.log("\n=== 3. 柜子：O 躲藏 / 隐匿 / 离开 ===");
   check("AI 能打到被察觉的躲藏者（伤害免疫、人被揪出）",
     me.hp === hp1 && me.hideProp === null && me.stun >= 1.9, me.hp + "/" + me.stun.toFixed(2));
   me.stun = 0; me.invuln = 0; me.hp = hp0; me.x = lk.x - lk.w / 2 - 16; me.y = lk.y; me.interactCd = 0;
+  me.noHideT = 0;                       // v3.9：上面刚被揪出来，清掉躲藏冷却才能继续测
   B.doInteract(me);
   me.hideTimer = 0.2;
   foe.bot = foe.bot || {}; foe.bot.foe = me;

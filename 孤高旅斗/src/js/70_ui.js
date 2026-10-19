@@ -391,7 +391,7 @@
       '<li><b>世界末日</b>：所有玩家<b>同一阵容、互不伤害</b>，出生在地图正中的<b>石墙庇护所</b>里（左右各一个两格宽门洞）。庇护所外会不断刷出僵尸，<b>存活玩家越多刷得越快</b>，僵尸会直冲门洞闯进来；<b>门洞外有一圈青色减速带</b>，僵尸进圈后移速减半。墙外是红圈，待在外面每 0.6 秒掉 4 血。对僵尸造成的伤害与击杀都计入个人分数（1 伤 = 1 分、击杀 +10 分），击杀还掉局内金币，可按 <span class="k">B</span> 买血包 / 血量 / 移速 / 能量球。最后存活的玩家获胜；时间到时仍有多人存活，则<b>分数最高者获胜</b>（不看剩余血量）。</li>',
       '<li><b>车轮战</b>：排队单挑，擂台上每次只有两人对决，败者永久出局，胜者回血 30% 迎接下一位挑战者。（仅本地面板可用）</li>',      '<li><b>追猎时刻</b>：开局<b>随机抽一名玩家当猎人</b>——先播一段猎人特写，猎人头顶加皇冠、血量 <b>800</b>、全部 CD 减半，且<b>伤害随存活幸存者数提升</b>（每多一名 +20%）；其余人是生存者，各自保留自己选的技能、互相同队。开场就有一个大毒圈并缓慢收缩（90 秒过去仍有大片走位空间）。猎人要在 90 秒内清场，生存者撑到倒计时结束就赢。</li>',
       '<li><b>乱斗热身</b>：限时刷分。对局时长在房间界面的「对局时间」里统一选 <b>60 / 120 / 180 秒</b>，阵亡不淘汰、1.6 秒后在随机位置复活，每次击杀得 1 分，时间到分数最高者获胜。不计回合、没有淘汰，纯粹练手。</li>',
-      '<li><b>塔防对战</b>：3v3 单线推塔，<b>没有时间限制</b>，一直打到一方水晶爆掉。地图 2800×600，左右镜像，红蓝一塔之间留出一大片中心战区。双方每 32 秒刷 6 只机器人小兵沿兵线推进，拆掉敌塔后自家小兵变强。防御塔（1500 血 / 射程 300）与水晶（3000 血 / 射程 340）会发射<b>高速追踪弹</b>，走进敌方范围时会显示一圈红圈警告；<b>防御塔没拆完水晶免疫伤害</b>。击杀小兵 / 英雄 / 助攻都给<b>局内金币</b>，按 <span class="k">B</span> 买被动装备（生命 / 攻击 / 护盾 / 能量 / 回血 / 霸体 / 闪避等，每件一次）、<b>主动装备</b>（最多 1 件，按 <span class="k">P</span> 释放）、可重复购买的<b>小兵强化</b>，以及开车时才能买的<b>汽油桶</b>（80 金，+2000 油，不限次数）。英雄 1–6 级，升级加血加伤害；阵亡后在原地立<b>墓碑</b>显示复活倒计时，倒计时结束回基地复活，基地回血圈每秒回复 12% 生命。房间界面可以选红队 / 蓝队。</li>',
+      '<li><b>塔防对战</b>：3v3 单线推塔，<b>没有时间限制</b>，一直打到一方水晶爆掉。地图 2800×600，左右镜像，红蓝一塔之间留出一大片中心战区。双方每 32 秒刷 6 只机器人小兵沿兵线推进，拆掉敌塔后自家小兵变强。防御塔（1200 血 / 射程 300）与水晶（2400 血 / 射程 340）会发射<b>高速追踪弹</b>，走进敌方范围时会显示一圈红圈警告；<b>防御塔没拆完水晶免疫伤害</b>。击杀小兵 / 英雄 / 助攻都给<b>局内金币</b>，按 <span class="k">B</span> 买被动装备（生命 / 攻击 / 护盾 / 能量 / 回血 / 霸体 / 闪避等，每件一次）、<b>主动装备</b>（最多 1 件，按 <span class="k">P</span> 释放）、可重复购买的<b>小兵强化</b>，以及开车时才能买的<b>汽油桶</b>（80 金，+2000 油，不限次数）。英雄 1–6 级，升级加血加伤害；阵亡后在原地立<b>墓碑</b>显示复活倒计时（<b>5 秒 + 等级 × 5 秒</b>，1 级 10 秒、5 级 30 秒），倒计时结束回基地复活，基地回血圈每秒回复 12% 生命。房间界面可以选红队 / 蓝队。</li>',
       '<li>单人「勇者格斗」的房间就是角色卡房间：第一张卡是你（可直接换装扮 / 技能），后面的人机卡可增删（最多 5 个，塔防会自动补满 5 个凑 3v3）、可选难度（木桩 / 普通 / 困难）与配装。</li>',
       '</ul>',
       '<h3>规则修饰符（可多选叠加）</h3>',
@@ -492,10 +492,11 @@
     if (B.rule === "auction") myTags.push("<i class='coin'></i> " + (me.bcoins || 0));
     if (B.rule === "warmup") myTags.push("得分 " + (B.wScore[B.fighters.indexOf(me)] || 0));
     if (B.rule === "ring") myTags.push(B.inPoison(me.x, me.y) ? "☠ 毒圈中" : "🛡 安全区");
+    /* v3.9 顺序统一为 血条 → 能量条 → 击杀/死亡；塔防也要显示能量条（之前被整条跳过） */
     pb.innerHTML = (myTags.length ? '<div class="tag me">你 · ' + myTags.join(" · ") + '</div>' : "") +
       bar("HP", me.hp, me.maxHp, "hp") +
-      '<div class="kd">击杀 <b style="color:#ffd98a">' + (me.kills || 0) + '</b> · 死亡 <b style="color:#fca5a5">' + (me.deaths || 0) + '</b></div>' +
-      (B.rule === "tower" ? "" : bar("能量", me.energy, me.maxEnergy, "en" + (me.energy >= me.maxEnergy ? " full" : "")));
+      bar("能量", me.energy, me.maxEnergy, "en" + (me.energy >= me.maxEnergy ? " full" : "")) +
+      '<div class="kd">击杀 <b style="color:#ffd98a">' + (me.kills || 0) + '</b> · 死亡 <b style="color:#fca5a5">' + (me.deaths || 0) + '</b></div>';
     /* 敌方：除自己以外的参战者（僵尸 / 杂兵 / 分身不占血条位，只在下面报数量）
      * v2.7 修复：以前只收 kind === "hero"，导致闯关里的巨龙（kind === "dragon"）
      * 在困难模式下血厚、玩家需要盯着血条打时却完全没有血条显示。 */
@@ -510,7 +511,7 @@
         if (foe.huntRole === "hunter") tags.push("👑 猎人");
         if (foe.huntRole === "runner") tags.push("生存者");
         if (B.rule === "warmup") tags.push((B.wScore[B.fighters.indexOf(foe)] || 0) + " 分");
-        if (B.rule === "overlord" && B.stone && !B.stone.holder) tags.push("石头已掉落");
+        /* 霸主标记只在 crown.holder 身上：foe.overlord 由 finishCrown/stripOverlord 维护，勿按 crown.phase 全员加冠 */
         if (foe.name) tags.push(nameHtml(foe));
         if (foe.dead) tags.push(foe.respawnT > 0 && B.rule === "warmup" ? "复活中" : "已倒下");
       }
@@ -630,7 +631,16 @@
     } else if (B.rule === "gifts") {
       subs.push("天降技能 <b>" + (B.gifts || []).length + "</b> 个");
     } else if (B.rule === "overlord") {
-      subs.push(B.stone ? "能量石已掉落！" : "击败巨龙夺取能量石");
+      const cw = B.crown;
+      if (cw && cw.phase === "held") {
+        const who = cw.holder;
+        const nm = who ? (who.name || ("玩家" + (who.side + 1))) : "-";
+        subs.push("霸主 <b>" + nm + "</b> · 剩余 <b>" + Math.ceil(Math.max(0, cw.holdT)) + "s</b>");
+      } else if (cw && cw.phase === "fallen") {
+        subs.push('<span class="big">👑 皇冠已落地！靠近按交互键争夺</span>');
+      } else if (cw && cw.phase === "warn") {
+        subs.push('<span class="big">👑 皇冠将在 ' + Math.ceil(Math.max(0, cw.warnT)) + "s 后降落</span>");
+      }
     }
     if (B.mods && B.mods.length) {
       subs.push('<span style="color:#c4b5fd">' + B.mods.map(id => {
