@@ -1,0 +1,43 @@
+name: 孤高旅斗 CI
+
+# 只在孤高旅斗目录或本工作流变动时触发，避免其它游戏改动也跑一遍。
+on:
+  push:
+    branches: [main]
+    paths:
+      - '孤高旅斗/**'
+      - '.github/workflows/gugao-test.yml'
+  pull_request:
+    paths:
+      - '孤高旅斗/**'
+      - '.github/workflows/gugao-test.yml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: 构建 + 结构检查 + 无头测试
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # --keep：CI 不迭代版本号（版本号只在明确发布时手动指定）
+      - name: 构建单文件产物
+        working-directory: 孤高旅斗
+        run: python scripts/build.py --keep
+
+      - name: 模块依赖与层级检查
+        working-directory: 孤高旅斗
+        run: python scripts/depcheck.py
+
+      - name: 无头测试
+        working-directory: 孤高旅斗
+        run: node tests/run_tests.js

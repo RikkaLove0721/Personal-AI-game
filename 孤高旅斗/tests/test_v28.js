@@ -17,80 +17,16 @@
  *   ⑮ 螺旋手里剑吸附加强（pull 180 / pullR 225）+ 爆炸半径 170
  *   ⑯ 九种模式各有一个「获胜 10 次」的称号（含旧档 relayWins/huntWins/warmupWins 迁移）
  */
-const fs = require("fs"), vm = require("vm");
-const path = require("path");
-const html = fs.readFileSync(path.join(__dirname, "..", "dist", "孤高旅斗.html"), "utf8");
-const code = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+const SB = require("./_sandbox.js");
+const { fs, path, html, code, makeCtx, makeEl, step } = SB;
+const makeSandbox = (label) => SB.makeSandbox(label, { image: false });
 
-let CLK = 0;
-function makeCtx() {
-  return new Proxy({}, {
-    get(t, k) {
-      if (k === "createLinearGradient" || k === "createRadialGradient")
-        return () => ({ addColorStop() {} });
-      if (k === "measureText") return () => ({ width: 120 });
-      if (k === "canvas") return { width: 960, height: 600 };
-      if (typeof k === "symbol") return undefined;
-      return function () {};
-    },
-    set(t, k, v) { t[k] = v; return true; }
-  });
-}
-function makeEl(tag) {
-  const s = new Set();
-  return {
-    tagName: (tag || "div").toUpperCase(), style: {}, dataset: {}, value: "", textContent: "", innerHTML: "",
-    placeholder: "", width: 0, height: 0, disabled: false, onclick: null, onchange: null, title: "",
-    classList: {
-      add: c => s.add(c), remove: c => s.delete(c), contains: c => s.has(c),
-      toggle: (c, f) => { if (f === undefined) { s.has(c) ? s.delete(c) : s.add(c); } else if (f) s.add(c); else s.delete(c); }
-    },
-    addEventListener() {}, removeEventListener() {}, focus() {}, select() {},
-    appendChild(c) { return c; }, insertBefore(c) { return c; }, removeChild() {}, remove() {},
-    querySelector: () => makeEl("canvas"), querySelectorAll: () => [],
-    getContext: () => makeCtx(), setAttribute() {}, getAttribute: () => "",
-    parentNode: { lastChild: { textContent: "" } }
-  };
-}
-function makeSandbox(label) {
-  const els = {}, L = {}, raf = [];
-  const on = (t, f) => { (L[t] = L[t] || []).push(f); };
-  const sb = {
-    console, JSON, Math, Date, isNaN, parseInt, parseFloat, String, Number, Array, Object, Set, Map, Error,
-    setTimeout, clearTimeout, setInterval: () => 0, clearInterval() {},
-    requestAnimationFrame: cb => { raf.push(cb); return raf.length; },
-    performance: { now: () => CLK },
-    navigator: { vibrate() {}, clipboard: { writeText() {} } },
-    location: { protocol: "http:", host: "127.0.0.1:8123", origin: "http://127.0.0.1:8123", href: "http://127.0.0.1:8123/" },
-    localStorage: { _d: {}, getItem(k) { return k in this._d ? this._d[k] : null; }, setItem(k, v) { this._d[k] = String(v); } },
-    document: {
-      getElementById: id => els[id] || (els[id] = makeEl(id === "cv" ? "canvas" : "div")),
-      createElement: t => makeEl(t), querySelector: () => makeEl(),
-      querySelectorAll: () => [], addEventListener: on,
-      readyState: "complete", hidden: false, body: makeEl()
-    },
-    addEventListener: on,
-    innerWidth: 1400, innerHeight: 900
-  };
-  sb.window = sb; sb.globalThis = sb;
-  vm.createContext(sb);
-  const balPath = path.join(__dirname, "..", "dist", "balance.js");
-  if (fs.existsSync(balPath)) vm.runInContext(fs.readFileSync(balPath, "utf8"), sb, { filename: "balance.js" });
-  vm.runInContext(code, sb);
-  return { label, sb, els, L, raf, err: null, LD: sb.LD };
-}
-function step(sb, n) {
-  for (let i = 0; i < (n || 1); i++) {
-    CLK += 16.67;
-    const cbs = sb.raf.splice(0, sb.raf.length);
-    for (const cb of cbs) { try { cb(CLK); } catch (e) { if (!sb.err) sb.err = e; } }
-  }
-}
 let pass = 0, fail = 0;
 function check(label, cond, extra) {
-  if (cond) { pass++; console.log("  ✔ " + label + (extra !== undefined && extra !== "" && extra !== false ? "  [" + extra + "]" : "")); }
-  else { fail++; console.log("  ✘ " + label + (extra !== undefined ? "  → " + extra : "")); }
+  if (cond) { pass++; console.log("  \u2714 " + label + (extra ? "  [" + extra + "]" : "")); }
+  else { fail++; console.log("  \u2718 " + label + (extra ? "  \u2192 " + extra : "")); }
 }
+
 
 const S = makeSandbox("main");
 const LD = S.LD, B = LD.Battle, P = LD.Profile, UI = LD.UI;

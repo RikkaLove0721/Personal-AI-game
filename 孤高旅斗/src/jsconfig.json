@@ -1,0 +1,15 @@
+{
+  /* 让 IDE 认识这个项目的全局命名空间（LD / B / UI / FX ...）。
+   * checkJs 保持关闭：源码是十几年演进式的游戏脚本，全量类型检查会淹没有效信号，
+   * 这里只取「补全 + 跳转 + 悬停提示」这部分收益。 */
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "none",
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "strict": false,
+    "baseUrl": "."
+  },
+  "include": ["js/**/*.js", "types/**/*.d.ts"]
+}

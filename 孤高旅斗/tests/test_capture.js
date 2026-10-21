@@ -3,73 +3,15 @@
  *       占领读条与僵持 / 产分 / 胜负 / 据点炮塔（生成、射程、换边保血、被拆消失）/
  *       AI 选点与残血回家 / 渲染不崩
  */
-const fs = require("fs"), vm = require("vm");
-const path = require("path");
-const html = fs.readFileSync(path.join(__dirname, "..", "dist", "孤高旅斗.html"), "utf8");
-const code = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+const SB = require("./_sandbox.js");
+const { fs, path, html, code, makeCtx, makeEl, makeSandbox } = SB;
 
-let CLK = 0;
-function makeCtx() {
-  return new Proxy({}, {
-    get(t, k) {
-      if (k === "createLinearGradient" || k === "createRadialGradient")
-        return () => ({ addColorStop() {} });
-      if (k === "measureText") return () => ({ width: 120 });
-      if (k === "canvas") return { width: 960, height: 600 };
-      if (k === "createPattern") return () => ({});
-      if (typeof k === "symbol") return undefined;
-      return function () {};
-    },
-    set(t, k, v) { t[k] = v; return true; }
-  });
-}
-function makeEl(tag) {
-  const s = new Set();
-  return {
-    tagName: (tag || "div").toUpperCase(), style: {}, dataset: {}, value: "", textContent: "", innerHTML: "",
-    placeholder: "", width: 0, height: 0, disabled: false, onclick: null, onchange: null, oninput: null, title: "",
-    classList: { add: c => s.add(c), remove: c => s.delete(c), contains: c => s.has(c),
-      toggle: (c, f) => { if (f === undefined) { s.has(c) ? s.delete(c) : s.add(c); } else if (f) s.add(c); else s.delete(c); } },
-    addEventListener() {}, removeEventListener() {}, focus() {}, select() {},
-    appendChild(c) { return c; }, insertBefore(c) { return c; }, removeChild() {}, remove() {},
-    querySelector: () => makeEl("canvas"), querySelectorAll: () => [],
-    getContext: () => makeCtx(), setAttribute() {}, getAttribute: () => "",
-    parentNode: { lastChild: { textContent: "" } }
-  };
-}
-function makeSandbox() {
-  const els = {}, L = {}, raf = [];
-  const on = (t, f) => { (L[t] = L[t] || []).push(f); };
-  const sb = {
-    console, JSON, Math, Date, isNaN, parseInt, parseFloat, String, Number, Array, Object, Set, Map, Error,
-    setTimeout, clearTimeout, setInterval: () => 0, clearInterval() {},
-    requestAnimationFrame: cb => { raf.push(cb); return raf.length; },
-    performance: { now: () => CLK },
-    /* 无头环境没有真实图片解码：Image 永远「未加载」，绘制层走程序化兜底 */
-    Image: function () { this.complete = false; this.naturalWidth = 0; this.src = ""; },
-    navigator: { vibrate() {}, clipboard: { writeText() {} } },
-    location: { protocol: "http:", host: "127.0.0.1:8123", origin: "http://127.0.0.1:8123", href: "http://127.0.0.1:8123/" },
-    localStorage: { _d: {}, getItem(k) { return k in this._d ? this._d[k] : null; }, setItem(k, v) { this._d[k] = String(v); } },
-    document: {
-      getElementById: id => els[id] || (els[id] = makeEl(id === "cv" ? "canvas" : "div")),
-      createElement: t => makeEl(t), querySelector: () => makeEl(),
-      querySelectorAll: () => [], addEventListener: on,
-      readyState: "complete", hidden: false, body: makeEl()
-    },
-    addEventListener: on, innerWidth: 1400, innerHeight: 900
-  };
-  sb.window = sb; sb.globalThis = sb;
-  vm.createContext(sb);
-  const balPath = path.join(__dirname, "..", "dist", "balance.js");
-  if (fs.existsSync(balPath)) vm.runInContext(fs.readFileSync(balPath, "utf8"), sb, { filename: "balance.js" });
-  vm.runInContext(code, sb);
-  return sb;
-}
 let pass = 0, fail = 0;
 function check(label, cond, extra) {
-  if (cond) { pass++; console.log("  ✔ " + label + (extra !== undefined && extra !== "" && extra !== false ? "  [" + extra + "]" : "")); }
-  else { fail++; console.log("  ✘ " + label + (extra !== undefined ? "  → " + extra : "")); }
+  if (cond) { pass++; console.log("  \u2714 " + label + (extra ? "  [" + extra + "]" : "")); }
+  else { fail++; console.log("  \u2718 " + label + (extra ? "  \u2192 " + extra : "")); }
 }
+
 
 const sb = makeSandbox();
 const LD = sb.LD, B = LD.Battle;
