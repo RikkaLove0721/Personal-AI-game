@@ -192,7 +192,9 @@
   /* ---------------- 卡片渲染 ---------------- */
   /* v3.9 塔防 / 双阵营：2 队时统一红蓝，不能沿用四队配色里的黄色 */
   const TEAM2_COLORS = ["#f87171", "#60a5fa"];
-  const teamColorOf = (t, ruleId) => (ruleId === "tower" ? TEAM2_COLORS[t] : LD.TEAM_COLORS[t]);
+  /* 只有红蓝两队的规则：塔防 / 占点争夺 / 护送情报箱（房间卡片与开局分队共用） */
+  const isTwoTeam = (ruleId) => ruleId === "tower" || ruleId === "escort" || ruleId === "capture";
+  const teamColorOf = (t, ruleId) => (isTwoTeam(ruleId) && t != null && t >= 0 ? TEAM2_COLORS[t > 0 ? 1 : 0] : LD.TEAM_COLORS[t]);
 
   function teamBar(sel, who, n) {
     /* v3.8 塔防只有红 / 蓝两队 */
@@ -219,7 +221,7 @@
     /* opts: { kind: "me"|"bot"|"player", team, teamSel, level, loadout, name, rule } */
     const k = opts.kind;
     const ruleId = opts.rule || room.rule;
-    const teamMode = ruleId === "team" || ruleId === "tower";
+    const teamMode = ruleId === "team" || isTwoTeam(ruleId);
     const badge = k === "me" ? '<span class="cb me">你</span>'
       : k === "bot" ? '<span class="cb bot">人机</span>'
       : '<span class="cb p">玩家</span>';
@@ -245,7 +247,7 @@
         return '<span>' + SLOT_LAB[slot] + ' ' + (s ? s.icon : "—") + '</span>';
       }).join("") + '</div>';
     }
-    if (teamMode && opts.teamSel) body += teamBar(opts.team, opts.twho || "me", ruleId === "tower" ? 2 : 4);
+    if (teamMode && opts.teamSel) body += teamBar(opts.team, opts.twho || "me", isTwoTeam(ruleId) ? 2 : 4);
     return '<div class="pcard' + (k === "me" ? " mine" : "") + '">' +
       '<canvas class="pv" width="112" height="126"></canvas>' + badge +
       '<div class="pn">' + (teamMode ? teamTag(opts.team, ruleId) : "") + (opts.name || "玩家") + '</div>' + body + '</div>';
@@ -297,9 +299,16 @@
     /* v3.8 塔防：默认玩家队 2 个人机、对面 3 个，凑成 3v3；可手动点队伍改 */
     if (room.rule === "tower") {
       const bb = room.bots[i];
-      if (bb && bb.team != null && bb.team >= 0) return bb.team;
+      if (bb && bb.team != null && bb.team >= 0) return bb.team > 0 ? 1 : 0;
       const mine = room.myTeam === 1 ? 1 : 0;
       return i < 2 ? mine : 1 - mine;
+    }
+    /* v4.8 占点 / 护送：同样是红蓝两队，默认与玩家交替分边（可手动改） */
+    if (room.rule === "escort" || room.rule === "capture") {
+      const bb = room.bots[i];
+      if (bb && bb.team != null && bb.team >= 0) return bb.team > 0 ? 1 : 0;
+      const mine = room.myTeam === 1 ? 1 : 0;
+      return i % 2 === 0 ? 1 - mine : mine;
     }
     if (room.rule !== "team") return -1;
     const bb = room.bots[i];
@@ -323,7 +332,13 @@
     bindBack(host);
     bindModals(host, "local");
     q("[data-rule]").forEach(el => {
-      el.onclick = () => { A.ui(); room.rule = el.dataset.rule; UI.renderRoom(); };
+      el.onclick = () => {
+        A.ui();
+        room.rule = el.dataset.rule;
+        /* 从 4 队模式切到红蓝两队：把越界的旧选择收回蓝队，避免没有高亮 */
+        if (isTwoTeam(room.rule) && room.myTeam > 1) room.myTeam = 1;
+        UI.renderRoom();
+      };
     });
     q("[data-mod]").forEach(el => {
       el.onclick = () => {
@@ -397,34 +412,42 @@
 
   /* ---------------- 开打 ---------------- */
   UI.roomStart = function () {
+    const two = isTwoTeam(room.rule);
+    if (two && room.myTeam < 0) room.myTeam = 0;
     /* v3.7 塔防：3v3 需要 6 个座位，人机不足就自动补齐（玩家 + 5 人机） */
     if (room.rule === "tower") {
       while (room.bots.length < 5) room.bots.push({ level: "normal", loadout: LD.AI.randomLoadout(), look: botLook() });
     }
-    if (room.rule === "team") {
+    /* v4.8 占点 / 护送：和阵营模式一样按房间选择分队，且红蓝两边都必须有人 */
+    if (room.rule === "team" || (two && room.rule !== "tower")) {
       const all = [{ team: myTeam() }].concat(room.bots.map((bb, i) => ({ team: botTeam(i) })));
-      if (teamsUsed(all) < 2) { UI.toast("至少要有两个阵营才能开局"); return; }
+      if (teamsUsed(all) < 2) {
+        UI.toast(two ? "红蓝两队都要有人才能开局" : "至少要有两个阵营才能开局");
+        return;
+      }
     }
     UI.duel.level = hardLevelOf(room.bots);
     const fighters = [];
     const me = B.mkHero(0, { x: 0, y: 0, look: P.look(), loadout: Object.assign({}, P.d.loadout), name: P.displayName() });
     me.ctrl = UI.ctrl;
-    me.team = room.rule === "team" ? myTeam() : -1;
+    me.team = (room.rule === "team" || two) ? myTeam() : -1;
     fighters.push(me);
     room.bots.forEach((bb, i) => {
       const bot = B.mkHero(i + 1, { x: 0, y: 0, look: bb.look, loadout: Object.assign({}, bb.loadout), name: (bb.level === "easy" ? "木桩" : "人机 " + (i + 1)) });
       LD.AI.mkBot(bot, bb.level);
-      bot.team = room.rule === "team" ? botTeam(i) : -1;
+      bot.team = (room.rule === "team" || two) ? botTeam(i) : -1;
       fighters.push(bot);
     });
     /* v3.9 霸主争霸不再放巨龙：改由天降皇冠决定霸主归属（见 B.initCrown） */
     /* v3.8 塔防：按房间选的红/蓝分队，并自动平衡成 3v3 */
     let teams = null;
-    if (room.rule === "tower") {
+    if (two) {
       teams = [myTeam()].concat(room.bots.map((bb, i) => botTeam(i)));
-      const count = t => teams.filter(x => x === t).length;
-      while (count(0) > 3) { teams[teams.lastIndexOf(0)] = 1; }
-      while (count(1) > 3) { teams[teams.lastIndexOf(1)] = 0; }
+      if (room.rule === "tower") {
+        const count = t => teams.filter(x => x === t).length;
+        while (count(0) > 3) { teams[teams.lastIndexOf(0)] = 1; }
+        while (count(1) > 3) { teams[teams.lastIndexOf(1)] = 0; }
+      }
     }
     B.setup({ mode: "duel", rule: room.rule, fighters, theme: {}, mods: room.mods.slice(),
       teams: teams || undefined,
@@ -462,14 +485,16 @@
     });
   };
 
-  /* 阵营模式下：玩家按座位轮流分阵营，人机接在玩家后面继续轮流分 */
-  function netBotTeam(i, offset) { return (offset + i) % 4; }
+  /* 阵营模式下：玩家按座位轮流分阵营，人机接在玩家后面继续轮流分
+   * v4.8 占点 / 护送只有红蓝两队，轮转基数改成 2（否则会出现 3 号队的高亮丢失） */
+  function netBotTeam(i, offset) { return (offset + i) % (isTwoTeam(UI.netRoom.rule) ? 2 : 4); }
 
   function netTeamOf(players, i) {
     const R = UI.netRoom;
     const seat = players[i].side;
-    if (R.teams[seat] == null) R.teams[seat] = i % 4;
-    return R.teams[seat];
+    const two = isTwoTeam(R.rule);
+    if (R.teams[seat] == null) R.teams[seat] = i % (two ? 2 : 4);
+    return two ? (R.teams[seat] > 0 ? 1 : 0) : R.teams[seat];
   }
 
   UI.setNetTeam = function (seat, team) { UI.netRoom.teams[seat] = team; UI.netPushRoom(); };
@@ -487,7 +512,9 @@
     const N = LD.Net, R = UI.netRoom, isHost = N.isHost;
     const players = UI.netPlayers();
     R.players = players;
-    if (R.rule === "team") players.forEach((p, i) => netTeamOf(players, i));
+    const netTwo = isTwoTeam(R.rule);
+    /* 占点 / 护送也要给每个座位落到红蓝（否则开局前 R.teams 是空的） */
+    if (R.rule === "team" || netTwo) players.forEach((p, i) => netTeamOf(players, i));
 
     const netRules = LD.RULES.filter(r => r.id !== "relay" && r.id !== "tower");   // 车轮战 / 塔防仅本地面板
     const ruleBar = '<div class="rulebar">' + netRules.map(r =>
@@ -496,8 +523,8 @@
 
     const cards = players.map((p, i) => cardHtml(i, null, {
       kind: p.mine ? "me" : "player", name: p.name, look: p.look,
-      team: R.rule === "team" ? netTeamOf(players, i) : -1,
-      teamSel: R.rule === "team" && (p.mine || isHost), twho: p.mine ? "me" : "s" + p.side,
+      team: (R.rule === "team" || netTwo) ? netTeamOf(players, i) : -1,
+      teamSel: (R.rule === "team" || netTwo) && (p.mine || isHost), twho: p.mine ? "me" : "s" + p.side,
       loadout: p.loadout, rule: R.rule
     }));
     R.bots.forEach((bb, i) => {
@@ -505,8 +532,10 @@
          绑定层直接用 +dataset 索引 R.bots，传 100+i 会导致删除 / 难度 / 技能全部失灵 */
       cards.push(cardHtml(i, null, {
         kind: isHost ? "bot" : "player", name: "人机 " + (i + 1), look: bb.look,
-        team: R.rule === "team" ? (bb.team == null || bb.team < 0 ? netBotTeam(i, players.length) : bb.team) : -1,
-        teamSel: R.rule === "team" && isHost, twho: "b" + i,
+        team: (R.rule === "team" || netTwo)
+          ? (bb.team == null || bb.team < 0 ? netBotTeam(i, players.length) : (netTwo && bb.team > 0 ? 1 : bb.team))
+          : -1,
+        teamSel: (R.rule === "team" || netTwo) && isHost, twho: "b" + i,
         level: bb.level, loadout: bb.loadout, rule: R.rule
       }));
     });
@@ -636,7 +665,7 @@
     if (!N.isHost) { UI.renderNetRoom(); return; }
     const players = UI.netPlayers();
     R.players = players;
-    const teams = players.map((p, i) => (R.rule === "team" ? netTeamOf(players, i) : -1));
+    const teams = players.map((p, i) => ((R.rule === "team" || isTwoTeam(R.rule)) ? netTeamOf(players, i) : -1));
     N.toPeer({
       t: "room", rule: R.rule, bots: R.bots, mods: R.mods || [], matchT: R.matchT || 120,
       map: R.map || null,
@@ -670,13 +699,19 @@
     if (!N.isHost) return;
     const players = UI.netPlayers();
     R.players = players;
-    if (R.rule === "team" && teamsUsed(netAllTeams(players)) < 2) { UI.toast("至少要有两个阵营才能开局"); return; }
+    const netTwo = isTwoTeam(R.rule);
+    if ((R.rule === "team" || netTwo) && teamsUsed(netAllTeams(players)) < 2) {
+      UI.toast(netTwo ? "红蓝两队都要有人才能开局" : "至少要有两个阵营才能开局");
+      return;
+    }
     const roster = players.map((p, i) => ({
       look: p.look, loadout: Object.assign({}, p.loadout || {}), name: p.name,
-      team: R.rule === "team" ? netTeamOf(players, i) : -1
+      team: (R.rule === "team" || netTwo) ? netTeamOf(players, i) : -1
     })).concat(R.bots.map((b, i) => ({
       look: b.look, loadout: Object.assign({}, b.loadout), name: "人机 " + (i + 1),
-      team: R.rule === "team" ? (b.team == null || b.team < 0 ? netBotTeam(i, players.length) : b.team) : -1,
+      team: (R.rule === "team" || netTwo)
+        ? (b.team == null || b.team < 0 ? netBotTeam(i, players.length) : (netTwo && b.team > 0 ? 1 : b.team))
+        : -1,
       bot: true, level: b.level
     })));
     if (roster.length < 2) { UI.toast("至少需要两名参战者才能开局"); return; }

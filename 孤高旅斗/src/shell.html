@@ -56,6 +56,13 @@ body.mobile .shopbtn{top:auto;bottom:calc(100% - 66px);right:300px;font-size:15p
 .hp.foe .barfill{background:linear-gradient(90deg,#fb7185,#f59e0b)}
 .en .barfill{background:linear-gradient(90deg,#a78bfa,#22d3ee)}
 .en.full .barfill{background:linear-gradient(90deg,#fbbf24,#f472b6);box-shadow:0 0 12px rgba(251,191,36,.7)}
+/* v3.9.1 停电夜战：手电筒电量（蓝，低电量转红）与黑暗条（紫，满了呼吸警告） */
+.bat .barfill{background:linear-gradient(90deg,#0ea5e9,#e0f2fe)}
+.bat.low .barfill{background:linear-gradient(90deg,#f87171,#fbbf24);box-shadow:0 0 12px rgba(248,113,113,.65)}
+.drk .barfill{background:linear-gradient(90deg,#6d28d9,#c4b5fd)}
+.drk.full .barfill{background:linear-gradient(90deg,#a855f7,#f0abfc);box-shadow:0 0 12px rgba(168,85,247,.8);
+  animation:drkPulse .7s ease-in-out infinite}
+@keyframes drkPulse{0%,100%{opacity:1}50%{opacity:.5}}
 .bartxt{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
   font-size:9px;font-weight:700;text-shadow:0 1px 2px #000;letter-spacing:.4px}
 /* 注意：不要定义裸的 .ghost 规则——ghost 是按钮的「透明背景」修饰类（.btn.ghost），
@@ -110,6 +117,11 @@ body.mobile .shopbtn{top:auto;bottom:calc(100% - 66px);right:300px;font-size:15p
 #towerGrid .card .t{font-size:11px;margin-bottom:1px;letter-spacing:0}
 #towerGrid .card .d{font-size:9.5px;line-height:1.32}
 #towerGrid .card>div:last-child{font-size:11px;margin-top:4px!important}
+/* v4.3 局内商店（丧尸危机 / 世界末日 / 塔防）：商品卡一律保持自然高度，绝不压缩行高。
+ * 关键在于 flex:0 0 auto —— 网格是 .ov 这个 flex 容器的子项，默认 flex-shrink:1 会被压扁，
+ * 行高被压到比卡片还矮时，溢出内容会被容器裁掉（最后一行价格看不见）还不产生滚动条。
+ * 现在网格按内容撑高，整层 .ov 自己滚动（.ov 已带 overflow-y:auto）。 */
+#armyGrid,#towerGrid{flex:0 0 auto;align-content:start;grid-auto-rows:max-content;overflow:visible}
 
 /* ============ 覆盖层 ============ */
 /* 菜单背景：构建时 __MENU_BG__ 替换为 assets/menu-bg.jpg 的 data URI，
@@ -715,7 +727,7 @@ body.pad .bartxt{font-size:9px}
     <div class="sub">金币：<b id="towerCoins" style="color:#ffd98a">0</b> · 击杀小兵 / 英雄 / 助攻都给金币 · 被动装备每件只能买一次，主动装备最多携带 1 件（按 <b>P</b> 释放）</div>
     <div class="hr"></div>
     <div class="sub" id="towerHint" style="margin-bottom:10px"></div>
-    <div class="grid g3" id="towerGrid" style="max-width:900px;max-height:60vh;overflow:auto"></div>
+    <div class="grid g3" id="towerGrid" style="max-width:900px"></div>
     <div style="margin-top:14px"><button class="btn" id="towerCloseBtn">✕ 返回战斗</button></div>
   </div>
 
@@ -725,7 +737,7 @@ body.pad .bartxt{font-size:9px}
     <div class="sub">局内金币：<b id="armyCoins" style="color:#ffd98a">0</b>（只在当局有效，击杀僵尸/玩家掉落） · 点右上角「✕ 关闭」或按 B / Esc 返回战斗 · <b style="color:#fbbf24">商店不暂停战斗</b></div>
     <div class="hr"></div>
     <div class="sub" id="armyHint" style="margin-bottom:10px"></div>
-    <div class="grid g3" id="armyGrid" style="max-width:760px;max-height:44vh;overflow:auto"></div>
+    <div class="grid g3" id="armyGrid" style="max-width:760px"></div>
     <div style="margin-top:14px"><button class="btn" id="armyCloseBtn">✕ 返回战斗</button></div>
   </div>
 

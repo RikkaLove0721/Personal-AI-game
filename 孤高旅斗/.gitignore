@@ -20,6 +20,11 @@ __pycache__/
 temp/
 .agents/
 *.log
+.workbuddy/
+
+# AI 生成素材的原始输出（中间产物；只入库 assets/props 与 skins/parts 的最终图）
+assets/gen/
+processed_image_*.png
 
 # 系统文件
 Thumbs.db

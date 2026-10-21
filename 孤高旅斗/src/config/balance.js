@@ -130,6 +130,10 @@ window.LD_BALANCE = {
                   orbR: 24, orbitR: 78, spd: 2.6, hitPad: 32 },                // 球半径 24、判定再补 32（判定放宽）
     kingDrop:   { dmg: 50, rise: 1.0, boomR: 170, stun: 1.0 },                 // 王从天降（大招：二段落地 50 伤 + 1s 眩晕，飞起期间自身定身）
     shuriken:   { cd: 1.0, dmg: 12, tick: 0.35, speed: 250, r: 54, life: 4.5,  // 螺旋手里剑（勇者大招：中速巨球 + 强吸引 + 每段 12 伤）
-                  pull: 180, pullR: 225, boomDist: 520, boomR: 170, boomDmg: 25 }   // 飞出 520 距离后中范围爆炸再补 25 伤
+                  pull: 180, pullR: 225, boomDist: 520, boomR: 170, boomDmg: 25 },  // 飞出 520 距离后中范围爆炸再补 25 伤
+    /* v3.9.1 停电夜战的固定 K 技能：与大招 shuriken（螺旋手里剑）是两个技能，别改混了。
+     * windup 起手蓄力时长（期间定身，出手瞬间锁方向）/ blind 命中后的失明秒数。 */
+    shurikenToss: { cd: 7.0, dmg: 26, windup: 0.70, blind: 0.6,
+                    proj: { speed: 920, r: 26, life: 0.85 } }
   }
 };

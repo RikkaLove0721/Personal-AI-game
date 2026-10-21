@@ -298,6 +298,68 @@
     if (foe && !B.sameTeam(f, foe)) f.lock = foe.side;    // 让 AI 也用索敌（追踪类技能会朝他瞄准）
     ctrl.press = {};
     /* ==========================================================
+     *  v4.9 僵尸守房：僵尸默认直奔房子推进；只有玩家拦在近处才交战，
+     *  交战时不做处理，交给下面的通用逻辑去咬人（贴身照样会出手）。
+     * ========================================================== */
+    if (B.rule === "zombiehouse" && f.isZombie && B.zh) {
+      const H = B.zh.house, C = LD.ZOMBIEHOUSE || {};
+      const aggro = C.aggro || 200;
+      let near = null, nd = Infinity;
+      B.fighters.forEach(o => {
+        if (o === f || o.dead || o.isZombie || o.kind !== "hero") return;
+        const d = Math.hypot(o.x - f.x, o.y - f.y);
+        if (d < nd) { nd = d; near = o; }
+      });
+      if (!(near && nd <= aggro)) {
+        const ax = H.x - f.x, ay = H.y - f.y, ad = Math.hypot(ax, ay) || 1;
+        const s = AI.steer(f, ax / ad, ay / ad, null);
+        ctrl.mx = s.x; ctrl.my = s.y;
+        return;
+      }
+    }
+    /* ==========================================================
+     *  v4.8 碰碰车竞技：全程只干两件事——有车就撞最近的对手，没车就奔最近的空车。
+     *  单独放在这里 return：通用「在车上」分支会因为「坐太久 / 没油 / 卡住」主动下车，
+     *  本模式车就是命，下了车就只能挨撞。
+     * ========================================================== */
+    if (B.rule === "bump" && B.bump) {
+      const A = B.bumpArena ? B.bumpArena() : null;
+      const cars = ((B.terrain && B.terrain.props) || []).filter(o => o.bump && !o.dead);
+      if (!f.rideCar) {
+        let best = null, bd = Infinity;
+        cars.forEach(o => {
+          if (o.driver) return;
+          const d = Math.hypot(o.x - f.x, o.y - f.y);
+          if (d < bd) { bd = d; best = o; }
+        });
+        if (best) {
+          const ax = best.x - f.x, ay = best.y - f.y, ad = Math.hypot(ax, ay) || 1;
+          const s = AI.steer(f, ax / ad, ay / ad, null);
+          ctrl.mx = s.x; ctrl.my = s.y;
+          if (bd < 58) ctrl.press.interact = true;      // 走到车边就上
+        } else { ctrl.mx = 0; ctrl.my = 0; }
+        return;
+      }
+      /* 在车上：冲最近的对手；快贴到边缘还朝着外面 → 先掉头回中心，别自己送进水里 */
+      let tgt = null, td = Infinity;
+      B.fighters.forEach(o => {
+        if (o === f || o.dead || o.bench || o.kind !== "hero") return;
+        const d = Math.hypot(o.x - f.x, o.y - f.y);
+        if (d < td) { td = d; tgt = o; }
+      });
+      let tx = tgt ? tgt.x : (A ? A.x : f.x), ty = tgt ? tgt.y : (A ? A.y : f.y);
+      if (A) {
+        const dC = Math.hypot(f.x - A.x, f.y - A.y) || 1;
+        const outX = (f.x - A.x) / dC, outY = (f.y - A.y) / dC;
+        const aimX = tx - f.x, aimY = ty - f.y, aimD = Math.hypot(aimX, aimY) || 1;
+        if (dC > A.r * 0.72 && (aimX / aimD) * outX + (aimY / aimD) * outY > 0.2) { tx = A.x; ty = A.y; }
+      }
+      const ax = tx - f.x, ay = ty - f.y, ad = Math.hypot(ax, ay) || 1;
+      ctrl.mx = ax / ad; ctrl.my = ay / ad;
+      if (Math.random() < dt * 0.5) ctrl.press.basic = true;      // 偶尔按两下喇叭
+      return;
+    }
+    /* ==========================================================
      *  v3.3 交互欲望（AI）：
      *    - 躲在柜子里：等 2.5~3 秒就出来（敌人贴脸则提前出来）
      *    - 在车上：朝敌人撞；坦克会开炮；没油 / 残血 / 坐太久就下车
@@ -623,23 +685,47 @@
       mx = tdx / td * 1.5 + ux * 0.5;
       my = tdy / td * 1.5 + uy * 0.5;
     }
-    /* v3.2 世界末日：僵尸必须从左右门洞闯入；玩家（AI）不在红圈外逗留。
-     * 放在最后：要压过「绕障 / 视线被挡」的通用转向，否则会贴着外墙来回走。 */
+    /* v4.0 世界末日：僵尸沿独木桥摸向庇护所；英雄残血就退回岛上疗伤。
+     * 放在最后：要压过「绕障 / 视线被挡」的通用转向，否则会贴着崖边来回走。 */
     if (B.rule === "doomsday" && B.shelter) {
       const sh = B.shelter;
       const dSh = Math.hypot(f.x - sh.x, f.y - sh.y);
-      /* v3.2 修复：不能直接朝门洞点走——门洞点在墙环上，斜着接近时是切线，
-       * 到了门口方向立刻反指墙外，英雄会在门口来回抖（僵尸半径小才勉强挤进去）。
-       * doomAim 给的是「门外对位点 → 门内穿门点」两段目标。 */
       const aim = B.doomAim(f);
-      if (aim && dSh > sh.r - 40) {
-        const ax = aim.x - f.x, ay = aim.y - f.y, ad = Math.hypot(ax, ay) || 1;
-        mx = ax / ad * 1.8; my = ay / ad * 1.8;
-      } else if (!f.isZombie) {
-        const foeOut = foe && Math.hypot(foe.x - sh.x, foe.y - sh.y) > sh.r + 10;
-        if (dSh > sh.r - 90 && foeOut) {       // 守在门内，不追到红圈里
-          const cx = sh.x - f.x, cy = sh.y - f.y, cd = Math.hypot(cx, cy) || 1;
-          mx += cx / cd * 1.2; my += cy / cd * 1.2;
+      if (f.isZombie) {
+        /* v4.1 枪台/炮台优先吸引仇恨：建筑比玩家近就丢下玩家去啃墙（贴近后由 updateGuardPosts 啃咬） */
+        const post = B.guardPostNear ? B.guardPostNear(f, 340) : null;
+        const dPost = post ? Math.hypot(post.x - f.x, post.y - f.y) : Infinity;
+        const dFoe = (foe && !foe.dead) ? Math.hypot(foe.x - f.x, foe.y - f.y) : Infinity;
+        if (post && dPost < dFoe) {
+          const ax = post.x - f.x, ay = post.y - f.y, ad = Math.hypot(ax, ay) || 1;
+          mx = ax / ad * 1.8; my = ay / ad * 1.8;
+        } else {
+          /* 有人贴在 300 内就先咬人，没人附近才闷头过桥 */
+          const near = foe && !foe.dead && dFoe < 300;
+          if (aim && !near) {
+            const ax = aim.x - f.x, ay = aim.y - f.y, ad = Math.hypot(ax, ay) || 1;
+            mx = ax / ad * 1.8; my = ay / ad * 1.8;
+          }
+        }
+      } else {
+        /* v4.2 右大陆整块是危险区：英雄不再过去刷分，退回安全区一侧守桥 */
+        const L = LD.Terrain && LD.Terrain.doomLand;
+        const danger = B.inDoomDanger ? B.inDoomDanger(f.x, f.y) : false;
+        if (danger && L) {
+          /* 已经踩进右大陆：立刻沿桥往西撤，先回到安全区 */
+          const b = L.bridge, cy = (b.y0 + b.y1) / 2;
+          const ax = (b.x0 - 70) - f.x, ay = cy - f.y, ad = Math.hypot(ax, ay) || 1;
+          mx = ax / ad * 2.0; my = ay / ad * 2.0;
+        } else if (L && foe && !foe.dead && B.inDoomDanger && B.inDoomDanger(foe.x, foe.y)) {
+          /* 敌人在危险区里：不追过去，退守桥西头等它过桥（守安全区，不吃毒） */
+          const b = L.bridge, cy = (b.y0 + b.y1) / 2;
+          const gx = b.x0 - 60, gy = cy;
+          const gd = Math.hypot(gx - f.x, gy - f.y);
+          if (gd > 150) { mx = (gx - f.x) / gd * 1.7; my = (gy - f.y) / gd * 1.7; }
+        } else if (dSh > sh.r - 30 && f.hp < f.maxHp * 0.35) {
+          /* 残血回岛疗伤 */
+          const ax = sh.x - f.x, ay = sh.y - f.y, ad = Math.hypot(ax, ay) || 1;
+          mx = ax / ad * 1.6; my = ay / ad * 1.6;
         }
       }
     }
@@ -660,6 +746,76 @@
         const px = -my, py = mx;                 // 垂直方向侧移
         mx += px * b._unstickDir * 1.6;
         my += py * b._unstickDir * 1.6;
+      }
+    }
+    /* v4.5 护送情报箱：抱箱 → 冲敌方交付点；空手 → 抢地上的箱 / 追持箱的人。
+     * 只接管移动，攻击决策仍走下面的通用逻辑（贴身照样会出手）。 */
+    if (B.rule === "escort" && B.escort) {
+      const st = B.escort, box = st.box;
+      const myT = f.team > 0 ? 1 : 0;
+      if (f.intel) {
+        const goal = B.escortGoalOf(myT === 0 ? 1 : 0);
+        if (goal) {
+          const ax = goal.x - f.x, ay = goal.y - f.y, ad = Math.hypot(ax, ay) || 1;
+          mx = ax / ad * 1.8; my = ay / ad * 1.8;
+        }
+      } else if (box.alive) {
+        const ax = box.x - f.x, ay = box.y - f.y, ad = Math.hypot(ax, ay) || 1;
+        mx = ax / ad * 1.7; my = ay / ad * 1.7;
+      } else {
+        const holder = B.fighters.find(o => o.kind === "hero" && o.intel && !o.dead &&
+          (o.team > 0 ? 1 : 0) !== myT);
+        if (holder) {
+          const ax = holder.x - f.x, ay = holder.y - f.y, ad = Math.hypot(ax, ay) || 1;
+          mx = ax / ad * 1.7; my = ay / ad * 1.7;
+        }
+      }
+    }
+    /* v4.7 占点争夺：挑「最需要自己」的据点——非自家的点、自家被抢的点优先，
+     * 队友已经站够的点自动让开；有敌方炮塔的点降权；残血没架打就回基地回血。
+     * 进圈后只做小范围走位，不被敌人勾出去。 */
+    if (B.rule === "capture" && B.capture) {
+      const myT = f.team > 0 ? 1 : 0, foeT = myT ? 0 : 1;
+      const pts = B.capture.pts || [];
+      const base = B.captureBase ? B.captureBase(myT) : null;
+      const foeNear = !!(foe && !foe.dead && Math.hypot(foe.x - f.x, foe.y - f.y) < 260);
+      const inBase = base ? Math.hypot(f.x - base.x, f.y - base.y) <= base.r * 0.8 : false;
+      if (base && !inBase && !foeNear && f.hp < f.maxHp * 0.34) {
+        /* 残血撤退：基地圈内 5% 最大生命/秒，比在点上硬扛划算 */
+        const ax = base.x - f.x, ay = base.y - f.y, ad = Math.hypot(ax, ay) || 1;
+        mx = ax / ad * 1.8; my = ay / ad * 1.8;
+      } else if (base && inBase && !foeNear && f.hp < f.maxHp * 0.92) {
+        mx = my = 0;                     // 站在基地里等回血
+      } else {
+        let best = null, bs = -1e9;
+        for (const p of pts) {
+          const d = Math.hypot(p.x - f.x, p.y - f.y);
+          let s = 60 - d * 0.06;
+          if (p.owner !== myT) s += 110;
+          if (p.owner === myT && p.by === foeT) s += 90 + p.prog * 90;
+          if (p.owner !== myT && p.by === myT) s += 45 + p.prog * 60;
+          /* 敌方炮塔守着点：进去就得先扛塔，降一点优先级 */
+          const tur = B.captureTurretOf ? B.captureTurretOf(p) : null;
+          if (tur && tur.side !== myT) s -= 60;
+          const mates = B.fighters.filter(o => o !== f && o.kind === "hero" && !o.dead && !o.bench
+            && (o.team > 0 ? 1 : 0) === myT && Math.hypot(o.x - p.x, o.y - p.y) < p.r * 0.85).length;
+          s -= mates * 26;
+          if (s > bs) { bs = s; best = p; }
+        }
+        if (best) {
+          const d = Math.hypot(best.x - f.x, best.y - f.y);
+          const inside = d < best.r * 0.70;
+          let tx = best.x, ty = best.y;
+          if (inside && foe && !foe.dead) {
+            tx = clamp(foe.x, best.x - best.r * 0.50, best.x + best.r * 0.50);
+            ty = clamp(foe.y, best.y - best.r * 0.50, best.y + best.r * 0.50);
+          }
+          const ax = tx - f.x, ay = ty - f.y, ad = Math.hypot(ax, ay);
+          if (ad > (inside ? 40 : 24)) {
+            const sp = inside ? 1.1 : 1.8;
+            mx = ax / ad * sp; my = ay / ad * sp;
+          } else { mx = 0; my = 0; }
+        }
       }
     }
     const n = Math.hypot(mx, my);

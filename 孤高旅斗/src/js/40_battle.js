@@ -221,15 +221,30 @@
       const tw = LD.TOWER.world;
       this.world = { w: tw.w, h: tw.h, pt: tw.pt };
     }
+    /* v3.9.1 停电夜战：场地放大 1.5 倍（1200 → 1800），黑灯瞎火里要够地方周旋 */
+    if (this.rule === "blackout" && LD.NIGHT && LD.NIGHT.world) {
+      const nw = LD.NIGHT.world;
+      this.world = { w: nw.w, h: nw.h, pt: nw.pt != null ? nw.pt : 120 };
+    }
+    /* v4.0 世界末日：横向长图（左岛 + 独木桥 + 右大陆），尺寸由 LD.DOOMSDAY.world 决定 */
+    if (this.rule === "doomsday" && LD.DOOMSDAY && LD.DOOMSDAY.world) {
+      const dw = LD.DOOMSDAY.world;
+      this.world = { w: dw.w, h: dw.h, pt: dw.pt != null ? dw.pt : 70 };
+    }
+    /* v4.7 占点争夺：地图长宽各放大 1.5 倍（1600 → 2400） */
+    if (this.rule === "capture" && LD.CAPTURE && LD.CAPTURE.world) {
+      const cw = LD.CAPTURE.world;
+      this.world = { w: cw.w, h: cw.h, pt: cw.pt != null ? cw.pt : 120 };
+    }
     this.cam = { x: 0, y: 0 };
     /* v3.0 地形：房间带 mapCfg；闯关自动读关卡预置；都不传时保持空场地（兼容旧调用与无头测试） */
     let mapCfg = cfg.mapCfg || null;
     if (!mapCfg && cfg.level) mapCfg = LD.Terrain.bossCfg(cfg.level);
-    /* v3.2 世界末日：固定一张灰烬空地，中心再砌石墙庇护所（不进随机设施） */
+    /* v4.4 世界末日：灰烬长图，右大陆撒一批掩体 / 爆桶 / 车辆（岛内与桥面会被 buildDoomsday 清掉） */
     if (!mapCfg && this.rule === "doomsday") {
       mapCfg = LD.mapCfg({ preset: "arena", seed: 43210, ground: "ash", patches: ["stone"],
-        counts: { solid: 0, breakable: 0, pushable: 0, fence: 0, bush: 0, water: 0,
-                  barrel: 0, car: 0, tire: 0, supply: 0, barricade: 0, room: 0 } });
+        counts: { solid: 8, breakable: 6, pushable: 3, fence: 4, bush: 7, water: 0,
+                  barrel: 6, car: 2, tire: 3, supply: 3, barricade: 4, room: 0 } });
     }
     this.mapCfg = mapCfg;
     if (this.rule === "tower" && LD.Terrain.buildTowerMap) {
@@ -243,7 +258,7 @@
     }
     if (mapCfg) this.terrainMapCfg = mapCfg;
     this.shelter = null;
-    if (this.rule === "doomsday" && this.terrain) this.shelter = LD.Terrain.buildShelter(this.terrain, this.world);
+    if (this.rule === "doomsday" && this.terrain) this.shelter = LD.Terrain.buildDoomsday(this.terrain, this.world);
     /* v2.6 / v2.7 规则修饰符（可叠加）：
      * lowgrav 低重力 / speed 高速 / heal 回复 / zombie 僵尸 / wheel 技能轮盘 */
     this.mods = (cfg.mods || []).slice();
@@ -421,6 +436,16 @@
     if (this.rule === "hunt" && this.isHost) this.initHunt();
     /* v3.9 霸主争霸：每回合重新开始皇冠循环 */
     if (this.rule === "overlord" && this.initCrown) this.initCrown();
+    /* v3.9.1 停电夜战：固定配装（J 位移斩 / K 手里剑）+ 撒充电站 + 黑暗状态复位 */
+    if (this.rule === "blackout" && this.initBlackout) this.initBlackout();
+    /* v4.5 护送情报箱：两队归并 + 两侧交付点 + 中央投放箱子 */
+    if (this.rule === "escort" && this.initEscort) this.initEscort();
+    /* v4.6 占点争夺：三座据点 + 队伍归并 + 各自半场开局 */
+    if (this.rule === "capture" && this.initCapture) this.initCapture();
+    /* v4.8 碰碰车竞技：圆形擂台清场 + 发碰碰车 + 每人上车 */
+    if (this.rule === "bump" && this.initBump) this.initBump();
+    /* v4.9 僵尸守房：全员同队 + 房子占地清场 + 摆位到房四周 */
+    if (this.rule === "zombiehouse" && this.initZombieHouse) this.initZombieHouse();
     this.dragonCorpseT = 0;
     /* v2.6 / v2.7 各规则回合限时：
      * 追猎 90 秒（时间到生存者胜）；缩圈无限时（毒圈就是时钟）；
@@ -559,21 +584,34 @@
     /* v3.7 塔防：荆棘护甲的减伤 */
     if (tgt.dr) dmg = Math.max(1, Math.round(dmg * (1 - tgt.dr)));
     tgt.hp = Math.max(0, tgt.hp - dmg);
-    tgt.hitFlash = 0.16;
     tgt.dmgTaken += dmg;
+    /* v3.9.1 soft：环境类持续伤害（停电夜战的黑暗侵蚀）走的是「只掉血、不挨打」的通道——
+     * 不飘伤害数字、不炸粒子、不顿帧、也不打断手上的蓄力。
+     * 黑暗侵蚀是每帧都在发生的环境效果，走普通受击表现会让人以为自己一直在挨打。 */
+    if (!o.soft) tgt.hitFlash = 0.16;
     /* v3.9 正在开启能量包时挨打 → 蓄力中断，需要重新按交互键再来一次 */
-    if (tgt.chg && this.cancelCharge) this.cancelCharge(tgt, "被打断！");
+    if (tgt.chg && this.cancelCharge && !o.soft) this.cancelCharge(tgt, "被打断！");
     /* v3.2 世界末日：对僵尸造成的实际伤害计入得分（溢出伤害不算） */
     if (this.rule === "doomsday" && src && src.kind === "hero" && !src.isZombie && tgt.isZombie) {
       const si = this.fighters.indexOf(src);
       if (si >= 0) this.wScore[si] = (this.wScore[si] || 0) + Math.round(Math.min(dmg, hpBefore) * (((LD.DOOMSDAY || {}).scoreDmg) || 1));
     }
+    /* v3.9.1 乱斗热身：伤害也是分（大头在伤害，击杀是彩头）。
+     * 只算对英雄造成的实际伤害，溢出不算；wScore 允许带小数，展示层统一取整。 */
+    if (this.rule === "warmup" && src && src.kind === "hero" && src !== tgt &&
+        tgt.kind === "hero" && !tgt.dead && !src.isZombie) {
+      const si = this.fighters.indexOf(src);
+      if (si >= 0) this.wScore[si] = (this.wScore[si] || 0) + Math.min(dmg, hpBefore) * ((LD.WARMUP && LD.WARMUP.scoreDmg) || 0.05);
+    }
     /* v2.6 双子剑客：共享血量池——任意一方受伤，另一方同步 */
     if (tgt.isTwin && tgt.twinLink && !tgt.twinLink.dead) tgt.twinLink.hp = tgt.hp;
-    if (tgt.kind === "hero") tgt.blinkAmt = 0.1;
-
-    // 受击回能
-    if (tgt.enGainT !== undefined && tgt.enGainT <= 0) { tgt.energy = Math.min(tgt.maxEnergy, tgt.energy + C.energy.onHurt * (tgt.energyMul || 1)); tgt.enGainT = 0.25; }
+    /* v3.9.1 soft 伤害不闪红、不给能量、也不刷新「刚挨过打」的时间戳——
+     * 那个戳会让塔防 AI 判定成「刚被打」而触发撤退，黑暗侵蚀不该引起这种误判。 */
+    if (!o.soft) {
+      if (tgt.kind === "hero") tgt.blinkAmt = 0.1;
+      // 受击回能
+      if (tgt.enGainT !== undefined && tgt.enGainT <= 0) { tgt.energy = Math.min(tgt.maxEnergy, tgt.energy + C.energy.onHurt * (tgt.energyMul || 1)); tgt.enGainT = 0.25; }
+    }
     // 命中回能 / 吸血
     if (src) {
       src.dmgDealt += dmg;
@@ -589,19 +627,22 @@
 
     // ---- 反馈 ----
     const isBig = o.type === "ult";
-    FX.burst(tgt.x, tgt.y - 26, isBig ? 26 : (crit ? 16 : 11), crit ? ["#fde68a", "#fff"] : ["#ffd9de", "#ffffff", "#fca5a5"],
-      { speed: isBig ? 330 : 220, dir: o.hitDir == null ? null : o.hitDir });
-    FX.ring(tgt.x, tgt.y - 24, isBig ? 70 : 34, isBig ? "rgba(251,146,60,.9)" : "rgba(255,255,255,.8)", isBig ? 5 : 3, 0.32);
-    FX.float(tgt.x + rand(-8, 8), tgt.y - 46, (crit ? "暴击 " : "") + Math.round(dmg), crit ? "#fbbf24" : (isBig ? "#fb923c" : "#fff"), crit ? 20 : 15);
+    /* v3.9.1 soft 伤害不给任何受击表现（黑暗侵蚀）。hp 归零仍会走下面的 kill */
+    if (!o.soft) {
+      FX.burst(tgt.x, tgt.y - 26, isBig ? 26 : (crit ? 16 : 11), crit ? ["#fde68a", "#fff"] : ["#ffd9de", "#ffffff", "#fca5a5"],
+        { speed: isBig ? 330 : 220, dir: o.hitDir == null ? null : o.hitDir });
+      FX.ring(tgt.x, tgt.y - 24, isBig ? 70 : 34, isBig ? "rgba(251,146,60,.9)" : "rgba(255,255,255,.8)", isBig ? 5 : 3, 0.32);
+      FX.float(tgt.x + rand(-8, 8), tgt.y - 46, (crit ? "暴击 " : "") + Math.round(dmg), crit ? "#fbbf24" : (isBig ? "#fb923c" : "#fff"), crit ? 20 : 15);
+    }
     /* v3.8 兵线混战时小兵太多：打小兵不顿帧、不震屏，避免整局抖个不停 */
-    const quiet = tgt.kind === "laneMinion";
+    const quiet = tgt.kind === "laneMinion" || !!o.soft;
     if (!quiet) {
       FX.hitstop(isBig ? C.hitstop.ult : C.hitstop.hit);
       FX.shake(isBig ? C.shake.ult : (crit ? C.shake.parry : C.shake.hit));
     }
-    this.ev.push(["h", tgt.x, tgt.y - 46, (crit ? "暴击 " : "") + Math.round(dmg), crit ? "#fbbf24" : "#fff"]);
+    if (!o.soft) this.ev.push(["h", tgt.x, tgt.y - 46, (crit ? "暴击 " : "") + Math.round(dmg), crit ? "#fbbf24" : "#fff"]);
 
-    if (tgt.kind === "hero") tgt.lastHurtAt = this.t;   // v3.8 续航宝石 / 还魂曲计时
+    if (!o.soft && tgt.kind === "hero") tgt.lastHurtAt = this.t;   // v3.8 续航宝石 / 还魂曲计时
     if (o.stun && !tgt.ccImmune) this.applyStun(tgt, o.stun);
     if (o.blind && tgt.kind === "hero") {
       tgt.blind = Math.max(tgt.blind || 0, o.blind);
@@ -612,8 +653,8 @@
     else if (o.kbDist && !tgt.ccImmune) this.knockDist(tgt, o.from || src, o.kbDist, o.wallHit);
     if (tgt.hp <= 0) this.kill(tgt, src);
 
-    // 被击打断冥想
-    if (tgt.kind === "hero" && tgt.meditate > 0) {
+    // 被击打断冥想（v3.9.1：环境持续伤害不算「被打」，不打断）
+    if (!o.soft && tgt.kind === "hero" && tgt.meditate > 0) {
       tgt.meditate = 0; tgt.meditInterrupt = true;
       if (tgt.slot.skill1.phase === "meditate") B.endSlot(tgt, "skill1", LD.skill(tgt.loadout.skill1) ? LD.skill(tgt.loadout.skill1).cd : 4.5);
       if (tgt.slot.skill2.phase === "meditate") B.endSlot(tgt, "skill2", LD.skill(tgt.loadout.skill2) ? LD.skill(tgt.loadout.skill2).cd : 4.5);
@@ -621,7 +662,7 @@
       FX.float(tgt.x, tgt.y - 58, "打断！", "#a78bfa", 16);
     }
     // 被打断瞬身蓄力
-    if (tgt.kind === "hero") {
+    if (!o.soft && tgt.kind === "hero") {
       const bk = tgt.slot.skill1.phase === "blinkCharge" ? "skill1" : tgt.slot.skill2.phase === "blinkCharge" ? "skill2" : null;
       if (bk) { B.endSlot(tgt, bk, 7.5); this.applyStun(tgt, 0.6); FX.float(tgt.x, tgt.y - 58, "蓄力被打断", "#f87171", 14); }
     }
@@ -810,12 +851,33 @@
     }
     // v2.6 丧尸危机：击杀玩家也掉局内金币
     if (this.rule === "auction" && this.coins) this.spawnCoin(f.x, f.y, 3);
+    /* v4.8 碰碰车竞技：没有淘汰概念——被撞死 / 掉进水里都走 bumpDunk 的复活流程，
+     * 这里直接返回，别让「只剩一人」的通用结算把比赛提前结束。 */
+    if (this.rule === "bump" && f.kind === "hero") {
+      /* 走和「掉进水里」同一条复活流程（撞死也算对手的战果） */
+      if (this.bumpDunk) this.bumpDunk(f, by, false);
+      return;
+    }
     // v2.7 乱斗热身：不淘汰、不倒计时重开，随机位置复活，击杀者加分
+    if (this.rule === "capture" && f.kind === "hero") {
+      /* v4.7 占点争夺：不淘汰，在本方基地复活；首次 3 秒，之后每次阵亡 +3 秒 */
+      const C = LD.CAPTURE || {};
+      const baseT = f.capRespawnT != null ? f.capRespawnT : (C.respawn || 3.0);
+      f.respawnT = baseT;
+      f.capRespawnT = Math.min(C.respawnMax || 24, baseT + (C.respawnStep || 3.0));
+      return;
+    }
+    /* v4.9 僵尸守房：打的是波次不是淘汰赛，阵亡只是退场一会儿，
+     * 别让「只剩一人」的通用结算提前把整局判掉（僵尸走更上面的通用分支）。 */
+    if (this.rule === "zombiehouse" && f.kind === "hero" && !f.isZombie) {
+      f.respawnT = (LD.ZOMBIEHOUSE || {}).respawn || 5;
+      return;
+    }
     if (this.rule === "warmup") {
       if (by && by.side != null) {
         const i = this.fighters.indexOf(by);
-        if (i >= 0) { this.wScore[i] = (this.wScore[i] || 0) + ((LD.WARMUP && LD.WARMUP.scoreKill) || 1); }
-        FX.float(by.x, by.y - 86, "得分 " + this.wScore[i], "#fcd34d", 17);
+        if (i >= 0) { this.wScore[i] = (this.wScore[i] || 0) + ((LD.WARMUP && LD.WARMUP.scoreKill) || 5); }
+        FX.float(by.x, by.y - 86, "击杀 +" + ((LD.WARMUP && LD.WARMUP.scoreKill) || 5) + "，得分 " + Math.round(this.wScore[i]), "#fcd34d", 17);
       }
       f.respawnT = (LD.WARMUP && LD.WARMUP.respawn) || 1.6;
       return;
@@ -1238,7 +1300,17 @@
     const cap = doom ? (D.maxBase || 5) + players * (D.maxPer || 2) : (Z.max || 6);
     if (alive >= cap) return;
     let bx, by;
-    if (doom && this.shelter) {
+    /* v4.0：僵尸只从右大陆冒出来，绝不刷在庇护所里，也不刷在悬崖上 */
+    const dm = doom ? ((LD.Terrain && LD.Terrain.doomLand) ? LD.Terrain.doomLand.main : null) : null;
+    if (doom && dm) {
+      bx = null;
+      for (let k = 0; k < 40; k++) {
+        const x = rand(dm.x0 + 80, dm.x1 - 80), y = rand(dm.y0 + 70, dm.y1 - 70);
+        if (this.humans(true).some(f => Math.hypot(f.x - x, f.y - y) < 380)) continue;   // 别贴脸刷
+        if (!this.terrain || LD.Terrain.clearAt(this.terrain, x, y, 26)) { bx = x; by = y; break; }
+      }
+      if (bx == null) { bx = rand(dm.x0 + 120, dm.x1 - 120); by = rand(dm.y0 + 90, dm.y1 - 90); }
+    } else if (doom && this.shelter) {
       const sh = this.shelter;
       bx = null;
       for (let k = 0; k < 40; k++) {
@@ -1272,60 +1344,82 @@
   };
   B.zombieOn = function () { return this.rule === "auction" || this.rule === "doomsday" || this.mod("zombie"); };
 
-  /* ---- v3.2 世界末日：庇护所外红圈持续掉血 ---- */
+  /* ---- v4.0 世界末日：庇护所内缓慢回血；v4.2 右大陆整块变成危险区 ---- */
+  /** 坐标是否踩在危险区（右边那块矩形大陆）里 —— 判定口径与缩圈毒圈一致 */
+  B.inDoomDanger = function (x, y) {
+    const L = LD.Terrain && LD.Terrain.doomLand;
+    if (!L) return false;
+    const m = L.main;
+    return x >= m.x0 && x <= m.x1 && y >= m.y0 && y <= m.y1;
+  };
   B.updateDoomsday = function (dt) {
     if (!this.shelter) return;
     const D = LD.DOOMSDAY || {};
-    this.doomTick = (this.doomTick == null ? (D.outTick || 0.6) : this.doomTick) - dt;
+    const heal = D.shelterHeal || 0;
+    const dg = D.danger || {};
+    const tick = dg.tick || 0.5;
+    this.doomTick = (this.doomTick == null ? tick : this.doomTick) - dt;
     if (this.doomTick > 0) return;
-    this.doomTick = D.outTick || 0.6;
+    this.doomTick = tick;
     for (const f of this.fighters) {
       if (f.dead || f.kind !== "hero" || f.isZombie || f.bench) continue;
-      if (Math.hypot(f.x - this.shelter.x, f.y - this.shelter.y) > this.shelter.r) {
-        this.damage(null, f, D.outDmg || 4, { type: "dot", kb: 0, noSrc: true });
-        if (f.hp > 0) FX.float(f.x, f.y - 60, "红圈侵蚀！", "#f87171", 13);
+      /* 危险区：整块右大陆等同圈外，站上去每 tick 掉一次血（僵尸是原住民，不受影响） */
+      if (this.inDoomDanger(f.x, f.y)) {
+        this.damage(null, f, dg.dmg || 5, { type: "dot", kb: 0, noSrc: true });
+        if (f.hp > 0) FX.float(f.x, f.y - 60, "危险区！", "#f87171", 13);
+        continue;
+      }
+      if (heal <= 0) continue;
+      if (Math.hypot(f.x - this.shelter.x, f.y - this.shelter.y) > this.shelter.r) continue;
+      if (f.hp >= f.maxHp) continue;
+      const before = f.hp;
+      f.hp = Math.min(f.maxHp, f.hp + heal * tick);
+      if (Math.floor(f.hp) > Math.floor(before)) FX.float(f.x, f.y - 60, "庇护所回血", "#4ade80", 12);
+    }
+  };
+  /** v4.0 已无门洞，保留空实现以免旧调用报错 */
+  B.doomGap = function () { return null; };
+  /**
+   * v4.0 独木桥寻路目标点。
+   * 桥只有两格宽，直奔岛上会把僵尸们挤在崖边打转，所以拆成两段：
+   * 在大陆 → 先走到桥的东头；上了桥 → 一路往西穿过桥面；到了岛上就交回正常战斗移动。
+   */
+  B.doomAim = function (f) {
+    const L = LD.Terrain && LD.Terrain.doomLand;
+    if (!L) return null;
+    const isl = L.island, b = L.bridge, m = L.main;
+    if (Math.hypot(f.x - isl.x, f.y - isl.y) <= isl.r - 20) return null;      // 已经上岛
+    const cy = (b.y0 + b.y1) / 2;
+    if (f.x >= m.x0) return { x: b.x1 - 46, y: cy };                          // 大陆 → 桥东头
+    if (f.x > b.x0 + 60) return { x: b.x0 + 46, y: cy };                      // 桥上 → 继续往西
+    return { x: isl.x, y: isl.y };
+  };
+  /** v4.0 独木桥减速：僵尸踩上桥面就明显变慢，给守桥的人留输出窗口 */
+  B.updateGateSlow = function (dt) {
+    const L = LD.Terrain && LD.Terrain.doomLand;
+    if (!L) return;
+    const b = L.bridge;
+    for (const f of this.fighters) {
+      if (f.dead || !f.isZombie) continue;
+      if (f.x >= b.x0 && f.x <= b.x1 && f.y >= b.y0 && f.y <= b.y1) {
+        f.gateSlowT = 0.16;      // 每帧续期，离开桥面后很快恢复
+        if (Math.random() < dt * 3) FX.trail(f.x + rand(-8, 8), f.y - rand(4, 26), "#67e8f9", 4, 0.3);
       }
     }
   };
-  /** 离目标最近的门洞（僵尸寻路 / 玩家回防都用它） */
-  B.doomGap = function (f) {
-    const sh = this.shelter;
-    if (!sh || !sh.gaps || !sh.gaps.length) return null;
-    let best = sh.gaps[0], bd = Infinity;
-    sh.gaps.forEach(g => { const d = Math.hypot(g.x - f.x, g.y - f.y); if (d < bd) { bd = d; best = g; } });
-    return best;
-  };
   /**
-   * v3.2 门洞寻路目标点。
-   * 关键：门洞点本身就在墙环上，直接朝它走会「原地打转」——
-   * 从斜上方接近时它是一条切线，到了门口方向立刻反指墙外，于是永远进不去。
-   * 因此分两步：还在圈外且没和门洞对齐 → 先去门外对位点；对齐后 → 直冲门内的穿门点。
+   * v4.0 悬崖边界：所有人（含位移 / 击退 / 载具）一律夹回陆地。
+   * 放在角色循环之后统一处理，这样任何一种改坐标的通道都逃不掉。
    */
-  B.doomAim = function (f) {
-    const sh = this.shelter;
-    if (!sh) return null;
-    const gate = this.doomGap(f);
-    if (!gate) return null;
-    const sign = gate.x >= sh.x ? 1 : -1;
-    const dSh = Math.hypot(f.x - sh.x, f.y - sh.y);
-    if (dSh <= sh.r - 40) return null;                        // 已经进来了，交给正常战斗移动
-    const aligned = Math.abs(f.y - gate.y) < 24 && Math.abs(f.x - gate.x) < sh.r + 40;
-    if (dSh > sh.r && !aligned) return { x: gate.x + sign * 72, y: gate.y };   // 门外对位点
-    return { x: gate.x - sign * 130, y: gate.y };                              // 门内穿门点
-  };
-  /** v3.2 门洞减速圈：僵尸站在门洞附近的圈里会明显变慢，给守门的人留输出窗口 */
-  B.updateGateSlow = function (dt) {
-    if (this.rule !== "doomsday" || !this.shelter || !this.shelter.gaps) return;
-    const D = LD.DOOMSDAY || {};
-    const gr = D.gateR || 92;
+  B.clampDoomLand = function () {
+    const T = LD.Terrain;
+    if (!T || !T.doomLand || !T.landFit) return;
     for (const f of this.fighters) {
-      if (f.dead || !f.isZombie) continue;
-      let inGate = false;
-      for (const g of this.shelter.gaps) {
-        if (Math.hypot(f.x - g.x, f.y - g.y) <= gr) { inGate = true; break; }
-      }
-      if (inGate) f.gateSlowT = 0.16;      // 每帧续期，离开圈后很快恢复
-      if (inGate && Math.random() < dt * 3) FX.trail(f.x + rand(-8, 8), f.y - rand(4, 26), "#67e8f9", 4, 0.3);
+      if (f.dead || f.bench || f.hideProp) continue;
+      const p = T.landFit(f.x, f.y);
+      if (!p) continue;
+      f.x = p.x; f.y = p.y;
+      if (f.vx != null) { f.vx *= 0.15; f.vy *= 0.15; }      // 撞崖即停，别贴着崖边弹跳
     }
   };
   /** 人机逛商店：残血先买血包，否则轮流买加成，钱不够或都买不了就收手 */
@@ -1393,8 +1487,8 @@
     return { x: bx, y: by };
   };
   B.updateRespawn = function (dt) {
-    if (this.rule !== "warmup") return;
-    const W = LD.WARMUP || {};
+    if (this.rule !== "warmup" && this.rule !== "capture") return;
+    const W = this.rule === "capture" ? (LD.CAPTURE || {}) : (LD.WARMUP || {});
     for (const f of this.fighters) {
       if (!f.respawnT || f.respawnT <= 0) continue;
       f.respawnT -= dt;
@@ -1407,7 +1501,7 @@
       f.buff = { rage: 0, thousand: 0, rush: 0 };
       Object.keys(f.slot || {}).forEach(k => { f.slot[k] = { on: false, phase: "", t: 0, d: {} }; });
       if (f.cd) { f.cd.basic = 0; f.cd.skill1 = 0; f.cd.skill2 = 0; f.cd.dodge = 0; f.cd.ult = 1.5; }
-      const p = this.randomRespawnSpot();
+      const p = (this.rule === "capture" && this.captureSpawn) ? this.captureSpawn(f) : this.randomRespawnSpot();
       f.x = p.x; f.y = p.y;
       f.invuln = W.invuln || 1.6;
       FX.ring(f.x, f.y - 26, 76, "rgba(103,232,249,.95)", 5, 0.5);
@@ -1498,6 +1592,16 @@
 
   /* v3.1 补给箱掉落：随机血包 / 能量包 / 移速包 */
   B.dropPickup = function (x, y, forceKind) {
+    /* v3.9.1 停电夜战禁用大招，能量包没有用处，本模式直接不产——
+     * 只掉血包与移速包（它们在黑地里也确实救命）。 */
+    if (this.rule === "blackout") {
+      if (forceKind === "energy") return;
+      forceKind = forceKind || (Math.random() < 0.5 ? "heal" : "speed");
+      this.pickups = this.pickups || [];
+      this.pickups.push({ id: (this._pkId = (this._pkId || 0) + 1), x: x, y: y, kind: forceKind, t: 0 });
+      FX.ring(x, y - 10, 46, "rgba(125,211,252,.9)", 4, 0.4);
+      return;
+    }
     const pool = ["heal", "energy", "speed"];
     const kind = forceKind || pool[(Math.random() * pool.length) | 0];
     if (!this.pickups) this.pickups = [];
@@ -1560,7 +1664,18 @@
         desc: "本局移速 +" + Math.round((S.spdGain || 0.15) * 100) + "%（最多叠 " + (S.spdMax || 3) + " 次）" },
       { id: "energy", name: "能量球", icon: "🔮", price: S.energyPrice || 3,
         desc: "立刻补充 " + (S.energyGain || 60) + " 点大招能量（能量已满时买不了）" }
-    ];
+    ].concat(this.rule === "doomsday" ? (function () {
+      /* v4.1 末日专属：防御建筑，买完立在脚下（金币靠刷僵尸攒） */
+      const C = (LD.DOOMSDAY || {}).build || {};
+      return [
+        { id: "b_fence", name: "栅栏", icon: "🚧", price: (C.fence || {}).price || 6,
+          desc: "在脚下立一段可破坏栅栏（血量 " + ((C.fence || {}).hp || 80) + "）：挡人不挡弹，飞行物可以穿过去" },
+        { id: "b_turret", name: "小型枪台", icon: "🔫", price: (C.turret || {}).price || 14,
+          desc: "在脚下架起枪台（血量 " + ((C.turret || {}).hp || 120) + "）：自动射击 " + ((C.turret || {}).range || 300) + " 范围内的僵尸，并优先吸引它们仇恨" },
+        { id: "b_cannon", name: "固定炮台", icon: "💥", price: (C.cannon || {}).price || 22,
+          desc: "在脚下架起炮台（血量 " + ((C.cannon || {}).hp || 160) + "）：低频发射范围爆炸的炮弹（" + ((C.cannon || {}).boomR || 90) + " 范围），同样吸引仇恨" }
+      ];
+    })() : []);
   };
   /** 购买局内商品：成功返回 true（扣金币 + 立刻生效） */
   B.armyBuy = function (f, id) {
@@ -1595,9 +1710,127 @@
       FX.ring(f.x, f.y - 26, 66, "#818cf8", 5, 0.45);
       FX.burst(f.x, f.y - 26, 14, ["#a5b4fc", "#fff"], { speed: 180 });
       FX.float(f.x, f.y - 64, "能量+" + gain, "#a5b4fc", 15);
+    } else if (id === "b_fence" || id === "b_turret" || id === "b_cannon") {
+      /* v4.1 末日防御建筑：扣钱放在 placeStructure 里做（放不下不扣钱） */
+      if (!this.placeStructure(f, id.slice(2))) return false;
     } else return false;
     if (typeof Audio2 !== "undefined" && Audio2.buy) Audio2.buy();
     return true;
+  };
+
+  /* ==========================================================
+   *  v4.1 世界末日：商店防御建筑（栅栏 / 小型枪台 / 固定炮台）
+   *  买完立在玩家面朝方向 52px 处；枪台自动点射、炮台范围轰炸，
+   *  两者都会把附近僵尸的仇恨从玩家身上抢过来（贴身的僵尸改为啃建筑）。
+   * ========================================================== */
+  B.placeStructure = function (f, kind) {
+    if (!f || f.dead || !this.terrain) return false;
+    const D = (LD.DOOMSDAY || {}).build || {};
+    const cfg = D[kind];
+    if (!cfg) return false;
+    if ((f.bcoins || 0) < cfg.price) return false;
+    const T = LD.Terrain, TILE = LD.TERRAIN.tile || 40;
+    const fx = f.facing ? f.facing.x : 1, fy = f.facing ? f.facing.y : 0;
+    const fd = Math.hypot(fx, fy) || 1;
+    let px = f.x + fx / fd * 52, py = f.y + fy / fd * 52;
+    px = Math.max(TILE, Math.min(this.world.w - TILE, px));
+    py = Math.max(this.world.pt + TILE, Math.min(this.world.h - TILE, py));
+    /* 末日地图：只能立在陆地（岛 / 桥 / 大陆）上，悬崖上放不了 */
+    if (T.landAt && !T.landAt(px, py)) {
+      const p2 = T.landFit ? T.landFit(px, py) : null;
+      if (!p2) { FX.float(f.x, f.y - 64, "那里是悬崖", "#f87171", 14); return false; }
+      px = p2.x; py = p2.y;
+    }
+    if (!T.clearAt(this.terrain, px, py, 20)) {
+      FX.float(f.x, f.y - 64, "这里放不下", "#f87171", 14); return false;
+    }
+    const spec = {
+      fence:  { kind: "barrier", mat: "fence_wood", shape: "bar",   elev: 28, mass: 1.0 },
+      turret: { kind: "turret",  mat: "metal",      shape: "round", elev: 34, mass: 3.4 },
+      cannon: { kind: "cannon",  mat: "metal",      shape: "round", elev: 36, mass: 4.2 }
+    }[kind];
+    const name = { fence: "栅栏", turret: "小型枪台", cannon: "固定炮台" }[kind];
+    this.terrain.props.push({
+      uid: 950000 + ((this._structSeq = (this._structSeq || 0) + 1)),
+      kind: spec.kind, mat: spec.mat, shape: spec.shape,
+      cw: 1, ch: 1, w: TILE, h: TILE,
+      x: px, y: py, ox: px, oy: py,
+      elev: spec.elev, mass: spec.mass,
+      hp: cfg.hp, maxHp: cfg.hp,
+      dead: false, flash: 0, vx: 0, vy: 0, free: false, glow: null,
+      boomR: 0, boomDmg: 0, variant: (this._structSeq * 137) % 997,
+      soft: false, blockMove: true,
+      blockProj: spec.kind !== "barrier",
+      side: f.side, owner: f, shotT: 0, aimAngle: 0
+    });
+    f.bcoins -= cfg.price;
+    FX.ring(px, py, 44, "#fbbf24", 5, 0.45);
+    FX.burst(px, py - 16, 12, ["#fde68a", "#fff"], { speed: 170 });
+    FX.float(px, py - 56, name + "！", "#fbbf24", 15);
+    if (typeof Audio2 !== "undefined" && Audio2.buy) Audio2.buy();
+    return true;
+  };
+  /** 离 f 最近的防御建筑（僵尸抢仇恨 / 啃咬都用它），r 内没有返回 null */
+  B.guardPostNear = function (f, r) {
+    if (!this.terrain) return null;
+    let best = null, bd = r;
+    for (const o of this.terrain.props) {
+      if (o.dead || (o.kind !== "turret" && o.kind !== "cannon")) continue;
+      const d = Math.hypot(o.x - f.x, o.y - f.y);
+      if (d < bd) { bd = d; best = o; }
+    }
+    return best;
+  };
+  B.updateGuardPosts = function (dt) {
+    if (this.rule !== "doomsday" || !this.terrain) return;
+    const D = (LD.DOOMSDAY || {}).build || {};
+    for (const o of this.terrain.props) {
+      if (o.dead || (o.kind !== "turret" && o.kind !== "cannon")) continue;
+      const S = D[o.kind] || {};
+      o.shotT = Math.max(0, (o.shotT || 0) - dt);
+      const range = S.range || 300;
+      let best = null, bd = Infinity;
+      for (const z of this.fighters) {
+        if (z.dead || !z.isZombie) continue;
+        const d = Math.hypot(z.x - o.x, z.y - o.y);
+        if (d <= range && d < bd) { bd = d; best = z; }
+      }
+      o._target = best;
+      if (!best) continue;
+      const oy = o.y - (o.elev || 34) * 0.5;
+      o.aimAngle = Math.atan2(best.y - 26 - oy, best.x - o.x);
+      if (o.shotT > 0) continue;
+      o.shotT = S.atk || 1.1;
+      const owner = o.owner;   // owner 只做伤害归属（金币/分数），死了也照算
+      if (o.kind === "turret") {
+        /* 小型枪台：高速点射弹（不吃 blockProj？吃的，正常飞行物） */
+        const a = o.aimAngle, sp = S.projSpeed || 920;
+        this.spawnProj({
+          x: o.x + Math.cos(a) * 18, y: oy + Math.sin(a) * 12,
+          vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+          r: 7, dmg: S.dmg || 12, life: 1.8, owner: owner,
+          color: "#fbbf24", core: "#fff7d6", type: "turretshot", kindTag: "skill", trail: true
+        });
+        FX.burst(o.x + Math.cos(a) * 20, oy, 5, ["#fbbf24", "#fff"], { speed: 130, dir: a });
+      } else {
+        /* 固定炮台：低频范围轰炸 —— 朝目标当前位置落一发延迟炮弹（复用高压弹通道） */
+        this.bombs = this.bombs || [];
+        this.bombs.push({ x: best.x, y: best.y, t: S.shellT || 0.55, max: S.shellT || 0.55,
+          owner: owner, r: S.boomR || 90, dmg: S.dmg || 34, cannon: true });
+        FX.ring(o.x, oy, 30, "rgba(251,191,36,.9)", 4, 0.35);
+      }
+    }
+    /* 僵尸啃咬：被枪台/炮台吸引过来的僵尸，贴近就啃建筑（建筑是它们唯一够得着的敌人） */
+    for (const z of this.fighters) {
+      if (z.dead || !z.isZombie) continue;
+      z.biteT = Math.max(0, (z.biteT || 0) - dt);
+      if (z.biteT > 0) continue;
+      const post = this.guardPostNear(z, 64);
+      if (!post) continue;
+      z.biteT = 0.8;
+      LD.Terrain.hitProp(this.terrain, post, 12, { melee: true, src: z });
+      FX.burst(post.x + rand(-10, 10), post.y - 30, 5, ["#a3e635", "#fff"], { speed: 120 });
+    }
   };
 
   /* ---- 车轮战：败者下台，胜者回血 30% 并迎接下一位（本地面板轮换，不上联机） ---- */
@@ -2203,6 +2436,42 @@
       });
       f.atkAnim = 0.3; f.atkDur = 0.3;
       FX.burst(f.x + Math.cos(a) * 32, f.y - 26, 12, ["#92400e", "#a16207"], { speed: 160, dir: a });
+      B.endSlot(f, slot, sk.cd);
+    }
+  };
+
+  /* ---- 手里剑（v3.9.1 停电夜战的固定 K 技能）----
+   * 蓄力 0.7 秒（原地定身，起手方向即出手方向）后高速掷出大型飞镖，
+   * 命中第一个敌人造成 26 伤害 + 0.6 秒失明。飞镖不穿透。 */
+  /* 手里剑（停电夜战 K 技能）。id 用 shurikenToss：shuriken 已被大招「螺旋手里剑」占用。 */
+  IMPL.shurikenToss = {
+    start(f, slot, sk) {
+      const s = f.slot[slot];
+      f.facing = aimAt(f, this);
+      s.on = true; s.phase = "shuWind"; s.t = 0;
+      s.d.dir = { x: f.facing.x, y: f.facing.y };
+      /* 蓄力期间定身：这是「交出去」的一击，起手能被读到、也能被抓 */
+      f.root = Math.max(f.root || 0, sk.windup);
+      f.atkAnim = sk.windup + 0.16; f.atkDur = sk.windup + 0.16;
+      FX.ring(f.x + f.facing.x * 26, f.y - 26 + f.facing.y * 14, 32, "rgba(103,232,249,.9)", 3, sk.windup);
+      FX.float(f.x, f.y - 78, "蓄力", "#67e8f9", 13);
+    },
+    update(f, slot, sk, dt) {
+      const s = f.slot[slot];
+      if (s.phase !== "shuWind") return;
+      s.t += dt;
+      if (Math.random() < dt * 14) FX.trail(f.x + rand(-10, 10), f.y - 30 + rand(-6, 14), "#67e8f9", 4, 0.26);
+      if (s.t < sk.windup) return;
+      s.phase = "shuDone";
+      const d = s.d.dir || f.facing;
+      const a = Math.atan2(d.y, d.x);
+      B.spawnProj({
+        x: f.x + Math.cos(a) * 28, y: f.y - 26 + Math.sin(a) * 14,
+        vx: Math.cos(a) * sk.proj.speed, vy: Math.sin(a) * sk.proj.speed,
+        r: sk.proj.r, dmg: sk.dmg, life: sk.proj.life, owner: f, blind: sk.blind,
+        color: "#22d3ee", core: "#ecfeff", type: "shuriken", kindTag: "skill", trail: true
+      });
+      FX.burst(f.x + Math.cos(a) * 30, f.y - 26 + Math.sin(a) * 14, 12, ["#67e8f9", "#fff"], { speed: 200, dir: a });
       B.endSlot(f, slot, sk.cd);
     }
   };
@@ -3986,11 +4255,23 @@
 
     /* v3.3 车辆驾驶 / 撞击 / 油量（在弹道之前，司机位置先落到车身上） */
     if (this.updateVehicles) this.updateVehicles(dt);
+    /* v4.0 世界末日：悬崖边界 —— 位移 / 击退 / 载具统统不许把人送出陆地 */
+    if (this.rule === "doomsday") this.clampDoomLand();
     /* v3.5 吹风机气流：在位移之后、弹道之前把角色往外吹 */
     if (this.updateWind) this.updateWind(dt);
     this.updateProjs(dt);
     if (this.terrain) LD.Terrain.update(this.terrain, dt, this);
     this.updatePickups(dt);
+    /* v3.9.1 停电夜战：手电筒耗电、黑暗条涨落、条满掉血 */
+    if (this.updateNight) this.updateNight(dt);
+    /* v4.5 护送情报箱：拾取 / 交付 / 重生 / 限时结算 */
+    if (this.rule === "escort" && this.updateEscort) this.updateEscort(dt);
+    /* v4.6 占点争夺：占领读条 / 产分 / 限时结算 */
+    if (this.rule === "capture" && this.updateCapture) this.updateCapture(dt);
+    /* v4.8 碰碰车竞技：车对车撞击 / 出圈落水 / 复活 / 计分 */
+    if (this.rule === "bump" && this.updateBump) this.updateBump(dt);
+    /* v4.9 僵尸守房：波次放怪 / 啃房掉耐久 / 击杀补记 / 喘息修房 */
+    if (this.rule === "zombiehouse" && this.updateZombieHouse) this.updateZombieHouse(dt);
     /* v3.9 能量包蓄力：进度推进与中断判定（锁移动 / 锁技能在角色循环里） */
     if (this.updateCharging) this.updateCharging(dt);
     this.updateZones(dt);
@@ -4011,7 +4292,7 @@
     if (this.rule === "ring") this.updateRing(dt);
     if (this.rule === "hunt") this.updateHunt(dt);
     if (this.rule === "auction") this.updateAuction(dt);
-    if (this.rule === "doomsday") { this.updateAuction(dt); this.updateDoomsday(dt); this.updateGateSlow(dt); }
+    if (this.rule === "doomsday") { this.updateAuction(dt); this.updateDoomsday(dt); this.updateGateSlow(dt); this.updateGuardPosts(dt); this.updateBombs(dt); }
     /* v3.3 规则修饰符：物资刷新 */
     if (this.mod && this.mod("refresh") && this.updateRefresh) this.updateRefresh(dt);
     if (this.rule === "relay") this.relayTick(dt);
@@ -4090,10 +4371,16 @@
         return;
       }
     }
+    /* v4.8 碰碰车竞技：限时；时间到按撞爆 / 撞出擂台的得分判胜 */
+    if (this.rule === "bump") {
+      this.roundT -= dt;
+      if (this.roundT <= 0 && this.bumpTimeUp) this.bumpTimeUp();
+    }
     // 决斗模式倒计时（v2.7：缩圈 / 车轮战 / 追猎 / 热身都有各自的时钟逻辑，不走通用倒计时）
     if (this.mode !== "dragon" && this.rule !== "ring" && this.rule !== "relay"
         && this.rule !== "hunt" && this.rule !== "warmup" && this.rule !== "doomsday"
-        && this.rule !== "tower") {
+        && this.rule !== "tower" && this.rule !== "escort" && this.rule !== "capture"
+        && this.rule !== "bump" && this.rule !== "zombiehouse") {
       this.roundT = (this.roundT || 75) - dt;
       if (this.roundT <= 0) {
         /* 超时：当前血量最高者赢下回合（平血按座位号） */
@@ -4290,6 +4577,8 @@
         f.slot.skill1.phase === "bdash" || f.slot.skill2.phase === "bdash") canMove = false;
     if (f.buff.rush > 0) sp *= LD.skill("meatRush").mul;
     if (f.slowT > 0) sp *= 0.55;   // 被冰痕 / 苍减速
+    /* v4.5 护送情报箱：抱箱时移速降 8%（不乘进 speedMul，避免反复乘漂移） */
+    if (f.intel && LD.ESCORT) sp *= LD.ESCORT.speedMul || 0.92;
     /* v3.2 世界末日：僵尸在门洞减速圈里额外变慢（给守门的人留输出窗口） */
     if (f.gateSlowT > 0 && f.isZombie) sp *= (LD.DOOMSDAY && LD.DOOMSDAY.gateSlow) || 0.5;
     /* v3.1：推着汽车 / 轮胎 / 方块走时明显变慢；水池里减速；拾取移速包短暂加速 */
@@ -4836,7 +5125,7 @@
       // 胜者特写：类似大招演出的逐字展示「胜者：xxx」
       if (w.kind === "hero")
         LD.Cine.start(w, "胜者：" + (w.name || ("玩家" + (w.side + 1))), "",
-          w.team != null && w.team >= 0 ? (LD.TEAM_COLORS[w.team] || "#fcd34d") : "#fcd34d", "赢得了本局胜利");
+          w.team != null && w.team >= 0 ? ((LD.teamColor && LD.teamColor(w.team)) || "#fcd34d") : "#fcd34d", "赢得了本局胜利");
     }
   };
 
@@ -4902,9 +5191,8 @@
         poisonSets.push({ list: this.rings.filter(c => !c.dead), ink: "rgba(120,10,30,.36)", line: "rgba(248,113,113,.95)", safe: true });
       if (this.rule === "hunt" && this.huntRing)
         poisonSets.push({ list: [this.huntRing], ink: "rgba(120,10,30,.34)", line: "rgba(248,113,113,.9)", safe: false });
-      /* v3.2 世界末日：庇护所外整片红圈（墙外持续掉血） */
-      if (this.rule === "doomsday" && this.shelter)
-        poisonSets.push({ list: [this.shelter], ink: "rgba(120,10,30,.34)", line: "rgba(248,113,113,.9)", safe: true });
+      /* v4.0 世界末日：旧版「庇护所外整片红圈」已随出圈掉血一起移除 ——
+       * 悬崖地形本身就是边界（深渊 + 崖壁由 V.doomChasm 绘制），再叠一层红会把整张图染成暗红色 */
       poisonSets.forEach(set => {
         if (!set.list.length) return;
         ctx.save();
@@ -4926,7 +5214,23 @@
         ctx.setLineDash([]);
         ctx.restore();
       });
-      /* v3.2 世界末日：门洞外的减速圈（僵尸进圈变慢）+ 门洞本体的绿圈 */
+      /* v4.2 世界末日：整块右大陆是危险区（等同圈外掉血），铺一层缓慢呼吸的红雾 + 虚线边界 */
+      if (this.rule === "doomsday") {
+        const L = LD.Terrain && LD.Terrain.doomLand;
+        if (L) {
+          const m = L.main;
+          ctx.save();
+          ctx.globalAlpha = 0.74 + Math.sin(this.t * 1.7) * 0.12;
+          ctx.fillStyle = "rgba(120,10,30,.26)";
+          ctx.fillRect(m.x0, m.y0, m.x1 - m.x0, m.y1 - m.y0);
+          ctx.globalAlpha = 1;
+          ctx.setLineDash([20, 13]); ctx.lineDashOffset = -this.t * 26;
+          ctx.strokeStyle = "rgba(248,113,113,.85)"; ctx.lineWidth = 5;
+          ctx.strokeRect(m.x0 + 3, m.y0 + 3, m.x1 - m.x0 - 6, m.y1 - m.y0 - 6);
+          ctx.setLineDash([]);
+          ctx.restore();
+        }
+      }
       if (this.rule === "doomsday" && this.shelter && this.shelter.gaps) {
         const D = LD.DOOMSDAY || {};
         const gr = D.gateR || 92;
@@ -4947,6 +5251,16 @@
           ctx.restore();
         });
       }
+      /* v4.5 护送情报箱：交付点 + 地上的箱子 + 持箱者引导线 */
+      if (this.rule === "escort" && this.drawEscort) this.drawEscort(ctx);
+      /* v4.6 占点争夺：据点圈 + 归属旗 + 占领读条 */
+      if (this.rule === "capture" && this.drawCapture) this.drawCapture(ctx);
+      /* v4.8 碰碰车竞技：场外水池 + 擂台警示带 + 车辆耐久条 */
+      if (this.rule === "bump" && this.drawBump) this.drawBump(ctx);
+      /* v4.9 僵尸守房：地基圈 + 屋子本体 + 房子耐久条 */
+      if (this.rule === "zombiehouse" && this.drawZombieHouse) this.drawZombieHouse(ctx);
+      /* v3.9.1 停电夜战：充电站（排在掉落物之前，压在人物下层） */
+      if (this.drawStations) this.drawStations(ctx);
       /* v3.1 补给掉落物：血包 / 能量包 / 移速包 */
       (this.pickups || []).forEach(pk => {
         const bob = Math.sin(this.t * 4 + pk.x * 0.05) * 3;
@@ -5387,7 +5701,9 @@
         if (f.stealthT > 0 && !f.dead) {
           const flash = !f._ghostNoFlash && f.stealthT > 1.6 && f.stealthT <= 2.0;
           if (f !== meHero && !flash) return;        // 别人视角：完全看不见
-          ctx.save(); ctx.globalAlpha = flash ? 1 : 0.45;
+          /* v3.9.1 停电夜战里全员一直在隐身状态，再压到 45% 就黑得看不见自己了，
+           * 这里按模式给个更实心的自视角——黑幕本来就够暗了。 */
+          ctx.save(); ctx.globalAlpha = flash ? 1 : (this.rule === "blackout" ? 0.85 : 0.45);
         }
         // 王从天降：飞天阶段整体上移
         if (f.kingRise > 0) {
@@ -5418,12 +5734,12 @@
           ctx.beginPath(); ctx.ellipse(f.x, f.y, 24, 9, 0, 0, TAU); ctx.stroke(); ctx.restore();
         }
         // 名字（阵营模式在名字前加彩色圆点，霸主加皇冠；自己标「你」，不再一律显示「勇者」）
-        const TM = LD.TEAM_COLORS || ["#f87171", "#fbbf24", "#60a5fa", "#34d399"];
+        /* v3.9：走 LD.teamColor，塔防的红 / 蓝两队不再被四队配色染成黄名 */
         const meF2 = this.hero(this.mySide == null ? 0 : this.mySide);
         ctx.save(); ctx.font = "600 11px system-ui"; ctx.textAlign = "center";
         const baseNm = f.name || (f.side === 0 ? "房主" : "玩家" + (f.side + 1));
         const nm = (meF2 && meF2 === f) ? "你 · " + baseNm : baseNm;
-        const dot = (f.team != null && f.team >= 0 && f.team < TM.length && !f.isZombie) ? TM[f.team] : null;
+        const dot = (f.team != null && f.team >= 0 && !f.isZombie) ? (LD.teamColor ? LD.teamColor(f.team) : (LD.TEAM_COLORS || [])[f.team]) : null;
         const label = ((f.overlord || f.huntRole === "hunter") ? "👑 " : "") + nm;
         ctx.fillStyle = f.isZombie ? "rgba(163,230,53,.95)" : (dot || (f.side === 0 ? "rgba(159,230,247,.9)" : "rgba(255,170,180,.9)"));
         ctx.fillText(label, f.x, f.y + 20);
@@ -5509,6 +5825,9 @@
         ctx.restore();
       }
     }
+    /* v3.9.1 停电夜战：全屏黑幕。画在战斗内容与屏幕边缘指示箭头之上、
+     * 倒计时与「被糊住了」提示之下——黑幕该盖住场上的人，但不该盖住提示文字。 */
+    if (this.drawNight) this.drawNight(ctx, W, H);
     ctx.restore();
     FX.drawFlash(ctx, W, H);
 

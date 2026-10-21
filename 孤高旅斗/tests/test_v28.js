@@ -410,12 +410,12 @@ console.log("=== 16. 手机端索敌按钮 ===");
 }
 
 /* ============================================================ */
-console.log("=== 17. 模式称号：十一种模式各自获胜 10 次 ===");
+console.log("=== 17. 模式称号：十四种模式各自获胜 10 次 ===");
 {
   const RULE_IDS = LD.RULES.map(r => r.id);
-  check("成就 20 项 / 称号 20 个", LD.ACHIEVEMENTS.length === 20 && LD.TITLES.length === 20,
+  check("成就 25 项 / 称号 25 个（v4.9 新增僵尸守房）", LD.ACHIEVEMENTS.length === 25 && LD.TITLES.length === 25,
     LD.ACHIEVEMENTS.length + " / " + LD.TITLES.length);
-  check("十一种模式各有一个专属称号", RULE_IDS.every(id => LD.TITLES.some(t => t.ach === id + "_win")),
+  check("十四种模式各有一个专属称号", RULE_IDS.every(id => LD.TITLES.some(t => t.ach === id + "_win")),
     LD.TITLES.filter(t => /_win$/.test(t.ach)).map(t => t.name + "(" + t.ach.replace("_win", "") + ")").join(" "));
   check("统一门槛：获胜 10 次", LD.MODE_TITLE_WINS === 10, LD.MODE_TITLE_WINS);
   check("三个旧称号仍在（擂台霸主 / 荒野猎人 / 热身达人）",

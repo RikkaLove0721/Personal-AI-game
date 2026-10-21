@@ -376,7 +376,7 @@
       '<h3>房间设置</h3>',
       '<ul>',
       '<li>房间界面已精简：模式按钮与修饰符按钮<b>悬停鼠标</b>可看到介绍；「⏱ 时间」「🗺 地图」两个按钮点开小窗编辑。</li>',
-      '<li><b>对局时间</b>（60 / 120 / 180 秒）只有经典乱斗、阵营、追猎、热身、世界末日会用到；缩圈由毒圈计时，霸主 / 天外来物不限时，丧尸危机打到只剩一人，车轮战每场固定 60 秒。</li>',
+      '<li><b>对局时间</b>（60 / 120 / 180 / 240 / 300 秒）只有经典乱斗、阵营、追猎、热身、世界末日会用到；缩圈由毒圈计时，霸主 / 天外来物不限时，丧尸危机打到只剩一人，车轮战每场固定 60 秒。</li>',
       '<li><b>地图配置</b>：先选预设（全部随机 / 雨林 / 沙漠 / 废墟 / 雪原 / 竞技场 / 熔炉 / 城市），再用 15 条滑条微调各类设施数量（0 = 不生成）：实心柱、可破坏箱、可推动方块、围栏、草丛（站进去隐身）、炸药桶（打爆原地爆炸）、汽车（多格可推）、水池（减速）、轮胎（很轻）、补给箱（打破掉血包 / 能量 / 移速）、路障、建筑（石墙房间）、柜子（可躲藏）、泥土（可搬起投掷）、吹风机（持续喷风）。位置每局随机。</li>',
       '<li>联机房间里以上配置由房主设定，客机只能看到摘要。</li>',
       '</ul>',
@@ -388,9 +388,12 @@
       '<li><b>天外来物</b>：开局只有普攻，技能与大招全靠天上降落。每 10 秒落一个技能、每 20 秒落一个大招（降落 2 秒后可拾取），走到掉落物旁按 <span class="k">P</span> 拾取：技能进 K/L 两格，两格都满时替换<b>最早获得</b>的那个；大招替换当前大招，被换下的会留在原地。最后活着的人获胜。AI 也会捡。</li>',
       '<li><b>缩圈乱斗</b>：开局也只有普攻，技能与大招靠天上掉落——场上最多同时 6 个技能、3 个大招，而且有一半概率<b>落在圈外</b>，想捡就得冒着中毒的风险出去。地图上只有 4 个大圈是安全区、其余全是毒；安全圈会一个个消失并持续缩小，最后只剩一个小圈逼大家正面开打。圈外每 0.5 秒掉 5 血，但圈外也会掉<b>血包</b>。最后活着的人获胜。</li>',
       '<li><b>丧尸危机</b>：<b>不限时</b>，场地不断刷出<b>僵尸</b>（100 血、移速 110%，固定「突刺 + 撕咬」两个技能，没有普攻、大招和闪避）。僵尸专盯玩家。你可以绕开它们，也可以杀掉爆<b>局内金币</b>（僵尸 1 枚 / 只、玩家 3 枚 / 人）；点战斗界面右上角的 <span class="k">🛒 商店</span> 按钮（电脑按 <span class="k">B</span>）打开<b>局内商店</b>，花 3 金币买血包、血量加成或移速加成（移速最多叠 3 次）。商店开着时战斗<b>不会暂停</b>，商品只在当局有效。打到只剩一人即获胜。</li>',
-      '<li><b>世界末日</b>：所有玩家<b>同一阵容、互不伤害</b>，出生在地图正中的<b>石墙庇护所</b>里（左右各一个两格宽门洞）。庇护所外会不断刷出僵尸，<b>存活玩家越多刷得越快</b>，僵尸会直冲门洞闯进来；<b>门洞外有一圈青色减速带</b>，僵尸进圈后移速减半。墙外是红圈，待在外面每 0.6 秒掉 4 血。对僵尸造成的伤害与击杀都计入个人分数（1 伤 = 1 分、击杀 +10 分），击杀还掉局内金币，可按 <span class="k">B</span> 买血包 / 血量 / 移速 / 能量球。最后存活的玩家获胜；时间到时仍有多人存活，则<b>分数最高者获胜</b>（不看剩余血量）。</li>',
+      '<li><b>世界末日</b>：所有玩家<b>同一阵容、互不伤害</b>，出生在地图左端的<b>圆形小岛</b>上——四周全是深渊，岛缘就是墙。中间一条 10 格长、2 格宽的<b>独木桥</b>通向右大陆：僵尸从大陆不断刷出（存活玩家越多刷得越快），<b>过桥移速 -70%</b>，守桥清怪是主业。<b>整块右大陆是危险区</b>（等同缩圈乱斗的圈外），站上去每 0.5 秒掉 5 血，头顶会亮「☠ 危险区」；回到岛上每秒回血 7。对僵尸造成的伤害与击杀都计入个人分数（1 伤 = 1 分、击杀 +10 分），击杀还掉局内金币，可按 <span class="k">B</span> 买血包 / 血量 / 移速 / 能量球，还能买<b>栅栏 / 枪台 / 炮台</b>守桥（枪台炮台会吸引僵尸仇恨）。最后存活的玩家获胜；时间到时仍有多人存活，则<b>分数最高者获胜</b>（不看剩余血量）。</li>',
       '<li><b>车轮战</b>：排队单挑，擂台上每次只有两人对决，败者永久出局，胜者回血 30% 迎接下一位挑战者。（仅本地面板可用）</li>',      '<li><b>追猎时刻</b>：开局<b>随机抽一名玩家当猎人</b>——先播一段猎人特写，猎人头顶加皇冠、血量 <b>800</b>、全部 CD 减半，且<b>伤害随存活幸存者数提升</b>（每多一名 +20%）；其余人是生存者，各自保留自己选的技能、互相同队。开场就有一个大毒圈并缓慢收缩（90 秒过去仍有大片走位空间）。猎人要在 90 秒内清场，生存者撑到倒计时结束就赢。</li>',
-      '<li><b>乱斗热身</b>：限时刷分。对局时长在房间界面的「对局时间」里统一选 <b>60 / 120 / 180 秒</b>，阵亡不淘汰、1.6 秒后在随机位置复活，每次击杀得 1 分，时间到分数最高者获胜。不计回合、没有淘汰，纯粹练手。</li>',
+      '<li><b>乱斗热身</b>：限时刷分。对局时长在房间界面的「对局时间」里统一选 <b>60 / 120 / 180 / 240 / 300 秒</b>，阵亡不淘汰、1.6 秒后在随机位置复活，每次击杀得 1 分，时间到分数最高者获胜。不计回合、没有淘汰，纯粹练手。</li>',
+      '<li><b>护送情报箱</b>：两队对抗（房间界面选红队 / 蓝队，默认 2 队）。场地正中会反复投放一个<b>情报箱</b>，任何英雄<b>走到箱子旁边自动抱起</b>（不用按键）；抱着箱子走进<b>敌方交付点</b>（地图左右两侧的红 / 蓝大圈）得 <b>1 分</b>。抱箱期间<b>移速降 8%</b>，而且头顶有金色标记与指向敌方基地的虚线，是全场最显眼的活靶子，得靠队友开路。持箱者阵亡时箱子<b>掉在原地</b>，0.8 秒保护期过后任何人都能捡。先到 <b>3 分</b>直接获胜；时间到比分高者胜，同分则比两队剩余总血量。该模式<b>没有大招限制</b>，配装、商店与常规对局一致。</li>',
+      '<li><b>占点争夺</b>：两队对抗（房间界面选红队 / 蓝队）。地图 <b>2400×2400</b>，每局随机生成 <b>3~5 座据点</b>，其中最大的据点永远在地图正中（权重 ×2）。站进圈内开始读条占领，<b>人越多越快</b>：空据点单人 <b>5 秒</b>，抢敌方已经占下的据点要花<b>两倍时间</b>（10 秒）；双方都在圈里则僵持，谁也推不动。占领后据点持续产分，大点 2 分/秒、小点 1 分/秒，先到 <b>80 分</b>获胜；圈里没人时，对方留下的占领进度会缓慢回落。据点被占领后中心会升起一座<b>炮塔</b>（1200 血、伤害 26、攻速 1.05，射程就等于据点半径），只打敌方角色；据点易主时炮塔跟着换攻击目标、<b>血量不变</b>，被拆掉后本局永久消失。阵亡后在本方基地复活：首次 <b>3 秒</b>，之后每死一次 <b>+3 秒</b>（最多 24 秒），基地圈内每秒回复 5% 最大生命。时间到比分高者胜，同分则比两队剩余总血量。</li>',
+      '<li><b>碰碰车竞技</b>：圆形擂台，台外全是水池，开局每人自动坐上一辆碰碰车（电力无限，车上不能用技能，普攻只是喇叭）。开车对撞时<b>接近速度越快，伤害和击退越大</b>，主动撞人的一方也会吃到 35% 的反伤。把对手的车<b>撞爆 +2 分</b>、直接把他<b>顶出擂台 +3 分</b>，先到 <b>12 分</b>获胜。撞爆的车 4 秒后重生，掉进水里的人 2.4 秒后回到擂台中心并重新发车。诀窍是：绕到侧面撞、把人往边缘推，同时别让自己顺着惯性滑出去。</li>',
       '<li><b>塔防对战</b>：3v3 单线推塔，<b>没有时间限制</b>，一直打到一方水晶爆掉。地图 2800×600，左右镜像，红蓝一塔之间留出一大片中心战区。双方每 32 秒刷 6 只机器人小兵沿兵线推进，拆掉敌塔后自家小兵变强。防御塔（1200 血 / 射程 300）与水晶（2400 血 / 射程 340）会发射<b>高速追踪弹</b>，走进敌方范围时会显示一圈红圈警告；<b>防御塔没拆完水晶免疫伤害</b>。击杀小兵 / 英雄 / 助攻都给<b>局内金币</b>，按 <span class="k">B</span> 买被动装备（生命 / 攻击 / 护盾 / 能量 / 回血 / 霸体 / 闪避等，每件一次）、<b>主动装备</b>（最多 1 件，按 <span class="k">P</span> 释放）、可重复购买的<b>小兵强化</b>，以及开车时才能买的<b>汽油桶</b>（80 金，+2000 油，不限次数）。英雄 1–6 级，升级加血加伤害；阵亡后在原地立<b>墓碑</b>显示复活倒计时（<b>5 秒 + 等级 × 5 秒</b>，1 级 10 秒、5 级 30 秒），倒计时结束回基地复活，基地回血圈每秒回复 12% 生命。房间界面可以选红队 / 蓝队。</li>',
       '<li>单人「勇者格斗」的房间就是角色卡房间：第一张卡是你（可直接换装扮 / 技能），后面的人机卡可增删（最多 5 个，塔防会自动补满 5 个凑 3v3）、可选难度（木桩 / 普通 / 困难）与配装。</li>',
       '</ul>',
@@ -490,12 +493,47 @@
     if (me.overlord) myTags.push("👑 霸主");
     if (B.rule === "hunt") myTags.push(me.huntRole === "hunter" ? "👑 猎人" : "🏃 生存者");
     if (B.rule === "auction") myTags.push("<i class='coin'></i> " + (me.bcoins || 0));
-    if (B.rule === "warmup") myTags.push("得分 " + (B.wScore[B.fighters.indexOf(me)] || 0));
+    if (B.rule === "warmup") myTags.push("得分 " + Math.round(B.wScore[B.fighters.indexOf(me)] || 0));
     if (B.rule === "ring") myTags.push(B.inPoison(me.x, me.y) ? "☠ 毒圈中" : "🛡 安全区");
+    if (B.rule === "doomsday" && B.inDoomDanger)
+      myTags.push(B.inDoomDanger(me.x, me.y) ? "☠ 危险区" : "🛡 安全区");
+    if (B.rule === "escort" && B.escort)
+      myTags.push("📦 " + ((B.escort.score && B.escort.score[0]) || 0) + " : " + ((B.escort.score && B.escort.score[1]) || 0));
+    if (B.rule === "escort" && me.intel) myTags.push("抱箱中");
+    if (B.rule === "bump" && B.bump) {
+      const i = B.fighters.indexOf(me);
+      myTags.push("🚗 " + Math.round(B.bump.score[i] || 0) + " 分"
+        + (me.rideCar ? " · 车 " + Math.max(0, Math.round(me.rideCar.bumpHp || 0)) : " · 找车（按 P 上车）"));
+    }
+    if (B.rule === "capture" && B.capture) {
+      const sc = B.capture.score || [0, 0];
+      const myT = me.team > 0 ? 1 : 0;
+      const pts = B.capture.pts || [];
+      const own = pts.filter(p => p.owner === myT).length;
+      myTags.push("🚩 " + Math.round(sc[0]) + " : " + Math.round(sc[1]) + " · 据点 " + own + "/" + pts.length);
+    }
+    if (B.rule === "zombiehouse" && B.zh) {
+      const hp = Math.max(0, Math.round(B.zh.house.hp || 0));
+      const ks = B.zhScoreOf ? B.zhScoreOf(me.side) : 0;
+      const inside = Math.hypot(me.x - B.zh.house.x, me.y - B.zh.house.y) <= B.zh.house.r;
+      myTags.push("🏠 房子 " + hp + " · 击杀 " + ks + (inside ? " · 修房中" : ""));
+    }
     /* v3.9 顺序统一为 血条 → 能量条 → 击杀/死亡；塔防也要显示能量条（之前被整条跳过） */
+    /* v3.9.1 停电夜战：血量、能量之后补两条——手电筒电量与黑暗条。
+     * 黑暗条是本模式的第二条命，必须和血条并排显示，不能塞进模式信息条里。 */
+    let nightBars = "";
+    if (B.rule === "blackout") {
+      const N = LD.NIGHT || {};
+      const batMax = N.batMax || 100, bat = me.battery || 0;
+      const drkMax = N.darkMax || 15, drk = me.dark || 0;
+      /* v3.9.1 摸黑时是隐匿状态（走到公共光里就解除），所以黑暗条后缀直接把状态说清楚 */
+      nightBars = bar("电量", bat, batMax, "bat" + (bat <= (N.batLow || 20) ? " low" : ""), me.flash ? " · 开" : " · 关") +
+        bar("黑暗", drk, drkMax, "drk" + (drk >= drkMax ? " full" : ""), me.lit ? " · 受光" : " · 摸黑 · 隐匿");
+    }
     pb.innerHTML = (myTags.length ? '<div class="tag me">你 · ' + myTags.join(" · ") + '</div>' : "") +
       bar("HP", me.hp, me.maxHp, "hp") +
       bar("能量", me.energy, me.maxEnergy, "en" + (me.energy >= me.maxEnergy ? " full" : "")) +
+      nightBars +
       '<div class="kd">击杀 <b style="color:#ffd98a">' + (me.kills || 0) + '</b> · 死亡 <b style="color:#fca5a5">' + (me.deaths || 0) + '</b></div>';
     /* 敌方：除自己以外的参战者（僵尸 / 杂兵 / 分身不占血条位，只在下面报数量）
      * v2.7 修复：以前只收 kind === "hero"，导致闯关里的巨龙（kind === "dragon"）
@@ -510,7 +548,7 @@
         if (foe.overlord) tags.push("👑 霸主");
         if (foe.huntRole === "hunter") tags.push("👑 猎人");
         if (foe.huntRole === "runner") tags.push("生存者");
-        if (B.rule === "warmup") tags.push((B.wScore[B.fighters.indexOf(foe)] || 0) + " 分");
+        if (B.rule === "warmup") tags.push(Math.round(B.wScore[B.fighters.indexOf(foe)] || 0) + " 分");
         /* 霸主标记只在 crown.holder 身上：foe.overlord 由 finishCrown/stripOverlord 维护，勿按 crown.phase 全员加冠 */
         if (foe.name) tags.push(nameHtml(foe));
         if (foe.dead) tags.push(foe.respawnT > 0 && B.rule === "warmup" ? "复活中" : "已倒下");
@@ -608,10 +646,82 @@
       subs.push("🧟 僵尸 <b>" + zN + "</b> · 存活 <b>" + B.humans(true).length + "</b> · 你 <b>" + my + "</b> 分 · 最高 <b>" + top + "</b> 分"
         + " · <i class='coin'></i> <b>" + (meH ? (meH.bcoins || 0) : 0) + "</b>");
     } else if (B.rule === "warmup") {
-      const my = B.wScore[B.fighters.indexOf(B.hero(B.mySide == null ? 0 : B.mySide))] || 0;
+      const my = Math.round(B.wScore[B.fighters.indexOf(B.hero(B.mySide == null ? 0 : B.mySide))] || 0);
       let top = 0;
-      B.humans().forEach(f => { const s = B.wScore[B.fighters.indexOf(f)] || 0; if (s > top) top = s; });
-      subs.push("你 <b>" + my + "</b> 分 · 最高 <b>" + top + "</b> 分 · 阵亡后随机复活");
+      B.humans().forEach(f => { const s = Math.round(B.wScore[B.fighters.indexOf(f)] || 0); if (s > top) top = s; });
+      subs.push("你 <b>" + my + "</b> 分 · 最高 <b>" + top + "</b> 分 · 伤害计分 · 击杀 +5 · 阵亡后随机复活");
+    } else if (B.rule === "blackout") {
+      const N = LD.NIGHT || {};
+      const meH = B.hero(B.mySide == null ? 0 : B.mySide);
+      subs.push("🔦 充电站 <b>" + ((B.stations || []).length) + "</b> 座 · 手电筒 <b>" + Math.round(meH ? (meH.battery || 0) : 0) + "%</b>"
+        + " · P 开关灯，靠近充电站按住 P 充电" + (meH && meH.lit ? "" : " · 摸黑隐匿中"));
+      if (meH && !meH.dead && (meH.dark || 0) >= (N.darkMax || 15) - 0.01)
+        subs.push('<span class="warn">黑暗条已满，正在掉血——快回到光里</span>');
+      else if (meH && !meH.dead && (meH.dark || 0) >= (N.darkMax || 15) * 0.6)
+        subs.push('<span class="warn">黑暗条快满了</span>');
+    } else if (B.rule === "escort") {
+      const st = B.escort || {};
+      const sc = st.score || [0, 0];
+      const meH = B.hero(B.mySide == null ? 0 : B.mySide);
+      subs.unshift('<span class="big">红 <b style="color:#f87171">' + (sc[0] || 0) + '</b> : <b style="color:#60a5fa">' + (sc[1] || 0) + '</b> 蓝</span>');
+      subs.push("📦 先到 <b>" + ((LD.ESCORT || {}).need || 3) + "</b> 分获胜 · "
+        + (meH && meH.intel ? "抱着情报箱，冲向敌方交付点" : "去中央抢情报箱"));
+    } else if (B.rule === "capture") {
+      const st = B.capture || {};
+      const sc = st.score || [0, 0];
+      const pts = st.pts || [];
+      const own0 = pts.filter(p => p.owner === 0).length;
+      const own1 = pts.filter(p => p.owner === 1).length;
+      subs.unshift('<span class="big">红 <b style="color:#f87171">' + Math.round(sc[0] || 0) + '</b> : <b style="color:#60a5fa">' + Math.round(sc[1] || 0) + '</b> 蓝</span>');
+      subs.push("🚩 据点 <b>红 " + own0 + " / 蓝 " + own1 + "</b> · 先到 <b>" + ((LD.CAPTURE || {}).need || 80) + "</b> 分 · 大点 ×2 · 占点出炮塔");
+      const meH = B.hero(B.mySide == null ? 0 : B.mySide);
+      if (meH && !meH.dead) {
+        const myT = meH.team > 0 ? 1 : 0;
+        const inPt = pts.find(p => Math.hypot(meH.x - p.x, meH.y - p.y) <= p.r);
+        if (inPt) {
+          const enemyIn = myT === 0 ? inPt.c1 > 0 : inPt.c0 > 0;
+          const mateIn = myT === 0 ? inPt.c0 : inPt.c1;
+          subs.push(inPt.owner === myT
+            ? "站在 <b>" + inPt.name + "</b> 圈内（己方据点）"
+            : enemyIn ? '<span class="warn">据点 ' + inPt.name + ' 正在争夺，把敌人赶出去</span>'
+              : "正在占领 <b>" + inPt.name + "</b> · 圈内己方 " + mateIn + " 人"
+                + (inPt.owner >= 0 ? " · 抢点耗时 ×2" : ""));
+        } else {
+          subs.push("离开据点圈了——去抢地图上的据点" + (((LD.CAPTURE || {}).turret) ? "（占下来会升起炮塔）" : ""));
+        }
+      }
+    } else if (B.rule === "bump") {
+      const st = B.bump || {};
+      const meH = B.hero(B.mySide == null ? 0 : B.mySide);
+      const rows = B.fighters.map((f, i) => ({ f: f, s: (st.score && st.score[i]) || 0 }))
+        .filter(x => x.f && x.f.kind === "hero").sort((a, b) => b.s - a.s);
+      subs.unshift('<span class="big">' + rows.slice(0, 3).map(x =>
+        (x.f.name || ("玩家" + (x.f.side + 1))) + ' <b>' + x.s + '</b>').join(" · ") + '</span>');
+      subs.push("🚗 先到 <b>" + ((LD.BUMP || {}).need || 12) + "</b> 分 · 撞爆车 <b>+" + ((LD.BUMP || {}).scoreWreck || 2)
+        + "</b> · 撞出擂台 <b>+" + ((LD.BUMP || {}).scoreDunk || 3) + "</b> · 车速越快撞得越狠");
+      if (meH && !meH.dead) {
+        if (meH.rideCar) {
+          const k = Math.max(0, meH.rideCar.bumpHp || 0) / (meH.rideCar.bumpMax || 1);
+          subs.push(k > 0.3 ? "车况 <b>" + Math.round(k * 100) + "%</b> · 别贴着边缘开"
+            : '<span class="warn">车快散架了——先拉开距离，等它报废后换一辆</span>');
+        } else {
+          subs.push('<span class="warn">没车！走到碰碰车旁按 P 上车</span>');
+        }
+      }
+    } else if (B.rule === "zombiehouse" && B.zh) {
+      const Z = LD.ZOMBIEHOUSE || {};
+      const H = B.zh.house;
+      const wv = B.zh.wave || 0, tot = Z.waves || 5;
+      const pct = Math.round(Math.max(0, H.hp) / (H.maxHp || 1) * 100);
+      if (B.zh.phase === "gap") {
+        subs.push("🏠 第 <b>" + (wv + 1) + "</b> / " + tot + " 波 · 准备中 <b>"
+          + Math.max(0, Math.ceil(B.zh.gapT || 0)) + "</b> 秒 · 站在房子里修房");
+      } else {
+        const left = (B.zh.queue || 0) + B.fighters.filter(f => f.isZombie && !f.dead).length;
+        subs.push("🏠 第 <b>" + wv + "</b> / " + tot + " 波 · 本波剩余僵尸 <b>" + left + "</b>");
+      }
+      subs.push(pct > 50 ? "房子耐久 <b>" + pct + "%</b> · 别放僵尸贴上来"
+        : '<span class="warn">房子耐久只剩 <b>' + pct + "%</b> —— 快清怪，趁喘息期站回房里</span>");
     } else if (B.rule === "relay" && B.relay) {
       const onStage = B.fighters.filter(f => f.kind === "hero" && !f.dead && !f.bench);
       subs.push("擂台上 " + onStage.map(f => f.name).join(" vs ") + " · 剩余 " + B.fighters.filter(f => f.kind === "hero" && !f.dead).length + " 人");
@@ -658,11 +768,10 @@
       '<div class="bartrack ' + cls + '"><div class="barfill" style="transform:scaleX(' + p + ')"></div>' +
       '<div class="bartxt">' + Math.ceil(v) + " / " + Math.round(max) + (extra || "") + '</div></div></div>';
   }
-  /* v3.8 塔防：红队红名、蓝队蓝名 */
+  /* v3.8 塔防：红队红名、蓝队蓝名（统一走 LD.teamColor，别再各写一套） */
   function teamColor(f) {
     if (!f || f.team == null || f.team < 0) return null;
-    if (B.rule === "tower") return f.team === 1 ? "#60a5fa" : "#f87171";
-    return (LD.TEAM_COLORS && LD.TEAM_COLORS[f.team]) || null;
+    return (LD.teamColor && LD.teamColor(f.team)) || null;
   }
   function nameHtml(f) {
     const c = teamColor(f);
@@ -856,7 +965,7 @@
     }
     if (B.rule === "warmup") {
       scoreTxt = B.humans().map(f => {
-        const s = B.wScore[B.fighters.indexOf(f)] || 0;
+        const s = Math.round(B.wScore[B.fighters.indexOf(f)] || 0);
         return (f.name || ("玩家" + (f.side + 1))) + " " + s;
       }).join(" · ");
     }

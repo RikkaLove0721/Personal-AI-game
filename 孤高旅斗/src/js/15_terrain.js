@@ -153,6 +153,7 @@
   T.build = function (srcCfg, world, avoid) {
     const cfg = LD.mapCfg(srcCfg);
     world = world || (LD.WORLD || { w: 1600, h: 1600, pt: 120 });
+    T.doomLand = null;          // v4.0：非末日地图一律不带陆地约束，避免上一局残留污染
     const cols = Math.max(8, Math.floor(world.w / TILE));
     const rows = Math.max(8, Math.floor((world.h - world.pt) / TILE));
     let best = null;
@@ -323,47 +324,105 @@
    *   在半径 r 的环带上按 40px 格子铺满石墙块，左右各留一个两格宽门洞。
    *   纯几何推导、无随机数，联机两端各自构建结果完全一致。
    * ---------------------------------------------------------- */
-  T.buildShelter = function (map, world, opt) {
+  /* ---------------------------------------------------------- v4.0 世界末日：悬崖地图
+   *   陆地只有三块：左边小岛（庇护所）、中间独木桥、右边大陆（僵尸区），
+   *   三块之外一律是悬崖 —— 不铺地面、不摆设施、人走进去会被夹回来。
+   *   纯几何推导、无随机数，联机两端各自构建结果完全一致。
+   * ---------------------------------------------------------- */
+  T.doomLand = null;
+  T.buildDoomsday = function (map, world) {
     if (!map) return null;
     const D = LD.DOOMSDAY || {};
-    const o = opt || {};
     const tile = TILE;
-    const cx = world.w / 2;
-    const cy = (world.pt + world.h) / 2;
-    const r = o.r != null ? o.r : (D.r || 280);
-    const gapW = (o.gap != null ? o.gap : (D.gap || 2)) * tile;    // 门洞高度（像素）
-    const mat = (LD.TERRAIN.mats.solid || []).find(m => m.id === (o.mat || "wall_stone"))
-      || (LD.TERRAIN.mats.solid || [])[0] || { id: "stone", shape: "square", elev: 30, mass: 3 };
-    /* 清场：房间会把自己的地图配置传进来，随机设施可能正好堵死门洞、或在城里塞满箱子。
-     * 环带（城内 + 墙体所在格）与左右门洞的进出走廊一律清空，纯几何判定、两端一致。 */
+    const W = D.world || world || { w: 2600, h: 1180, pt: 70 };
+    const cy = Math.round((W.pt + W.h) / 2);
+    const ir = (D.island || {}).r || 320;
+    const ix = (D.island || {}).x != null ? (D.island || {}).x : ir + 80;
+    const blen = ((D.bridge || {}).len || 10) * tile;          // 10 格 = 400px
+    const bwid = ((D.bridge || {}).wide || 2) * tile;          // 2 格 = 80px
+    const e0 = ix + ir;                 // 桥的可见起点：正好贴着岛的右缘
+    const e1 = e0 + blen;                // 桥的可见终点：正好贴着大陆的左缘
+    /* 桥的碰撞区两端各往陆地里埋 40px：否则「留白收缩」后岛与桥之间会出现一道谁都过不去的缝 */
+    const land = {
+      island: { x: ix, y: cy, r: ir },
+      bridge: { x0: e0 - 40, x1: e1 + 40, y0: cy - bwid / 2, y1: cy + bwid / 2,
+                vx0: e0, vx1: e1 },
+      main: { x0: e1, y0: W.pt, x1: W.w, y1: W.h },
+      edge: D.edge || 26, bedge: D.bridgeEdge != null ? D.bridgeEdge : 10,
+      tile: tile, world: { w: W.w, h: W.h, pt: W.pt }
+    };
+    T.doomLand = land;
+
+    /* 清场：悬崖上的设施一律铲掉（不然树和箱子会浮在虚空里），
+     * 桥面与两个桥头全清空，岛内只留几件不挡路的装饰。 */
+    const inLand = (x, y) =>
+      Math.hypot(x - ix, y - cy) <= ir ||
+      (x >= land.bridge.x0 - 20 && x <= land.bridge.x1 + 20 && Math.abs(y - cy) <= bwid / 2 + 20) ||
+      (x >= land.main.x0 && x <= land.main.x1 && y >= land.main.y0 && y <= land.main.y1);
+    let deco = 0;
     map.props = (map.props || []).filter(p => {
-      const dx = p.x - cx, dy = p.y - cy;
-      if (Math.hypot(dx, dy) < r + tile * 0.75) return false;                     // 城内 + 墙带
-      if (Math.abs(dy) < gapW / 2 + 14 && Math.abs(dx) < r + 150) return false;   // 门洞走廊
+      if (!inLand(p.x, p.y)) return false;
+      if (Math.abs(p.y - cy) <= bwid / 2 + 30 && p.x >= land.bridge.x0 - 30 && p.x <= land.bridge.x1 + 30) return false;
+      if (Math.hypot(p.x - ix, p.y - cy) <= ir) {
+        if (p.blockMove && p.kind !== "barrel" && p.kind !== "tire") return false;   // 岛上不留挡路的大件
+        return deco++ < 5;
+      }
       return true;
     });
-    let uid = 900000;
-    for (let row = 0; row < map.rows; row++) {
-      for (let col = 0; col < map.cols; col++) {
-        const x = col * tile + tile / 2;
-        const y = world.pt + row * tile + tile / 2;
-        if (Math.abs(Math.hypot(x - cx, y - cy) - r) > tile * 0.5) continue;   // 只取环带
-        /* 左右门洞：水平轴上下各留半个门宽（两格 = 80px），其余环带照常砌墙 */
-        if (Math.abs(y - cy) < gapW / 2 && Math.abs(Math.abs(x - cx) - r) < tile) continue;
-        map.props.push({
-          uid: uid++, kind: "solid", mat: mat.id, shape: mat.shape || "square",
-          cw: 1, ch: 1, w: tile, h: tile, x: x, y: y, ox: x, oy: y,
-          elev: mat.elev || 32, mass: mat.mass || 3,
-          hp: 0, maxHp: 0, dead: false, flash: 0,
-          vx: 0, vy: 0, free: false, glow: null,
-          boomR: 150, boomDmg: 40, variant: (col * 37 + row * 71) % 997,
-          soft: false, blockMove: true, blockProj: true
-        });
-        if (map.occ && map.occ[row]) map.occ[row][col] = 1;
+    /* occ 重标：清理之后必须同步，否则 AI 会绕着一堆已经不存在的障碍走 */
+    const top = map.top != null ? map.top : W.pt;
+    if (map.occ) {
+      for (let r = 0; r < map.rows; r++) {
+        const row = map.occ[r];
+        if (row) for (let c = 0; c < row.length; c++) row[c] = 0;
       }
+      map.props.forEach(p => {
+        if (!p.blockMove) return;
+        const c0 = Math.max(0, Math.floor((p.x - p.w / 2) / tile));
+        const c1 = Math.min(map.cols - 1, Math.floor((p.x + p.w / 2 - 1) / tile));
+        const r0 = Math.max(0, Math.floor((p.y - p.h / 2 - top) / tile));
+        const r1 = Math.min(map.rows - 1, Math.floor((p.y + p.h / 2 - 1 - top) / tile));
+        for (let r = r0; r <= r1; r++) if (map.occ[r]) for (let c = c0; c <= c1; c++) map.occ[r][c] = 1;
+      });
     }
-    return { x: cx, y: cy, r: r,
-      gaps: [{ x: cx + r, y: cy }, { x: cx - r, y: cy }], tile: tile };
+    /* v4.0 起庇护所不砌墙：岛缘本身就是墙（崖壁与亮边由 V.doomChasm 绘制），
+     * 早期版本在岛缘摆过一圈碎石当视觉提示，实机看就是一堵灰墙，已删。 */
+    return { x: ix, y: cy, r: ir, land: land };
+  };
+  /** v4.0 悬崖：点是否踩在陆地上（留白之内） */
+  T.landAt = function (x, y) {
+    const L = T.doomLand;
+    if (!L) return true;
+    const e = L.edge || 26, be = L.bedge || 10;
+    if (Math.hypot(x - L.island.x, y - L.island.y) <= L.island.r - e) return true;
+    const b = L.bridge;
+    if (x >= b.x0 + be && x <= b.x1 - be && y >= b.y0 + be && y <= b.y1 - be) return true;
+    const m = L.main;
+    return x >= m.x0 + e && x <= m.x1 - e && y >= m.y0 + e && y <= m.y1 - e;
+  };
+  /**
+   * v4.0 悬崖：把点拉回最近的陆地；已经在陆地上则返回 null。
+   * 三块地各做一次投影（圆上取半径方向、矩形直接 clamp），取挪动最少的那个，
+   * 这样贴着崖边斜着走会沿边界滑动，而不是被弹回原地。
+   */
+  T.landFit = function (x, y) {
+    const L = T.doomLand;
+    if (!L || T.landAt(x, y)) return null;
+    const e = L.edge || 26, be = L.bedge || 10;
+    const isl = L.island, b = L.bridge, m = L.main;
+    const dx = x - isl.x, dy = y - isl.y, d = Math.hypot(dx, dy) || 1;
+    const rr = Math.max(24, isl.r - e);
+    const cand = [
+      { x: isl.x + dx / d * rr, y: isl.y + dy / d * rr },
+      { x: Math.max(b.x0 + be, Math.min(b.x1 - be, x)), y: Math.max(b.y0 + be, Math.min(b.y1 - be, y)) },
+      { x: Math.max(m.x0 + e, Math.min(m.x1 - e, x)), y: Math.max(m.y0 + e, Math.min(m.y1 - e, y)) }
+    ];
+    let best = cand[0], bd = Infinity;
+    for (const p of cand) {
+      const dd = Math.hypot(p.x - x, p.y - y);
+      if (dd < bd) { bd = dd; best = p; }
+    }
+    return best;
   };
 
   /* ----------------------------------------------------------
@@ -437,6 +496,57 @@
       { x: W.w - 620, y: sy, r: 120 }, { x: W.w - 1120, y: sy, r: 120 }
     ];
     const kinds = ["solid", "breakable", "bush", "barrel", "car", "barricade", "pushable", "tire"];
+    /* 车四周至少留这么多净空：普通地图每格强制 1 格（40px），塔防这套原本只有 16px，
+     * 车开出十几个像素就顶到旁边的箱子 / 桶，玩家会以为「坦克根本开不动」。 */
+    const CAR_PAD = 56;
+    const carSpotOK = (x, y, w, h) => {
+      if (Math.abs(y - cy) < 86 + h / 2) return false;      // 不占兵线走廊（按车高留够）
+      if (near(x, y, keepOut, 70)) return false;            // 不贴着塔 / 水晶
+      if (y - h / 2 < W.pt + 8 || y + h / 2 > W.h - 8) return false;
+      const clashC = (px, py) => props.some(o => {
+        const need = Math.max(CAR_PAD, o.kind === "car" ? CAR_PAD : 16);
+        return Math.abs(o.x - px) < (o.w + w) / 2 + need && Math.abs(o.y - py) < (o.h + h) / 2 + need;
+      });
+      return !clashC(x, y) && !clashC(W.w - x, y);
+    };
+    const mkCarPair = (x, y, cw, ch) => {
+      const carMat = pickMat("car") || (mats.car || [])[0];
+      if (!carMat) return false;
+      const VC = LD.VEHICLES || {};
+      const ids = carMat.vehicle ? [carMat.vehicle] : ["sedan", "van"];
+      if (rnd() < 0.16) ids.push("tank");
+      if (rnd() < 0.20) ids.push("bus");
+      const vc = VC[ids[Math.floor(rnd() * ids.length)]] || VC.sedan || { speed: [1.2, 1.7], fuel: [2000, 6000] };
+      /* 左右两侧共用一份参数，保证镜像位置是同一车型 / 同一油量 */
+      const fuelMax = Math.round(vc.fuel[0] + rnd() * (vc.fuel[1] - vc.fuel[0]));
+      const speedMul = vc.speed[0] + rnd() * (vc.speed[1] - vc.speed[0]);
+      const w = cw * TILE, h = ch * TILE;
+      [x, W.w - x].forEach(px => {
+        const o = {
+          uid: uid++, kind: "car", mat: carMat.id, shape: carMat.shape || "square",
+          cw, ch, w, h, x: px, y, ox: px, oy: y,
+          elev: carMat.elev || 26, mass: carMat.mass || 3,
+          hp: 0, maxHp: 0, dead: false, flash: 0, vx: 0, vy: 0, free: false,
+          glow: carMat.glow || null, boomR: 0, boomDmg: 0, variant: (px + y) % 997, soft: false,
+          blockMove: true, blockProj: true,
+          vtype: vc.id, fuelMax: fuelMax, fuel: fuelMax, speedMul: speedMul,
+          ramCd: 0, hornCd: 0, cannonCd: 0, driver: null
+        };
+        props.push(o); mark(o);
+      });
+      return true;
+    };
+    /* v3.9：车必须在其它设施**之前**落位。放在后面的话只能往剩余缝隙里塞，
+     * 而后面每放一个箱子都会主动避开已存在的车（clash 里取 max），这样两边都宽松。 */
+    for (let k = 0; k < 120; k++) {
+      const ch = rnd() < 0.5 ? 2 : 1, cw = 2;
+      const x = 420 + rnd() * 620;
+      const y = W.pt + 60 + rnd() * (W.h - W.pt - 130);
+      if (!carSpotOK(x, y, cw * TILE, ch * TILE)) continue;
+      mkCarPair(x, y, cw, ch);
+      break;
+    }
+
     let placed = 0;
     for (let i = 0; i < 90 && placed < 9; i++) {
       const kind = kinds[Math.floor(rnd() * kinds.length)];
@@ -444,18 +554,26 @@
       if (!mat) continue;
       const x = 420 + rnd() * 620;                      // 左半区，镜像到右半区
       const y = W.pt + 60 + rnd() * (W.h - W.pt - 130);
-      if (Math.abs(y - cy) < 86) continue;              // 兵线走廊保持畅通
-      if (near(x, y, keepOut, 40)) continue;
+      /* v3.9 车要留出「能开出去」的余量：车宽 80，只留 16px 的话
+       * 开出去十几个像素就顶到旁边的箱子 / 桶上，玩家会觉得「坦克根本开不动」。
+       * 普通地图每格都强制 1 格净空（40px），塔防这套只留 16，所以车要单独加宽。 */
+      const isCar = kind === "car";
+      if (Math.abs(y - cy) < (isCar ? 110 : 86)) continue;   // 兵线走廊保持畅通
+      if (near(x, y, keepOut, isCar ? 70 : 40)) continue;
       const def = LD.TERRAIN.types[kind] || {};
       let cw = 1, ch = 1;
-      if (kind === "car") { cw = 2; ch = rnd() < 0.5 ? 2 : 1; }
+      if (isCar) { cw = 2; ch = rnd() < 0.5 ? 2 : 1; }
       if (kind === "barricade") { cw = 2; ch = 1; }
       if (kind === "bush") { cw = 2; ch = 2; }
       if (kind === "tire") { cw = 1; ch = 1; }
       const w = cw * TILE, h = ch * TILE;
       /* 新设施不能和已有设施叠在一起（叠住的车会把 AI 夹在中间） */
-      const clash = (px, py) => props.some(o =>
-        Math.abs(o.x - px) < (o.w + w) / 2 + 16 && Math.abs(o.y - py) < (o.h + h) / 2 + 16);
+      const pad = isCar ? CAR_PAD : 16;
+      /* 反过来也要算：后来放的小箱子不能贴到先放好的车上，否则车照样卡死 */
+      const clash = (px, py) => props.some(o => {
+        const need = Math.max(pad, o.kind === "car" ? CAR_PAD : 16);
+        return Math.abs(o.x - px) < (o.w + w) / 2 + need && Math.abs(o.y - py) < (o.h + h) / 2 + need;
+      });
       if (clash(x, y) || clash(W.w - x, y)) continue;
       /* 车辆参数先在镜像前定好，保证左右两侧是同一车型 / 同一油量 */
       let carCfg = null;
@@ -496,28 +614,13 @@
       placed++;
     }
 
-    /* 保证至少刷一对车（有概率是坦克），否则随机池可能一辆车都不出 */
+    /* 兜底：随机池一辆车都没出时，至少保证有一对能开动的车 */
     if (!props.some(o => o.kind === "car")) {
-      const carMat = (mats.car || []).find(m => m.id === "car_red") || (mats.car || [])[0];
-      for (let k = 0; k < 40 && carMat; k++) {
-        const x = 480 + rnd() * 480, y = W.pt + 70 + rnd() * (W.h - W.pt - 150);
-        if (Math.abs(y - cy) < 86 || near(x, y, keepOut, 40)) continue;
-        const VC = LD.VEHICLES || {};
-        const vc = (rnd() < 0.4 ? VC.tank : (rnd() < 0.5 ? VC.van : VC.sedan)) || VC.sedan || { speed: [1.2, 1.7], fuel: [2000, 6000] };
-        [x, W.w - x].forEach(px => {
-          const o = {
-            uid: uid++, kind: "car", mat: carMat.id, shape: "square", cw: 2, ch: 2,
-            w: 80, h: 80, x: px, y, ox: px, oy: y, elev: carMat.elev || 26, mass: carMat.mass || 3,
-            hp: 0, maxHp: 0, dead: false, flash: 0, vx: 0, vy: 0, free: false,
-            glow: null, boomR: 0, boomDmg: 0, variant: 7, soft: false,
-            blockMove: true, blockProj: true,
-            vtype: vc.id, fuelMax: Math.round(vc.fuel[0] + rnd() * (vc.fuel[1] - vc.fuel[0])),
-            speedMul: vc.speed[0] + rnd() * (vc.speed[1] - vc.speed[0]),
-            ramCd: 0, hornCd: 0, cannonCd: 0, driver: null
-          };
-          o.fuel = o.fuelMax;
-          props.push(o); mark(o);
-        });
+      for (let k = 0; k < 120; k++) {
+        const x = 420 + rnd() * 620;
+        const y = W.pt + 60 + rnd() * (W.h - W.pt - 130);
+        if (!carSpotOK(x, y, 80, 80)) continue;
+        mkCarPair(x, y, 2, 2);
         break;
       }
     }
@@ -851,6 +954,10 @@
       o.shotT = o.shotT || 0;
       if (LD.Battle && LD.Battle.structureDamaged) LD.Battle.structureDamaged(o, dmg, opt);
     }
+    /* v4.7 占点炮塔：沿用塔防的「英雄拆建筑倍率」，否则 1200 血要磨太久 */
+    if (o.capTurret && dmg > 0 && opt.src && opt.src.kind === "hero") {
+      dmg = Math.round(dmg * ((LD.TOWER && LD.TOWER.structDmgMul) || 1));
+    }
     /* v3.5 车体受击也会漏油：1 点伤害 = 20 可行驶距离 */    if (o.kind === "car" && dmg > 0 && (o.fuel || 0) > 0) {
       const per = (LD.VEHICLE_CFG && LD.VEHICLE_CFG.fuelPerDmg) || 20;
       o.fuel = Math.max(0, o.fuel - dmg * per);
@@ -906,6 +1013,9 @@
     /* v3.7 塔防：防御塔 / 水晶被打掉 → 交给战斗层结算金币、兵线强化与胜负 */
     if ((o.kind === "tower" || o.kind === "crystal") && LD.Battle && LD.Battle.onStructureBroken)
       LD.Battle.onStructureBroken(o);
+    /* v4.7 占点争夺：据点炮塔被拆掉 → 通知战斗层（本局不再重建） */
+    if (o.capTurret && LD.Battle && LD.Battle.captureTurretBroken)
+      LD.Battle.captureTurretBroken(o);
   };
 
   /* ==========================================================

@@ -443,6 +443,53 @@ console.log("\n=== 7.6 v3.9 无兵线不顶塔 / 塔下挨打先撤出塔圈 ===
   }
 }
 
+console.log("\n=== 7.7 v3.9 塔防蓝队队色 / 车辆要能开出去 ===");
+{
+  const hs = field(6, false);
+  /* 蓝队队色：塔防只有红蓝两队，不能沿用四队配色的「1 号 = 黄」 */
+  check("塔防 0 队 = 红", LD.teamColor(0) === "#f87171", LD.teamColor(0));
+  check("塔防 1 队 = 蓝（不是黄）", LD.teamColor(1) === "#60a5fa", LD.teamColor(1));
+  const keepRule = B.rule;
+  B.rule = "team";
+  check("非塔防仍走四队配色（1 号黄队）", LD.teamColor(1) === "#fbbf24", LD.teamColor(1));
+  B.rule = keepRule;
+  check("切回塔防后 1 号又是蓝队", LD.teamColor(1) === "#60a5fa", LD.teamColor(1));
+  check("头顶名字取的就是这个色", LD.teamColor(hs[3].team) === "#60a5fa", "team=" + hs[3].team);
+
+  /* 车辆：至少有一个方向能一口气开出 80px，且与最近的阻挡物留有间隙 */
+  const cars = B.terrain.props.filter(o => o.kind === "car" && !o.dead);
+  check("塔防地图刷出了车", cars.length >= 2, cars.length + " 辆");
+  const freeRun = (o, dx, dy) => {
+    let d = 0;
+    const x0 = o.x, y0 = o.y;
+    for (; d < 320; d += 4) {
+      const nx = x0 + dx * d, ny = y0 + dy * d;
+      if (nx < o.w / 2 + 4 || nx > B.world.w - o.w / 2 - 4) break;
+      if (ny < B.world.pt + o.h / 2 + 2 || ny > B.world.h - o.h / 2 - 4) break;
+      if (T.blockedAt(B.terrain, o, nx, ny)) break;
+    }
+    o.x = x0; o.y = y0;
+    return d;
+  };
+  const dirs = [[1, 0], [-1, 0], [0, -1], [0, 1]];
+  const worst = cars.map(o => Math.max(...dirs.map(d => freeRun(o, d[0], d[1]))));
+  check("每辆车至少有一个方向能开出 80px（不然一上去就卡死）",
+    worst.every(v => v >= 80), worst.join(","));
+  const gapOf = o => {
+    let g = Infinity;
+    B.terrain.props.forEach(p => {
+      if (p === o || p.dead || !p.blockMove) return;
+      const gx = Math.abs(p.x - o.x) - (p.w + o.w) / 2;
+      const gy = Math.abs(p.y - o.y) - (p.h + o.h) / 2;
+      if (gx < 0 && gy < 0) g = -1;                        // 重叠
+      else g = Math.min(g, Math.max(gx, gy));
+    });
+    return g;
+  };
+  const gaps = cars.map(gapOf);
+  check("车与最近阻挡物的间隙 ≥ 40px", gaps.every(g => g >= 40), gaps.map(g => Math.round(g)).join(","));
+}
+
 console.log("\n=== 8. 无时限 ===");
 {
   const hs = field(2, false);

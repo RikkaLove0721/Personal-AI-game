@@ -174,6 +174,23 @@ console.log("\n=== 2. 能量包：交互蓄力开包 ===");
   check("按交互键开始蓄力", B.doInteract(me) === true && !!me.chg && me.chg.kind === "pack");
   check("交互提示为「开启能量包」", B.interactLabel(me) === "开启能量包", B.interactLabel(me));
 
+  /* v3.9 修：交互半径按「两个身位」算，站在包旁边（不是贴脸）也要能开 */
+  {
+    const pkR = B.pickups[0];
+    const near = [40, 60, 80, 90].map(d => {
+      me.x = pkR.x - d; me.y = pkR.y; me.chg = null; me.interactCd = 0;
+      const t = B.interactTarget(me);
+      return t && t.type === "chg" && t.kind === "pack";
+    });
+    check("站在 40 / 60 / 80 / 90px 处都能识别到能量包", near.every(Boolean), near.join(","));
+    me.x = pkR.x - 200; me.y = pkR.y; me.interactCd = 0;
+    check("离得远（200px）不会误触", !B.interactTarget(me));
+    /* 复位到包上，后面的「蓄力期间不移动 / 进度推进」还要用 */
+    me.x = pkR.x; me.y = pkR.y; me.chg = null; me.interactCd = 0;
+    B.doInteract(me);
+    check("复位后重新起手", !!me.chg);
+  }
+
   /* 蓄力期间移动被锁 */
   me.ctrl.mx = 1; me.ctrl.my = 0;
   const bx = me.x, by = me.y;
@@ -204,6 +221,50 @@ console.log("\n=== 2. 能量包：交互蓄力开包 ===");
   me.x = pk2.x + 400;
   step();
   check("走远后蓄力中断", !me.chg);
+
+  /* v3.9 修：交互半径内（80~96px）起手不能被「离得太远」误判打断。
+   * 旧版只放 f.r + keep（≈80），站在 90px 按 P 起手、下一帧就被判中断。 */
+  B.dropPickup(600, 400, "energy");
+  const pk3 = B.pickups[0];
+  me.x = pk3.x - 90; me.y = pk3.y; me.interactCd = 0; me.energy = 0;
+  B.doInteract(me);
+  const okStart = !!me.chg;
+  stepN(30);
+  check("站在 90px 处起手后蓄力不会被误判中断", okStart && !!me.chg,
+    "起手=" + okStart + " 一帧后=" + !!me.chg);
+
+  /* v3.9 修：蓄力中途再按 P = 提前开启，按已蓄比例折算，不再白费 */
+  B.cancelCharge(me, null);
+  me.x = pk3.x; me.y = pk3.y; me.interactCd = 0; me.energy = 0;
+  B.doInteract(me);
+  stepN(60 * 2.5);                       // 蓄到 2.5 秒（一半）
+  const halfT = me.chg ? me.chg.t : 0;
+  me.interactCd = 0;
+  B.doInteract(me);                      // 第二下 P
+  check("中途按 P 会提前开包", B.pickups.indexOf(pk3) < 0, "半程 t=" + halfT.toFixed(2));
+  check("提前开包按比例折算（约 +30）", me.energy >= 25 && me.energy <= 35, "energy=" + me.energy);
+
+  /* 蓄力刚开始（<40%）再按 P 才是取消，不消耗背包 */
+  B.dropPickup(600, 400, "energy");
+  const pk4 = B.pickups[0];
+  me.x = pk4.x; me.y = pk4.y; me.interactCd = 0; me.energy = 0;
+  B.doInteract(me);
+  stepN(18);                             // 0.3 秒
+  me.interactCd = 0;
+  B.doInteract(me);
+  check("刚起手就按第二下 = 取消，背包还在", !me.chg && B.pickups.indexOf(pk4) >= 0 && me.energy === 0);
+
+  /* v3.9 修：车里的玩家不该看到「开启能量包」（车身半径和补给箱常重叠） */
+  {
+    me.chg = null; me.interactCd = 0;
+    me.rideCar = { kind: "car", x: me.x, y: me.y, driver: me };
+    const tInCar = B.interactTarget(me);
+    const lblInCar = B.interactLabel(me);
+    check("车里的玩家不会把能量包当交互目标", !(tInCar && tInCar.kind === "pack"), tInCar ? tInCar.type : "null");
+    check("车里的 P 框只提示「下车」", lblInCar === "下车", lblInCar);
+    me.rideCar = null;
+    check("下车后能量包重新可交互", (B.interactTarget(me) || {}).kind === "pack");
+  }
 
   /* 血包与移速包仍是接触即生效 */
   me.x = 600; me.y = 400; me.hp = me.maxHp - 50;

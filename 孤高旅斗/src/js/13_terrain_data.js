@@ -47,6 +47,13 @@
       /* v3.7 塔防对战：建筑沿用「可破坏障碍」逻辑（有血量、被打坏后 dead） */
       tower:     { name: "防御塔",   blockMove: true,  blockProj: true,  damageable: true,  pushable: false, structure: true },
       crystal:   { name: "水晶",     blockMove: true,  blockProj: true,  damageable: true,  pushable: false, structure: true },
+      /* v4.1 世界末日商店设施（玩家购买后立在脚下）：
+       * 栅栏   挡人不挡弹，可破坏 —— 拿来堵门挡僵尸，自己人远程还能隔着输出；
+       * 枪台   自动射击范围内的僵尸，会优先吸引僵尸仇恨；
+       * 炮台   低频发射范围爆炸的炮弹，同样吸引仇恨。 */
+      barrier:   { name: "栅栏",     blockMove: true,  blockProj: false, damageable: true,  pushable: false },
+      turret:    { name: "小型枪台", blockMove: true,  blockProj: true,  damageable: true,  pushable: false, structure: true },
+      cannon:    { name: "固定炮台", blockMove: true,  blockProj: true,  damageable: true,  pushable: false, structure: true },
     },
 
     /* 障碍材质：pal 为程序化像素贴图的调色板，elev 为视觉高度（像素），mass 越小越好推 */

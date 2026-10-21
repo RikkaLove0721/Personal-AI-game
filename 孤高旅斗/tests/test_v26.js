@@ -111,12 +111,12 @@ check("双子剑客无技能 2 槽位", LD.BOSS.twin.skill2 == null);
 check("镜影配装为空（运行时复制）", LD.BOSS.mirror.loadout === null && LD.BOSS.mirror.cdMul === 1.3);
 check("关卡共 9 关", LD.LEVELS.length === 9, LD.LEVELS.length);
 check("关卡 4-9 BOSS 依次正确", LD.LEVELS.slice(3).map(l => l.boss).join(",") === "bee,frost,twin,gambler,mirror,tesla", LD.LEVELS.slice(3).map(l => l.boss).join(","));
-check("规则共 11 种", LD.RULES.length === 11, LD.RULES.length);
+check("规则共 16 种（v4.9 新增僵尸守房）", LD.RULES.length === 16, LD.RULES.length);
 check("杂兵目录：工蜂", LD.MINIONS && LD.MINIONS.beeDrone && LD.MINIONS.beeDrone.dmg === 9);
 check("修饰符共 6 种（v3.3 新增定期刷新）", LD.MODS.length === 6 && LD.MODS.every(m => m.id && m.name && m.desc), LD.MODS.map(m => m.id).join(","));
 check("词条池共 6 条", LD.PERKS.length === 6 && LD.PERKS.every(p => typeof p.apply === "function"));
-check("成就共 20 项", LD.ACHIEVEMENTS.length === 20, LD.ACHIEVEMENTS.length);
-check("称号共 20 个且 id 合法", LD.TITLES.length === 20 && LD.TITLES.every(t => t.id === t.id.trim() && t.ach));
+check("成就共 25 项（v4.9 新增僵尸守房）", LD.ACHIEVEMENTS.length === 25, LD.ACHIEVEMENTS.length);
+check("称号共 25 个且 id 合法", LD.TITLES.length === 25 && LD.TITLES.every(t => t.id === t.id.trim() && t.ach));
 check("新成就：热身达人 / 清道夫", LD.ACHIEVEMENTS.some(a => a.id === "warmup_win") && LD.ACHIEVEMENTS.some(a => a.id === "zombie_50"));
 
 console.log("=== 2. BOSS 技能注册 ===");
@@ -390,16 +390,25 @@ check("旧版「0 号位固定猎人」已废弃", (() => {
 
 console.log("=== 10. 乱斗热身（v2.7 新增） ===");
 {
-  check("对局时间提供 60 / 120 / 180 三档", LD.MATCH.times.join(",") === "60,120,180", LD.MATCH.times.join(","));
+  check("对局时间提供 60 / 120 / 180 / 240 / 300 五档", LD.MATCH.times.join(",") === "60,120,180,240,300", LD.MATCH.times.join(","));
   check("规则表已收录乱斗热身", LD.ruleInfo("warmup").name === "乱斗热身" && LD.ruleInfo("warmup").icon === "🎯");
   const fs2 = mkBattle("warmup", { n: 4, cfg: { matchT: 60 } });
   check("房间可以指定时长（60 秒）", B.rule === "warmup" && B.matchT === 60, B.matchT);
   check("回合时限 = 最新对局时间", B.roundT === 60, B.roundT);
   check("热身模式地图 1200x1200", B.world.w === 1200 && B.world.h === 1200);
   const a = fs2[0], b2 = fs2[1];
-  b2.hp = 1;
+  const RATE = LD.WARMUP.scoreDmg, KILLB = LD.WARMUP.scoreKill;
+  check("热身计分配置：20 伤害 1 分 / 击杀 5 分", RATE === 0.05 && KILLB === 5, RATE + " / " + KILLB);
+  /* v3.9.1 起伤害也是分：20 点伤害 = 1 分 */
+  let s0 = B.wScore[0] || 0;
+  b2.hp = 80;
+  B.damage(a, b2, 20, { type: "skill", kb: 0 });
+  check("只造成伤害也计分（20 伤害 = 1 分）", Math.abs(B.wScore[0] - s0 - 1) < 1e-6, B.wScore[0] - s0);
+  /* 溢出部分不算：30 血挨 999，只按 30 折算 */
+  s0 = B.wScore[0] || 0;
+  b2.hp = 30;
   B.damage(a, b2, 999, { type: "skill", kb: 0 });
-  check("击杀者得 1 分", B.wScore[0] === 1, B.wScore[0]);
+  check("击杀计分 = 伤害折算 + 击杀奖励，溢出不计", Math.abs(B.wScore[0] - s0 - (30 * RATE + KILLB)) < 1e-6, B.wScore[0] - s0);
   check("阵亡不淘汰，转入复活倒计时", b2.dead === true && b2.respawnT > 0, b2.respawnT);
   check("有人阵亡也不结束比赛", B.state === "fight", B.state);
   B.updateRespawn(1.7);
@@ -407,9 +416,17 @@ console.log("=== 10. 乱斗热身（v2.7 新增） ===");
   check("复活位置随机且在地图内", b2.x >= 34 && b2.x <= B.world.w - 34 && b2.y >= B.world.pt && b2.y <= B.world.h - 40, Math.round(b2.x) + "," + Math.round(b2.y));
   check("复活后短暂无敌", b2.invuln > 0, b2.invuln);
   b2.invuln = 0;
-  check("连杀累加分数", (() => { B.damage(a, b2, 999, { type: "skill", kb: 0 }); return B.wScore[0] === 2; })(), B.wScore[0]);
+  s0 = B.wScore[0] || 0;
+  B.damage(a, b2, 999, { type: "skill", kb: 0 });
+  check("连杀累加分数", Math.abs(B.wScore[0] - s0 - (b2.maxHp * RATE + KILLB)) < 1e-6, B.wScore[0] - s0);
+  /* 自伤不计分 */
+  s0 = B.wScore[0] || 0;
+  const aHp = a.hp;
+  B.damage(a, a, 40, { type: "skill", kb: 0 });
+  check("打到自己不计分", Math.abs(B.wScore[0] - s0) < 1e-6, B.wScore[0] - s0);
+  a.hp = aHp;
   /* 时间到：分数最高者获胜 */
-  B.wScore[1] = 9;
+  B.wScore[1] = 999;
   B.roundT = 0.001;
   /* 击杀的命中定格（FX.stop）会吃掉第一帧，多推几帧 */
   for (let i = 0; i < 6 && B.state === "fight"; i++) B.update(0.5);

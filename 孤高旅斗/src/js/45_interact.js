@@ -61,13 +61,34 @@
         take({ type: "gift", prop: g, label: "拾取", gap: gap, lim: lim });
       });
     }
-    /* v3.9 需要蓄力的目标：能量包（血包 / 移速包仍是接触即生效）、霸主皇冠 */
+    /* v3.9 需要蓄力的目标：能量包（血包 / 移速包仍是接触即生效）、霸主皇冠。
+     * 判定半径两处都改过：旧版回落到 34 - f.r×1.3 ≈ 48px，站在包旁边根本看不到 P 框。
+     * 现在统一用「中心距 96px（约两个身位）」，并且**单独优先**：
+     * 能量包是补给箱掉在地上的消耗品，以前和其它交互目标一起按「最近优先」比大小，
+     * 旁边停着一辆车 / 柜子时（哪怕能量包就在脚下）会被它们抢走目标，按 P 开不了包。
+     * 满血时车是常见的干扰源，所以这里直接给能量包最高优先级。
+     * v3.9 修：车上 / 柜子里 / 扛着泥土 时，能量包**不**算交互目标——
+     * 车身 96px 半径很容易和补给箱重叠，之前车里的玩家会看到「开启能量包」却按不动
+     * （doInteract 先下车，目标被跳过）。这两种状态下 P = 下车/离开，
+     * 想让能量包重新出现，先下车站到包边即可。 */
+    if (f.rideCar || f.hideProp || f.carryMud) return best;
     if (this.pickups && this.pickups.length) {
-      const lim = CFG.openRange != null ? CFG.openRange : 34;
+      const lim = CFG.openRange != null ? CFG.openRange : 96;
+      let near = null, nd = Infinity;
       this.pickups.forEach(pk => {
         if (pk.kind !== "energy") return;
-        const gap = Math.hypot(f.x - pk.x, f.y - pk.y) - f.r;
-        take({ type: "chg", prop: pk, kind: "pack", label: "开包", gap: gap, lim: lim });
+        const d = Math.hypot(f.x - pk.x, f.y - pk.y);
+        if (d <= lim && d < nd) { nd = d; near = pk; }
+      });
+      if (near) return { type: "chg", prop: near, kind: "pack", label: "开包", gap: nd, lim: lim };
+    }
+    /* v3.9.1 停电夜战：充电站——靠近按住交互键给手电筒充电。
+     * 排在能量包之后：包是消耗品（26 秒就消失），站是常驻的，两者都在范围内优先开包。
+     * 判定半径沿用「两个身位」（CHARGE.station.keep = 96）。 */
+    if (this.stations && this.stations.length) {
+      const slim = (LD.NIGHT && LD.NIGHT.charge && LD.NIGHT.charge.keep) || 96;
+      this.stations.forEach(st => {
+        take({ type: "chg", prop: st, kind: "station", label: "充电", gap: Math.hypot(f.x - st.x, f.y - st.y) - f.r, lim: slim });
       });
     }
     if (this.crown && this.crown.phase === "fallen") {
@@ -107,6 +128,19 @@
    * ========================================================== */
   B.doInteract = function (f) {
     if (!f || f.dead) return false;
+    /* v3.9 蓄力中再按交互键 = 取消蓄力（给玩家一个反悔的出口），
+     * 之前会直接落到 startCharge 里返回 false，但外面那一层已经把 chg 清空了，
+     * 表现就是「手快按了两下 P，蓄力刚起步就没了」——看起来像开包没生效。 */
+    if (f.chg) {
+      const c = f.chg, cfg = chgCfg(c.kind), p = chgPos(c);
+      /* 中途按 P = 提前开启（已等的秒数按比例折算），只有几乎没蓄才当取消。
+       * 5 秒是长按，手快按两下不该把整包白费掉。 */
+      const done = c.t / cfg.need;
+      if (done >= 0.4) { this.completeCharge(f, c); return true; }
+      this.cancelCharge(f, "已取消");
+      f.interactCd = CFG.pickCd || 0.35;
+      return true;
+    }
     if ((f.interactCd || 0) > 0) return false;
     /* v3.7 塔防：交互键优先释放主动装备（车里除外，车里 P = 下车）。
      * 没有装备、或在冷却中，则照常走拾取 / 躲藏 / 驾驶。 */
@@ -141,7 +175,8 @@
     }
     const t = this.interactTarget(f);
     if (!t) return "";
-    if (t.type === "chg") return t.kind === "crown" ? "争夺皇冠" : "开启能量包";
+    /* v3.9.1：充电站与能量包都是 chg 类，得分开报——否则站在充电站旁边 P 框会写「开启能量包」 */
+    if (t.type === "chg") return t.kind === "crown" ? "争夺皇冠" : t.kind === "station" ? "充电" : "开启能量包";
     if (t.type === "car") return "上车";
     if (t.type === "locker") return "躲藏";
     if (t.type === "gift") return "拾取";
@@ -331,6 +366,8 @@
   /* 蓄力目标的存活判定（各自保证目标还在场上） */
   function chgAlive(B, c) {
     if (c.kind === "pack") return !!B.pickups && B.pickups.indexOf(c.tgt) >= 0;
+    /* v3.9.1 充电站：夜战里是常驻设施，只要还在场上就能继续充 */
+    if (c.kind === "station") return !!B.stations && B.stations.indexOf(c.tgt) >= 0;
     if (c.kind === "crown") return !!B.crown && B.crown === c.tgt && B.crown.phase === "fallen";
     return false;
   }
@@ -346,7 +383,11 @@
     if (!chgAlive(this, c)) return false;
     f.chg = c;
     f.vx = 0; f.vy = 0; f.moving = false;
-    FX.ring(f.x, f.y - 20, 54, chgCfg(kind).color, 4, 0.35);
+    const cfg = chgCfg(kind);
+    FX.ring(f.x, f.y - 20, 54, cfg.color, 4, 0.35);
+    /* v3.9：长按蓄力要立刻给一句话，否则玩家按完看角色不动会以为没生效 */
+    FX.float(f.x, f.y - 72, cfg.label + "（" + cfg.need.toFixed(0) + " 秒，受击打断）", cfg.color, 14);
+    this.ev.push(["t", f.x, f.y - 72, cfg.label + "（" + cfg.need.toFixed(0) + " 秒，受击打断）", cfg.color]);
     return true;
   };
 
@@ -371,21 +412,37 @@
       if ((f.stun || 0) > 0 || (f.root || 0) > 0) { this.cancelCharge(f, "被打断！"); continue; }
       if (f.rideCar || f.hideProp) { this.cancelCharge(f, "中断了"); continue; }
       const p = chgPos(c);
-      if (Math.hypot(f.x - p.x, f.y - p.y) > f.r + cfg.keep) { this.cancelCharge(f, "离得太远，中断！"); continue; }
+      /* v3.9 修：判定要算上「蓄力可用半径」。
+       * 开包的交互半径是 96px（两个身位），但这里只放 f.r + keep（≈20+60=80）——
+       * 于是站在 80~96px 处按 P 能起手，下一秒就被判「离得太远，中断！」，
+       * 表现就是「靠近能量包按 P 什么也没发生」。keep 只负责容错，不该小于开包半径。 */
+      const reach = Math.max(cfg.keep, (CFG.openRange != null ? CFG.openRange : 96));
+      if (Math.hypot(f.x - p.x, f.y - p.y) > f.r + reach) { this.cancelCharge(f, "离得太远，中断！"); continue; }
       c.t += dt;
       if (Math.random() < dt * 12) FX.trail(f.x + rand(-10, 10), f.y - rand(4, 26), cfg.color, 3, 0.3);
-      if (c.t >= cfg.need) {
-        f.chg = null;
-        if (c.kind === "pack") this.finishPack(f, c.tgt);
-        else if (c.kind === "crown") this.finishCrown(f, c.tgt);
-      }
+      if (c.t >= cfg.need) this.completeCharge(f, c);
     }
   };
 
-  B.finishPack = function (f, pk) {
+  /* 蓄力完成（自然读满 / 中途提前开启共用一条路径） */
+  B.completeCharge = function (f, c) {
+    if (!f || !c || f.chg !== c) return false;
+    f.chg = null;
+    if (c.kind === "pack") this.finishPack(f, c.tgt, c.t);
+    else if (c.kind === "crown") this.finishCrown(f, c.tgt);
+    /* v3.9.1 充电站：蓄满 = 手电筒电量补满（不满也按已蓄比例给） */
+    else if (c.kind === "station" && this.finishStation) this.finishStation(f, c.tgt, c.t);
+    return true;
+  };
+
+  B.finishPack = function (f, pk, elapsed) {
     const idx = (this.pickups || []).indexOf(pk);
     if (idx >= 0) this.pickups.splice(idx, 1);
-    const gain = (LD.CONF && LD.CONF.energy && LD.CONF.energy.packGain) || 60;
+    const base = (LD.CONF && LD.CONF.energy && LD.CONF.energy.packGain) || 60;
+    /* v3.9 提前开启：按已蓄比例折算，最低三成，避免「按两下 P 白拿一包」 */
+    const need = (LD.CHARGE && LD.CHARGE.pack && LD.CHARGE.pack.need) || 5;
+    const k = elapsed == null ? 1 : Math.max(0.3, Math.min(1, elapsed / need));
+    const gain = Math.round(base * k);
     f.energy = Math.min(f.maxEnergy, f.energy + gain);
     FX.ring(f.x, f.y - 26, 78, "rgba(165,180,252,.95)", 6, 0.45);
     FX.burst(f.x, f.y - 26, 20, ["#a5b4fc", "#fff", "#818cf8"], { speed: 240 });

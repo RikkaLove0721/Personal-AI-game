@@ -106,9 +106,152 @@
     return (d && d.pal && d.pal.base) || "#333944";
   }
 
+  /* ---------------- v4.0 世界末日：悬崖 ---------------- */
+  const _chasm = { water: null };
+  /**
+   * 谷底水面：深渊里不是空的，底下是一片深水。
+   * 亮度压得很低（比陆地暗一大截），只留一点波纹反光，用来读出「这里低了一截」。
+   */
+  function waterPattern(ctx) {
+    if (_chasm.water) return _chasm.water;
+    const S = 128;
+    const c = cnv(S, S);
+    if (!c || !c.getContext || !ctx.createPattern) return null;
+    const g = c.getContext("2d");
+    if (!g) return null;
+    g.fillStyle = "#06101c"; g.fillRect(0, 0, S, S);
+    /* 横向波纹：sin 的周期刚好等于贴图宽度，左右接缝天然连续 */
+    for (let k = 0; k < 16; k++) {
+      const y0 = k * (S / 16);
+      const bright = k % 3 === 0;
+      g.strokeStyle = bright ? "rgba(64,124,164,.17)" : "rgba(18,42,64,.34)";
+      g.lineWidth = bright ? 1.4 : 1;
+      g.beginPath();
+      for (let x = 0; x <= S; x += 8) {
+        const y = y0 + Math.sin((x / S) * Math.PI * 2 + k * 1.7) * 2.4;
+        if (x === 0) g.moveTo(x, y); else g.lineTo(x, y);
+      }
+      g.stroke();
+    }
+    /* 零星反光点：水面碎光，亮度同样压住 */
+    const R = rng(hash("doom_water"));
+    g.fillStyle = "rgba(125,196,232,.16)";
+    for (let i = 0; i < 12; i++) g.fillRect((R() * S) | 0, (R() * S) | 0, 2, 1);
+    try { _chasm.water = ctx.createPattern(c, "repeat"); } catch (e) { _chasm.water = null; }
+    return _chasm.water;
+  }
+  /**
+   * 三块陆地的并集路径。
+   * 桥一定要用「可见桥矩形」vx0..vx1，不能用碰撞区 x0..x1 ——
+   * 碰撞区两端各往陆地里埋了 40px，与岛/大陆面积重叠，clip 没问题但描边会多出一圈内部线。
+   */
+  function landPath(ctx, L) {
+    const b = L.bridge, m = L.main;
+    ctx.beginPath();
+    ctx.arc(L.island.x, L.island.y, L.island.r, 0, Math.PI * 2);
+    ctx.rect(b.vx0, b.y0, b.vx1 - b.vx0, b.y1 - b.y0);
+    ctx.rect(m.x0, m.y0, m.x1 - m.x0, m.y1 - m.y0);
+    ctx.closePath();
+  }
+  /**
+   * 深渊：谷底深水 + 陆地投影。
+   * v4.2 起不再铺崖壁贴图 —— 深水本身的亮度就足够读出「这里低了一截」，
+   * 岩壁纹理反而把交界线切得很碎。现在只在岸边留一圈柔和投影：
+   * 整块陆地填黑并向下偏移做阴影，填黑的部分随后会被陆地地面盖住，
+   * 实际留在水面上的就是一圈「光从上方打下来」的自然落影，越往外越淡。
+   */
+  V.doomChasm = function (ctx, L, ox, oy, vw, vh) {
+    ctx.save();
+    /* 谷底：先垫一层更沉的底色兜住可视区边缘，再铺深水 */
+    ctx.fillStyle = "#050a12";
+    ctx.fillRect(ox - 24, oy - 24, vw + 48, vh + 48);
+    ctx.fillStyle = waterPattern(ctx) || "#06101c";
+    ctx.fillRect(ox - 24, oy - 24, vw + 48, vh + 48);
+    /* 岸边落影 */
+    ctx.shadowColor = "rgba(2,6,14,.62)";
+    ctx.shadowBlur = 18;
+    ctx.shadowOffsetY = 10;
+    ctx.fillStyle = "#04070d";
+    landPath(ctx, L);
+    ctx.fill();
+    ctx.restore();
+  };
+
+  /* ---------------- v4.1 末日商店设施：枪台 / 炮台 ---------------- */
+  const _postImg = {};
+  function postImg(kind) {
+    const src = (typeof window !== "undefined" && window.LD_PROP_IMG && window.LD_PROP_IMG[kind]) || null;
+    if (!src) return null;
+    if (!_postImg[kind]) { const im = new Image(); im.src = src; _postImg[kind] = im; }
+    const im = _postImg[kind];
+    return (im.complete && im.naturalWidth) ? im : null;
+  }
+  /** 小型枪台 / 固定炮台：AI 生图（没有就程序化圆台）+ 炮管指向 + 血条 */
+  function drawGuardPost(ctx, o, t, x, y, w, h, el) {
+    const isCannon = o.kind === "cannon";
+    const H = isCannon ? 66 : 56;
+    const im = postImg(o.kind);
+    const baseY = y + h * 0.32;
+    ctx.save();
+    ctx.globalAlpha = 0.25; ctx.fillStyle = "#000";
+    ctx.beginPath(); ctx.ellipse(x + 3, y + h * 0.34, w * 0.62, h * 0.22, 0, 0, TAU); ctx.fill();
+    ctx.globalAlpha = 1;
+    if (im) {
+      const iw = H * (im.naturalWidth / im.naturalHeight);
+      if (o.flash > 0) ctx.globalAlpha = 0.85;
+      ctx.drawImage(im, x - iw / 2, baseY - H, iw, H);
+      if (o.flash > 0) {
+        ctx.globalCompositeOperation = "lighter";
+        ctx.globalAlpha = Math.min(0.55, o.flash * 2.4);
+        ctx.drawImage(im, x - iw / 2, baseY - H, iw, H);
+        ctx.globalCompositeOperation = "source-over";
+      }
+      ctx.globalAlpha = 1;
+    } else {
+      /* 兜底：金属圆台 + 顶盖 */
+      const rx = w * 0.44;
+      const g = ctx.createLinearGradient(x - rx, 0, x + rx, 0);
+      g.addColorStop(0, "#3d4651"); g.addColorStop(0.5, "#7d8b9b"); g.addColorStop(1, "#2b323c");
+      ctx.fillStyle = g;
+      ctx.fillRect(x - rx, baseY - H * 0.55, rx * 2, H * 0.55);
+      ctx.fillStyle = isCannon ? "#57422c" : "#4a5563";
+      ctx.beginPath(); ctx.ellipse(x, baseY - H * 0.55, rx, rx * 0.4, 0, 0, TAU); ctx.fill();
+    }
+    /* 炮管指向目标（俯视短杠杆 + 端点光点） */
+    const a = o.aimAngle || 0, len = isCannon ? 32 : 24, py = baseY - H * 0.42;
+    ctx.strokeStyle = isCannon ? "rgba(251,146,60,.9)" : "rgba(251,191,36,.9)";
+    ctx.lineWidth = isCannon ? 5 : 3;
+    ctx.beginPath();
+    ctx.moveTo(x, py);
+    ctx.lineTo(x + Math.cos(a) * len, py + Math.sin(a) * len * 0.6);
+    ctx.stroke();
+    if (o._target) {
+      ctx.fillStyle = "#fff7d6";
+      ctx.beginPath();
+      ctx.arc(x + Math.cos(a) * len, py + Math.sin(a) * len * 0.6, 2.6 + Math.sin(t * 12) * 1.1, 0, TAU);
+      ctx.fill();
+    }
+    /* 血条（受伤后才出现） */
+    if (o.maxHp > 0 && o.hp < o.maxHp) {
+      const bw = 40, by = baseY - H - 10;
+      ctx.fillStyle = "rgba(4,8,16,.72)"; ctx.fillRect(x - bw / 2 - 1, by - 1, bw + 2, 6);
+      ctx.fillStyle = "#fbbf24"; ctx.fillRect(x - bw / 2, by, bw * Math.max(0, o.hp / o.maxHp), 4);
+    }
+    ctx.restore();
+  }
+
   /** 画可见范围内的地面材质（ctx 已随摄像机平移） */
   V.terrainGround = function (ctx, map, t, cam, vw, vh) {
     if (!map || !map.ground) return;
+    /* v4.0 世界末日：陆地之外是悬崖 —— 先铺深渊与崖壁，再把地面裁剪进三块陆地 */
+    const DL = LD.Terrain && LD.Terrain.doomLand;
+    const doom = !!(DL && LD.Battle && LD.Battle.rule === "doomsday");
+    if (doom) {
+      V.doomChasm(ctx, DL, cam ? cam.x : 0, cam ? cam.y : 0, vw || 960, vh || 600);
+      ctx.save();
+      landPath(ctx, DL);
+      ctx.clip();
+    }
     const c0 = Math.max(0, Math.floor((cam ? cam.x : 0) / TILE) - 1);
     const r0 = Math.max(0, Math.floor(((cam ? cam.y : 0) - map.top) / TILE) - 1);
     const c1 = Math.min(map.cols - 1, Math.ceil(((cam ? cam.x : 0) + (vw || 960)) / TILE) + 1);
@@ -135,11 +278,14 @@
         c = c2 + 1;
       }
     }
-    /* 场地四周压暗一圈，让地图边界更清楚 */
-    ctx.save();
-    ctx.strokeStyle = "rgba(6,10,18,.55)"; ctx.lineWidth = 10;
-    ctx.strokeRect(-5, map.top - 5, map.cols * TILE + 10, map.rows * TILE + 10);
-    ctx.restore();
+    /* 场地四周压暗一圈，让地图边界更清楚（悬崖图不需要：那圈线会浮在深渊上） */
+    if (!doom) {
+      ctx.save();
+      ctx.strokeStyle = "rgba(6,10,18,.55)"; ctx.lineWidth = 10;
+      ctx.strokeRect(-5, map.top - 5, map.cols * TILE + 10, map.rows * TILE + 10);
+      ctx.restore();
+    }
+    if (doom) ctx.restore();     // 结束地面的陆地裁剪
   };
 
   /* ---------------- 障碍顶面纹理 ---------------- */
@@ -257,15 +403,19 @@
     if (o.kind === "bush" || o.kind === "water") return;      // 由 V.bushPass / V.terrainFlat 绘制
     /* v3.7 塔防建筑：防御塔 / 水晶（贴图或程序化） */
     if ((o.kind === "tower" || o.kind === "crystal") && V.structure) { V.structure(ctx, o, t); return; }
-    if (o.kind === "fence") { drawFence(ctx, o, mat, x0, y0, w, h, base, el); return; }
+    if (o.kind === "fence" || o.kind === "barrier") { drawFence(ctx, o, mat, x0, y0, w, h, base, el); return; }
     if (o.kind === "barrel") { drawBarrel(ctx, o, mat, x0, top0(o, y0, el), w, h, el); return; }
     if (o.kind === "tire") { drawTire(ctx, o, mat, x0, y0, w, h, el); return; }
+    /* v4.8 碰碰车竞技：橡胶保险杠 + 集电杆，按座位给司机帽上色，和地形里的普通汽车区分开 */
+    if (o.kind === "car" && o.bump) { bumperCar(ctx, o, mat, x0, y0, w, h, el); return; }
     if (o.kind === "car") { drawCar(ctx, o, mat, x0, y0, w, h, el); return; }
     if (o.kind === "locker") { drawLocker(ctx, o, mat, x0, y0, w, h, el); return; }
     if (o.kind === "mud") { drawMud(ctx, o, mat, x0, y0, w, h); return; }
     if (o.kind === "blower") { drawBlower(ctx, o, mat, x0, y0, w, h, el, t); return; }
     if (o.kind === "supply") { drawSupply(ctx, o, mat, x0, top0(o, y0, el), w, h, el); return; }
     if (o.kind === "barricade") { drawBarricade(ctx, o, mat, x0, top0(o, y0, el), w, h, el); return; }
+    /* v4.1 末日商店设施：小型枪台 / 固定炮台（AI 生图 + 炮管朝向 + 血条） */
+    if (o.kind === "turret" || o.kind === "cannon") { drawGuardPost(ctx, o, t, x, y, w, h, el); return; }
 
     const topY = y0 - el;
     if (o.shape === "round") {
@@ -499,6 +649,55 @@
       ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = 0.55;
       ctx.fillStyle = "#fef9c3";
       ctx.beginPath(); ctx.ellipse(x0 + w + 8, by + bodyH * 0.42, 22, 8, 0, 0, TAU); ctx.fill();
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  /* v4.8 碰碰车竞技的碰碰车：橡胶保险杠一圈 + 集电杆，司机帽按座位上色 */
+  const BUMP_COLORS = ["#f87171", "#60a5fa", "#facc15", "#a78bfa"];
+  function bumperCar(ctx, o, mat, x0, y0, w, h, el) {
+    const p = mat.pal;
+    const cx = x0 + w / 2;
+    const bodyH = Math.min(h, 52);
+    const by = y0 + h - bodyH;
+    const drv = o.driver;
+    const col = drv ? BUMP_COLORS[drv.side % BUMP_COLORS.length] : "#94a3b8";
+    ctx.save();
+    /* 橡胶保险杠（外圈最厚的一层，撞人的就是它） */
+    ctx.fillStyle = "#1f2937";
+    roundRect(ctx, x0, by + el * 0.12, w, bodyH - el * 0.12, 13); ctx.fill();
+    ctx.strokeStyle = "#0b1220"; ctx.lineWidth = 1.4; ctx.stroke();
+    /* 车身 */
+    const g = ctx.createLinearGradient(0, by, 0, by + bodyH);
+    g.addColorStop(0, p.hi); g.addColorStop(0.55, p.top); g.addColorStop(1, p.lo);
+    ctx.fillStyle = g;
+    roundRect(ctx, x0 + 7, by + el * 0.18, w - 14, bodyH - el * 0.20, 9); ctx.fill();
+    /* 座舱（深色凹坑）+ 司机帽 */
+    ctx.fillStyle = "rgba(8,14,28,.82)";
+    ctx.beginPath(); ctx.ellipse(cx, by + el * 0.30, (w - 22) * 0.30, bodyH * 0.30, 0, 0, TAU); ctx.fill();
+    if (drv) {
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.arc(cx, by + el * 0.26, 8.5, 0, TAU); ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,.55)"; ctx.lineWidth = 1.4; ctx.stroke();
+    }
+    /* 集电杆：车尾斜上一根，顶端一个小滑轮 */
+    ctx.strokeStyle = "#475569"; ctx.lineWidth = 2.4;
+    ctx.beginPath(); ctx.moveTo(cx + w * 0.16, by + el * 0.22); ctx.lineTo(cx + w * 0.34, by - el * 0.62); ctx.stroke();
+    ctx.fillStyle = "#fde68a";
+    ctx.beginPath(); ctx.arc(cx + w * 0.34, by - el * 0.62, 3.4, 0, TAU); ctx.fill();
+    /* 车轮 */
+    ctx.fillStyle = "#111114";
+    [[x0 + w * 0.26, by + bodyH - 4], [x0 + w * 0.74, by + bodyH - 4]].forEach(([wx, wy]) => {
+      ctx.beginPath(); ctx.ellipse(wx, wy, 7, 5, 0, 0, TAU); ctx.fill();
+    });
+    /* 残血：车体泛红闪一下（和耐久条配合，远看也知道快散架了） */
+    const k = (o.bumpHp || 0) / (o.bumpMax || 1);
+    if (k < 0.35 && o.driver) {
+      ctx.save(); ctx.globalCompositeOperation = "lighter";
+      ctx.globalAlpha = 0.20 + Math.sin((LD.Battle && LD.Battle.t || 0) * 9) * 0.14;
+      ctx.fillStyle = "#f87171";
+      roundRect(ctx, x0 + 7, by + el * 0.18, w - 14, bodyH - el * 0.20, 9); ctx.fill();
       ctx.restore();
     }
     ctx.restore();
@@ -970,6 +1169,12 @@
     if (o.flash > 0) {
       ctx.globalAlpha = Math.min(0.5, o.flash * 3);
       ctx.fillStyle = "#fff"; ctx.fillRect(x0, topY, w, h + el * 0.3);
+    }
+    /* v4.1 可破坏栅栏（末日商店）：受伤后显示血条；普通围栏不可破坏不显示 */
+    if (o.maxHp > 0 && o.hp < o.maxHp) {
+      const bw = Math.max(30, w * 0.7), by = topY - 9;
+      ctx.fillStyle = "rgba(4,8,16,.72)"; ctx.fillRect(x - bw / 2 - 1, by - 1, bw + 2, 6);
+      ctx.fillStyle = "#fbbf24"; ctx.fillRect(x - bw / 2, by, bw * Math.max(0, o.hp / o.maxHp), 4);
     }
     ctx.restore();
   }

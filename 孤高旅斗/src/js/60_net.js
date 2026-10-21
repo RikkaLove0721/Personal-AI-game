@@ -302,7 +302,7 @@
         const wf = B.fighters[s.rw];
         if (wf && wf.kind === "hero")
           LD.Cine.start(wf, "胜者：" + (wf.name || ("玩家" + (s.rw + 1))), "",
-            wf.team != null && wf.team >= 0 ? (LD.TEAM_COLORS[wf.team] || "#fcd34d") : "#fcd34d", "赢得了本局胜利");
+            wf.team != null && wf.team >= 0 ? ((LD.teamColor && LD.teamColor(wf.team)) || "#fcd34d") : "#fcd34d", "赢得了本局胜利");
       }
       this._lastRW = s.rw;
     }
