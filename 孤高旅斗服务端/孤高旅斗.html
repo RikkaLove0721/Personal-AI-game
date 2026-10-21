@@ -357,8 +357,10 @@ body.mobile h1.ztitle .zsword{width:48px;height:132px;top:-26px;left:21px}
  *  3) 触摸热区：可点元素至少 44px（仅在粗指针设备生效）
  *  4) 竖屏引导
  * ============================================================ */
-html,body{touch-action:none;overscroll-behavior:none;-webkit-touch-callout:none}
+/* v4.10 触屏端禁用文字选择：双击 / 长按文字不再弹出系统选蓝框（game UI 没有复制的需求） */
+html,body{touch-action:none;overscroll-behavior:none;-webkit-touch-callout:none;user-select:none;-webkit-user-select:none;-moz-user-select:none}
 #app{touch-action:none}
+#app *{user-select:none;-webkit-user-select:none}
 body{
   padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
@@ -1432,17 +1434,22 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
   };
 
   /* ---------------------------------------------------------- v4.5 护送情报箱
-   * 两队（左红 / 右蓝）：场中央反复投放一个情报箱，走到箱子上自动抱起，
-   * 抱进【敌方】交付点就得 1 分。抱箱时移速降 8%，阵亡则掉在原地（0.8 秒保护期）。
-   * 先到 3 分结束；时间到比分高者胜，同分比剩余总血量。 */
+   * 两队（左红 / 右蓝）：场中央反复投放一个 2x2 的大情报箱，箱子不能抱起来——
+   * 靠近按交互键进入推箱状态，箱子跟着人朝移动方向挪，推箱时移速只有正常的 20%。
+   * 被攻击会打断推箱并眩晕 1 秒、3 秒内不能再碰箱子；有人在推时再按 = 交互占用。
+   * 把箱子推进【敌方】交付点就得 1 分。先到 3 分结束；时间到比分高者胜，同分比剩余总血量。 */
   LD.ESCORT = {
+    world: { w: 2080, h: 1600, pt: 120 },  // v4.10 地图长度 1.3 倍（1600 → 2080），高度不变
     need: 3,             // 先到几分获胜
     goalInset: 220,      // 交付点圆心离左右边界的距离
     goalR: 110,          // 交付点半径
-    boxR: 58,            // 拾取半径（角色中心到箱子中心，再加角色半径）
-    speedMul: 0.92,      // 抱箱移速倍率
+    boxW: 80,            // v4.10 箱子 2x2（80 x 80），不再是 30px 的小包裹
+    pushRange: 96,       // 多近可以按交互键开始推箱（约两个身位）
+    pushSpeed: 0.20,     // 推箱移速倍率（正常的 20%）
+    stun: 1.0,           // 推箱被打断的眩晕
+    noTouch: 3.0,        // 推箱被打断后，多久内不能再碰箱子
     respawn: 2.2,        // 交付后箱子重新投放的间隔
-    protect: 0.8         // 落地保护期：刚掉下来的箱子这么短时间内不能被立刻捡回
+    protect: 0.8         // 落地保护期：刚投放的箱子这么短时间内不能被推
   };
 
   /* ---------------------------------------------------------- v4.7 占点争夺
@@ -1455,11 +1462,11 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
    *     易主时只换攻击目标、血量保留；炮塔被拆掉就永久消失（本局不再重建）；
    *   - 复活从 3 秒起，每次阵亡 +3 秒（上限 24 秒）；自家基地内缓慢回血。 */
   LD.CAPTURE = {
-    world: { w: 2400, h: 2400, pt: 120 },   // 1600 × 1.5
+    world: { w: 1920, h: 1920, pt: 120 },   // v4.10 缩回 2400 的 80%：节奏更紧凑
     count: [3, 5],       // 每局据点总数（含中路大点）
-    minGap: 720,         // 据点圆心之间的最小间距
-    edge: 260,           // 据点离地图边界的最小距离
-    baseGap: 480,        // 据点离双方基地的最小距离
+    minGap: 576,         // 据点圆心之间的最小间距（随地图 ×0.8）
+    edge: 208,           // 据点离地图边界的最小距离（随地图 ×0.8）
+    baseGap: 384,        // 据点离双方基地的最小距离（随地图 ×0.8）
     big: { r: 180, w: 2, name: "B" },
     small: { r: 150, w: 1 },
     capRate: 0.20,       // 单人对空据点的占领速度（1 = 满进度，5 秒）
@@ -1477,34 +1484,43 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     spawnInset: 170,     // 基地圆心离左右边界的距离
     baseR: 190,          // 基地回血圈半径
     baseHealPct: 0.05,   // 自家基地每秒回复最大生命的比例
+    pointHeal: 5,        // v4.10 站在己方已占领的据点圈里，每秒回 5 滴血
     /* 据点炮塔：血量 / 伤害 / 攻速 / 弹速 / 追踪全部沿用塔防防御塔，
      * 射程不在这里配 —— 直接取据点半径（见 48_capture.js） */
     turret: { hp: 1200, dmg: 26, atk: 1.05, projSpeed: 1100, homing: 3.4, elev: 70 }
   };
 
   /* ---------------------------------------------------------- v4.8 碰碰车竞技
-   * 圆形擂台 + 每人一辆碰碰车：车与车对撞按接近速度结算伤害与击退，
-   * 把对手撞出擂台（掉进外围水池）或撞爆他的车都能得分，先到 need 分获胜。
-   * 车不会没油，撞爆后在场边重生；人被顶出圈就在擂台中心复活并重新发车。 */
+   * 圆环擂台（v4.10：中心也灌了一池水，可活动范围变成圆环）+ 每人一辆碰碰车：
+   * 车与车对撞按接近速度结算伤害与击退，把对手撞出擂台（掉进水池，内圈外圈都是水）
+   * 或撞爆他的车都能得分，先到 need 分获胜。
+   * v4.10：技能与大招禁用；地图 1200 → 1600；击退随速度的增幅大幅提高；
+   * 场上生成物减半、吹风机更多，气流也能吹动车。 */
   LD.BUMP = {
-    arenaMul: 0.40,      // 擂台半径 = min(宽, 高 - 顶部条) × 该系数（1200 地图约 432）
+    world: { w: 1600, h: 1600, pt: 120 },  // v4.10 地图扩大（1200 → 1600）
+    arenaMul: 0.40,      // 擂台外圈半径 = min(宽, 高 - 顶部条) × 该系数（1600 地图约 590）
+    innerMul: 0.42,      // v4.10 中心水圈半径 = 外圈 × 该系数（活动范围 = 圆环）
+    noSkill: true,       // v4.10 禁用技能与大招（普照常：喇叭）
     carHp: 100,          // 车辆耐久
     dmgPerSpd: 0.055,    // 撞击伤害 = 接近速度 × 系数（速度 300 → 16.5）
     dmgMin: 6, dmgMax: 30,
     selfMul: 0.35,       // 主动撞人的一方也要吃一点（对撞互损）
     minSpd: 110,         // 低于这个接近速度只是轻轻蹭开，不结算伤害
     kb: 300,             // 基础击退
-    kbPerSpd: 0.62,      // 击退随接近速度增加
+    kbPerSpd: 1.5,       // v4.10 击退随接近速度的增幅大幅提高（0.62 → 1.5）
     hitCd: 0.35,         // 同一对车两次结算的最小间隔
     credit: 3.0,         // 撞击归属有效期（多久内被撞出圈算你的）
     scoreWreck: 2,       // 撞爆对方的车
-    scoreDunk: 3,        // 把对方顶出擂台
+    scoreDunk: 3,        // 把对方顶进水里（外圈 / 内圈都算）
     need: 12,            // 先到 12 分获胜
-    respawn: 2.4,        // 落水后回到擂台中心的时间
+    respawn: 2.4,        // 落水后回到擂台的时间
     carRespawn: 4.0,     // 报废车辆的重生时间
     extraCars: 2,        // 车辆总数 = 参赛人数 + 该值（有人没车时就不会干等）
     invuln: 1.2,         // 复活后的无敌时间
     rimW: 16,            // 擂台边缘警示带宽度（视觉）
+    propsKeep: 0.5,      // v4.10 场上随机生成物只保留一半
+    blowers: 3,          // v4.10 环内额外摆放的吹风机数量（生成概率大幅提高）
+    windCarMul: 0.35,    // v4.10 吹风机对车辆的推力系数（适度吹动）
     waterDmg: 0          // 掉进水里不再额外掉血（直接判出局）
   };
 
@@ -1550,7 +1566,7 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
   /* v3.9 通用「长按蓄力」配置：能量包开包 / 霸主加冕共用一套 charge 框架。
    * need = 需要的秒数，keep = 允许离目标的最远距离（超出即中断）。 */
   LD.CHARGE = {
-    pack:  { need: 5.0, keep: 60, label: "开启能量包", color: "#818cf8" },
+    pack:  { need: 5.0, keep: 60, label: "开启道具包", color: "#818cf8" },
     crown: { need: 3.0, keep: 70, label: "加冕中", color: "#fcd34d" },
     /* v3.9.1 停电夜战：充电站——靠近按住交互键 1.6 秒把手电筒充满 */
     station: { need: 1.6, keep: 96, label: "充电中", color: "#38bdf8" }
@@ -1656,7 +1672,8 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
   /* ---------------------------------------------------------- v3.9.1 停电夜战
    * 全图黑：每人自带一圈私人视野（只有自己看得见），交互键 = 手电筒。
    * 手电筒照出的光锥是「公共光」——别人也能看见你照亮的地方，等于暴露自己。
-   * 黑暗条：不受光时每秒 +1，满 15 点后每秒掉 20 血；受光时每秒 -3。
+   * 黑暗条：不受光时每秒 +1，满 30 点后每秒掉 20 血；受光时每秒 -6（v4.10 由 3 翻倍，
+   * 公共光圈的「驱暗」效率更明显，摸黑压条更痛）。
    * 摸黑时自带隐匿，走进充电站的公共光圈就现形；本模式不产能量包（用不上）。 */
   LD.NIGHT = {
     /* 地图放大 1.5 倍（1200 → 1800）：黑灯瞎火里场地要够大，才躲得开、也才走得完 */
@@ -1673,9 +1690,9 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     batMax: 100,             // 电量上限
     batDrain: 6.5,           // 手电筒每秒耗电（满电约 15 秒）
     batLow: 20,              // 低电量阈值（UI 变红提示）
-    darkMax: 15,             // 黑暗条上限
+    darkMax: 30,             // 黑暗条上限（v4.10 由 15 扩到 30：满条要 30 秒，压条更从容）
     darkUp: 1,               // 无光时每秒积累
-    darkDown: 3,             // 受光时每秒消退
+    darkDown: 6,             // 受光时每秒消退（v4.10 ×2：公共光下减值速度翻倍）
     darkDps: 20,             // 条满后每秒掉血
     /* 黑暗侵蚀按 0.25 秒一节结算，避免每帧都掉 0.33 血不停飘字 / 顿帧 */
     darkTick: 0.25,
@@ -1760,7 +1777,7 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     { id: "heal",    name: "回复",   icon: "💊", desc: "场上每 8 秒掉落一个血包，吃下回复生命" },
     { id: "zombie",  name: "僵尸",   icon: "🧟", desc: "场上不断刷新僵尸干扰战局，击杀不掉金币、僵尸也不会放大招" },
     { id: "wheel",   name: "技能轮盘", icon: "🎰", desc: "每 12 秒全场随机换一套技能与大招" },
-    { id: "refresh", name: "物资刷新", icon: "🔄", desc: "每 30 秒按地图预设刷新一次：可破坏物复原、车辆满油、能量包重生（固定障碍不动）" }
+    { id: "refresh", name: "物资刷新", icon: "🔄", desc: "每 30 秒按地图预设刷新一次：可破坏物复原、车辆满油、道具包重生（固定障碍不动）" }
   ];
 
   /* ---------------------------------------------------------- v2.6 闯关词条（轻 roguelite）
@@ -1857,7 +1874,10 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
    * 房间分队、头顶名字、胜负文案统一走这里。 */
   LD.teamColor = function (team) {
     if (team == null || team < 0) return null;
-    if (LD.Battle && LD.Battle.rule === "tower") return team === 1 ? "#60a5fa" : "#f87171";
+    /* v4.10 红蓝两队规则统一取 TEAM2 配色——以前只有塔防特判，
+     * 护送 / 占点的蓝队名字沿用四队配色的 1 号黄，看起来像第三支队伍（BUG）。 */
+    if (LD.Battle && (LD.Battle.rule === "tower" || LD.Battle.rule === "escort" || LD.Battle.rule === "capture"))
+      return team === 1 ? "#60a5fa" : "#f87171";
     return LD.TEAM_COLORS[team] || null;
   };
   LD.RULES = [
@@ -1871,9 +1891,9 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     { id: "relay", name: "车轮战", icon: "🥋", short: "车轮", desc: "排队单挑：擂台上每次只有两人对决，败者永久出局，胜者回血 30% 迎接下一位挑战者。坚持到最后的人获胜。（仅本地面板可用）" },
     { id: "hunt", name: "追猎时刻", icon: "🏹", short: "追猎", desc: "开局随机抽一名玩家当猎人（头顶皇冠、血量 800、全部 CD 减半），其余人是生存者，各自保留自己选的技能。猎人的伤害随存活幸存者数提升：每多一名幸存者就 +20%。开场有大毒圈并缓慢收缩，猎人要在倒计时内清场（时长由房间「对局时间」决定），生存者撑到倒计时结束就赢。" },
     { id: "warmup", name: "乱斗热身", icon: "🎯", short: "热身", desc: "限时刷分：开局在房间「对局时间」统一选 60 / 120 / 180 / 240 / 300 秒，阵亡后 1.6 秒随机位置复活。造成伤害与击杀都计分——每 20 点实际伤害得 1 分（大头），击杀再额外 +5 分；自伤与溢出伤害不计。时间到分数最高者获胜——不计回合、没有淘汰，纯粹练手。" },
-    { id: "blackout", name: "停电夜战", icon: "🔦", short: "夜战", desc: "全场断电，每人只看得见自己身边一格。交互键变成手电筒：按下照亮前方十多格，但照亮的区域别人也看得见——开灯等于把自己暴露出去。地图上有 4 座充电站（自带 3 格公共亮光），靠近按住交互键 1.6 秒把手电筒充满；地上掉落的能量包同样散发 3 格亮光，靠近按交互键开包。手电筒有电量，满电约能照 15 秒。摸黑时黑暗条每秒涨 1 点，攒满 15 点开始每秒掉 20 血；待在光里（自己的手电、充电站、能量包、别人的光锥）黑暗条每秒退 3 点。该模式禁用大招，配装固定为 J 位移斩 + K 手里剑：手里剑蓄力 0.7 秒后高速掷出大型飞镖，命中第一个敌人造成 26 伤害并让其失明 0.6 秒。最后活着的人获胜。" },
-    { id: "escort", name: "护送情报箱", icon: "📦", short: "护送", desc: "两队对抗（红 / 蓝，默认 2 队）：场地正中反复投放一个情报箱，谁先走到箱子上谁就抱起它（自动拾取，不用按键）。抱着箱子走进【敌方】交付点得 1 分——抱箱期间移速降 8%，是活靶子，队友要负责开路。持箱者阵亡后箱子掉在原地，0.8 秒保护期过后任何人都能捡。先到 3 分直接获胜；时间到比分高者胜，同分则比剩余总血量（按队伍合计）。" },
-    { id: "bump", name: "碰碰车竞技", icon: "🚗", short: "碰碰车", desc: "圆形擂台，外围全是水池——开局每人自动坐上一辆碰碰车（电力无限、车上不能用技能，普攻只是喇叭）。开车撞车：接近速度越快，造成的伤害和击退越大，主动撞人的一方也会吃点小亏。把对手的车撞爆（+2 分）或直接顶出擂台掉进水里（+3 分）都能得分，先到 12 分获胜。撞爆的车会在 4 秒后重生，掉进水里的人 2.4 秒后回到擂台中心并重新发车。比的是走位和撞击角度，别把自己也顶下去。" },
+    { id: "blackout", name: "停电夜战", icon: "🔦", short: "夜战", desc: "全场断电，每人只看得见自己身边一格。交互键变成手电筒：按下照亮前方十多格，但照亮的区域别人也看得见——开灯等于把自己暴露出去。地图上有 4 座充电站（自带 3 格公共亮光），靠近按住交互键 1.6 秒把手电筒充满。手电筒有电量，满电约能照 15 秒。摸黑时黑暗条每秒涨 1 点，攒满 30 点开始每秒掉 20 血；待在光里（自己的手电、充电站、别人的光锥）黑暗条每秒退 6 点。另外：处于<b>隐匿状态</b>（隐匿技能、柜子、草丛）的人造成的伤害提高 50%。该模式禁用大招，配装固定为 J 位移斩 + K 手里剑：手里剑蓄力 0.7 秒后高速掷出大型飞镖，命中第一个敌人造成 26 伤害并让其失明 0.6 秒。最后活着的人获胜。" },
+    { id: "escort", name: "护送情报箱", icon: "📦", short: "护送", desc: "两队对抗（红 / 蓝，默认 2 队，分驻左右两端）：场地正中反复投放一个 2x2 的大情报箱。箱子不能抱起来——靠近按交互键进入推箱状态，箱子跟着你朝移动方向挪，推箱时移速只有正常的 20%；被攻击会打断推箱并眩晕 1 秒、3 秒内不能再碰箱子；已有人在推时再按会提示交互占用。把箱子推进【敌方】交付点得 1 分。先到 3 分直接获胜；时间到比分高者胜，同分则比剩余总血量（按队伍合计）。" },
+    { id: "bump", name: "碰碰车竞技", icon: "🚗", short: "碰碰车", desc: "圆环擂台：外围和正中心都是水池，可活动范围是一圈环形赛道——开局每人自动坐上一辆碰碰车（电力无限，技能与大招全部禁用，普攻只是喇叭）。开车撞车：接近速度越快，造成的伤害和击退越大（击退增幅相当可观），主动撞人的一方也会吃点小亏。把对手的车撞爆（+2 分）或顶进水里（+3 分，外圈内圈都算）都能得分，先到 12 分获胜。撞爆的车 4 秒后重生，落水的人 2.4 秒后回到赛道并重新发车。场上有吹风机，气流能把车吹得偏航。" },
     { id: "capture", name: "占点争夺", icon: "🚩", short: "占点", desc: "两队对抗（红 / 蓝）：地图 2400 × 2400，每局随机生成 3~5 座据点，其中最大的据点永远在地图正中。站进圈内读条占领，人越多越快：空据点单人 5 秒，抢敌方已经占下的据点要花两倍时间（10 秒）；双方都在圈里则僵持，谁也推不动。占领后据点每秒产分，中央大点权重 2，其余各 1，先到 80 分获胜；圈里没人时对方的占领进度会缓慢回落。据点被占领后中心会升起一座炮塔，数值与塔防防御塔相同、射程等于据点半径，只打敌方角色；据点易主时炮塔跟着换攻击目标、血量不变，被拆掉后本局永久消失。阵亡后在本方基地复活，首次 3 秒，之后每死一次 +3 秒（最多 24 秒），基地圈内可以缓慢回血。时间到比分高者胜，同分则比队伍剩余总血量。" },
     { id: "tower", name: "塔防对战", icon: "🏰", short: "推塔", desc: "3v3 单线推塔（一局 10 分钟）：地图窄长，左右各一座水晶与两座防御塔，塔和水晶会主动攻击进入范围的敌人。双方每 22 秒刷 6 只机器人小兵沿兵线推进；拆掉敌方全部防御塔才能打水晶。击杀小兵 / 英雄 / 助攻都给局内金币，买装备强化自己；阵亡后有复活倒计时，在基地复活。水晶被拆直接获胜，时间到按队伍击杀数判胜。该模式没有大招，英雄 1-6 级，升级加血加伤害。" },
     { id: "zombiehouse", name: "僵尸守房", icon: "🏠", short: "守房", desc: "所有人同一阵容、互不伤害,守住院子中央那栋房子。僵尸分 5 波从场地边缘涌来,一波比一波多:它们默认直奔房子啃(每次啃掉 22 点耐久),只有玩家拦在近处才会先咬人。房子耐久归零就全军覆没;两波之间有 8 秒喘息,站在房子里每秒修 90 点耐久。击杀僵尸计分,撑过全部波次后击杀数最高者获胜。" }
@@ -6454,10 +6474,20 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
       const dw = LD.DOOMSDAY.world;
       this.world = { w: dw.w, h: dw.h, pt: dw.pt != null ? dw.pt : 70 };
     }
-    /* v4.7 占点争夺：地图长宽各放大 1.5 倍（1600 → 2400） */
+    /* v4.7 占点争夺：地图尺寸由 LD.CAPTURE.world 决定（v4.10 缩到 1920） */
     if (this.rule === "capture" && LD.CAPTURE && LD.CAPTURE.world) {
       const cw = LD.CAPTURE.world;
       this.world = { w: cw.w, h: cw.h, pt: cw.pt != null ? cw.pt : 120 };
+    }
+    /* v4.10 护送情报箱：地图长度 1.3 倍（2080 x 1600） */
+    if (this.rule === "escort" && LD.ESCORT && LD.ESCORT.world) {
+      const ew = LD.ESCORT.world;
+      this.world = { w: ew.w, h: ew.h, pt: ew.pt != null ? ew.pt : 120 };
+    }
+    /* v4.10 碰碰车竞技：地图扩大（1200 → 1600），圆环擂台 */
+    if (this.rule === "bump" && LD.BUMP && LD.BUMP.world) {
+      const bw = LD.BUMP.world;
+      this.world = { w: bw.w, h: bw.h, pt: bw.pt != null ? bw.pt : 120 };
     }
     this.cam = { x: 0, y: 0 };
     /* v3.0 地形：房间带 mapCfg；闯关自动读关卡预置；都不传时保持空场地（兼容旧调用与无头测试） */
@@ -6605,6 +6635,8 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
       /* v3.9 被震下车后的上车禁令 / 被揪出柜子的躲藏禁令 / 能量包蓄力状态 */
       f.noCarT = 0; f._noCarSaidT = 0; f.chg = null;
       f.noHideT = 0; f._noHideSaidT = 0;
+      /* v4.10 护送情报箱：推箱状态 / 推箱禁令随回合复位 */
+      f.pushBox = null; f.noBoxT = 0;
       f.carTarget = null; f.hideT = 0; f.interactCd = 0; f.giftLock = 0;
       f.hideTimer = 0; f.hideSpotted = false; f.bushTimer = 0; f._stealthFlash = false;
       f.skillGot = { skill1: 0, skill2: 0 };
@@ -6771,6 +6803,11 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     if (src && src.dmgBonus) amt = Math.round(amt * (1 + src.dmgBonus));
     /* v2.7 追猎时刻：猎人伤害随存活幸存者数提升（1 + 20% × 存活人数） */
     if (src && src.huntDmgM && src.huntDmgM !== 1) amt = Math.round(amt * src.huntDmgM);
+    /* v4.10 隐匿状态下出手：伤害 ×1.5。口径 = 隐匿技能（stealthSlot 标记）
+     * + 柜子躲藏 + 草丛埋伏；夜战的「摸黑」是视野机制不算隐匿，否则全场常驻增伤。 */
+    if (src && src.kind === "hero" &&
+        ((src.stealthT > 0 && src.stealthSlot != null) || src.hideProp || src.bushHide))
+      amt = Math.round(amt * 1.5);
     /* v2.7 血怒：大招期间自身造成的伤害减少 25% */
     if (src && src.buff && src.buff.rage > 0) {
       const bsk = LD.skill("bloodRage");
@@ -6814,6 +6851,8 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     if (!o.soft) tgt.hitFlash = 0.16;
     /* v3.9 正在开启能量包时挨打 → 蓄力中断，需要重新按交互键再来一次 */
     if (tgt.chg && this.cancelCharge && !o.soft) this.cancelCharge(tgt, "被打断！");
+    /* v4.10 护送情报箱：推箱时挨打 → 打断 + 眩晕 1 秒 + 3 秒内不能再碰箱子 */
+    if (tgt.pushBox && this.escortBreakPush && !o.soft) this.escortBreakPush(tgt, src);
     /* v3.2 世界末日：对僵尸造成的实际伤害计入得分（溢出伤害不算） */
     if (this.rule === "doomsday" && src && src.kind === "hero" && !src.isZombie && tgt.isZombie) {
       const si = this.fighters.indexOf(src);
@@ -7813,18 +7852,22 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     this.ev.push(["x", x, y, r]);
   };
 
-  /* v3.1 补给箱掉落：随机血包 / 能量包 / 移速包 */
+  /* v3.1 补给箱掉落：随机血包 / 道具包（原「能量包」，v4.10 统一改名）/ 移速包 */
+  /* v4.10 道具包（+60 大招能量）只在这些模式之外的局里出现：
+   * 停电夜战（大招禁用）、世界末日（用户反馈「居然能充电」）、护送情报箱（交互被充电抢走）。
+   * 物资刷新修饰符走同一个出口，一处拦截全部生效。 */
+  B.packAllowed = function () {
+    return ["blackout", "doomsday", "escort"].indexOf(this.rule) < 0;
+  };
   B.dropPickup = function (x, y, forceKind) {
-    /* v3.9.1 停电夜战禁用大招，能量包没有用处，本模式直接不产——
-     * 只掉血包与移速包（它们在黑地里也确实救命）。 */
-    if (this.rule === "blackout") {
-      if (forceKind === "energy") return;
-      forceKind = forceKind || (Math.random() < 0.5 ? "heal" : "speed");
-      this.pickups = this.pickups || [];
-      this.pickups.push({ id: (this._pkId = (this._pkId || 0) + 1), x: x, y: y, kind: forceKind, t: 0 });
-      FX.ring(x, y - 10, 46, "rgba(125,211,252,.9)", 4, 0.4);
-      return;
+    if (forceKind === "energy" && !this.packAllowed()) {
+      /* 停电夜战：大招禁用但血包 / 移速包在黑地里救命，转换品类继续掉；
+       * 末日 / 护送：干脆不掉，场面上不要再冒出「按 P 充电」的交互。 */
+      if (this.rule !== "blackout") return;
+      forceKind = Math.random() < 0.5 ? "heal" : "speed";
     }
+    /* v3.9.1 停电夜战的大招禁用兜底：随机掉落时也不再抽到道具包 */
+    if (!forceKind && this.rule === "blackout") forceKind = Math.random() < 0.5 ? "heal" : "speed";
     const pool = ["heal", "energy", "speed"];
     const kind = forceKind || pool[(Math.random() * pool.length) | 0];
     if (!this.pickups) this.pickups = [];
@@ -7878,20 +7921,22 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
   /* v2.7 军备竞赛：局内商店（打僵尸/杀人掉金币，金币买增益，只在当局有效） */
   B.armyShop = function () {
     const S = LD.ASHOP || {};
+    /* v4.10 世界末日：低于 10 金币的道具价格全部 ×2（末日金币好赚，低价货白送一样） */
+    const px = (p) => (this.rule === "doomsday" && p < 10 ? p * 2 : p);
     return [
-      { id: "heal", name: "血包", icon: "❤️", price: S.healPrice || 2,
+      { id: "heal", name: "血包", icon: "❤️", price: px(S.healPrice || 2),
         desc: "立刻恢复 " + (S.healAmount || 45) + " 点生命（满血时买不了）" },
-      { id: "hp", name: "血量加成", icon: "💪", price: S.hpPrice || 2,
+      { id: "hp", name: "血量加成", icon: "💪", price: px(S.hpPrice || 2),
         desc: "本局生命上限 +" + (S.hpGain || 80) + " 并回满增量，可叠加" },
-      { id: "spd", name: "移速加成", icon: "👟", price: S.spdPrice || 2,
+      { id: "spd", name: "移速加成", icon: "👟", price: px(S.spdPrice || 2),
         desc: "本局移速 +" + Math.round((S.spdGain || 0.15) * 100) + "%（最多叠 " + (S.spdMax || 3) + " 次）" },
-      { id: "energy", name: "能量球", icon: "🔮", price: S.energyPrice || 3,
+      { id: "energy", name: "能量球", icon: "🔮", price: px(S.energyPrice || 3),
         desc: "立刻补充 " + (S.energyGain || 60) + " 点大招能量（能量已满时买不了）" }
     ].concat(this.rule === "doomsday" ? (function () {
-      /* v4.1 末日专属：防御建筑，买完立在脚下（金币靠刷僵尸攒） */
+      /* v4.1 末日专属：防御建筑，买完立在脚下（金币靠刷僵尸攒）；同样吃 <10 金币翻倍 */
       const C = (LD.DOOMSDAY || {}).build || {};
       return [
-        { id: "b_fence", name: "栅栏", icon: "🚧", price: (C.fence || {}).price || 6,
+        { id: "b_fence", name: "栅栏", icon: "🚧", price: px((C.fence || {}).price || 6),
           desc: "在脚下立一段可破坏栅栏（血量 " + ((C.fence || {}).hp || 80) + "）：挡人不挡弹，飞行物可以穿过去" },
         { id: "b_turret", name: "小型枪台", icon: "🔫", price: (C.turret || {}).price || 14,
           desc: "在脚下架起枪台（血量 " + ((C.turret || {}).hp || 120) + "）：自动射击 " + ((C.turret || {}).range || 300) + " 范围内的僵尸，并优先吸引它们仇恨" },
@@ -10332,6 +10377,14 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
 
   B.trySlot = function (f, slot, ctrl) {
     if (f.dead || f.stun > 0 || Cine_paused()) return;
+    /* v4.10 碰碰车竞技：技能与大招全部禁用，普攻（喇叭）照常 */
+    if (this.rule === "bump" && slot !== "basic") {
+      if (ctrl && ctrl.press && ctrl.press[slot] && (f._bumpNoSkillT == null || this.t - f._bumpNoSkillT > 1.2)) {
+        f._bumpNoSkillT = this.t;
+        FX.float(f.x, f.y - 56, "碰碰车上不能用技能", "#9fb3dd", 13);
+      }
+      return;
+    }
     /* v3.3：躲在柜子里 / 坐在驾驶位上时不能出招（车上只有喇叭与坦克火炮） */
     if (f.hideProp) return;
     if (f.rideCar) { if (f._rideNoSkillT == null || this.t - f._rideNoSkillT > 1.2) { f._rideNoSkillT = this.t; FX.float(f.x, f.y - 56, "车上无法使用技能", "#9fb3dd", 13); } return; }
@@ -10800,8 +10853,8 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
         f.slot.skill1.phase === "bdash" || f.slot.skill2.phase === "bdash") canMove = false;
     if (f.buff.rush > 0) sp *= LD.skill("meatRush").mul;
     if (f.slowT > 0) sp *= 0.55;   // 被冰痕 / 苍减速
-    /* v4.5 护送情报箱：抱箱时移速降 8%（不乘进 speedMul，避免反复乘漂移） */
-    if (f.intel && LD.ESCORT) sp *= LD.ESCORT.speedMul || 0.92;
+    /* v4.10 护送情报箱：推箱时移速只有正常的 20%（同样是单点乘，不落持久字段） */
+    if (f.pushBox && LD.ESCORT) sp *= LD.ESCORT.pushSpeed || 0.2;
     /* v3.2 世界末日：僵尸在门洞减速圈里额外变慢（给守门的人留输出窗口） */
     if (f.gateSlowT > 0 && f.isZombie) sp *= (LD.DOOMSDAY && LD.DOOMSDAY.gateSlow) || 0.5;
     /* v3.1：推着汽车 / 轮胎 / 方块走时明显变慢；水池里减速；拾取移速包短暂加速 */
@@ -13019,6 +13072,8 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     if (f.hideProp) return { type: "locker", prop: f.hideProp, label: "离开", gap: 0 };
     if (f.rideCar) return { type: "car", prop: f.rideCar, label: "下车", gap: 0 };
     if (f.carryMud) return { type: "mud", prop: f.carryMud, label: "扔出", gap: 0, carry: true };
+    /* v4.10 护送情报箱：推箱是一个持续状态——再按一次交互键 = 松手停下 */
+    if (f.pushBox) return { type: "escortPush", prop: f.pushBox, label: "松手", gap: 0 };
 
     let best = null, bestGap = Infinity;
     const take = (t) => { if (t.gap <= t.lim && t.gap < bestGap) { bestGap = t.gap; best = t; } };
@@ -13043,6 +13098,17 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
      * （doInteract 先下车，目标被跳过）。这两种状态下 P = 下车/离开，
      * 想让能量包重新出现，先下车站到包边即可。 */
     if (f.rideCar || f.hideProp || f.carryMud) return best;
+    /* v4.10 护送情报箱：走近按交互键开始推箱（箱子 2x2，不能抱起来）。
+     * 别人已经在推 → 目标仍在（doInteract 里报「交互占用」），但不覆盖车 / 柜子等目标。 */
+    if (this.rule === "escort" && this.escort && this.escort.box && this.escort.box.alive && !f.pushBox) {
+      const eb = this.escort.box;
+      const d = Math.hypot(f.x - eb.x, f.y - eb.y);
+      const lim = (LD.ESCORT && LD.ESCORT.pushRange) || 96;
+      if (d <= lim && !(f.noBoxT > 0)) {
+        const occ = !!eb.pusher;               // 有人推着 → 按下去只会提示占用，不给正常目标
+        return { type: "escortPush", prop: eb, label: occ ? "占用" : "推箱", gap: d, lim: lim, occupied: occ };
+      }
+    }
     if (this.pickups && this.pickups.length) {
       const lim = CFG.openRange != null ? CFG.openRange : 96;
       let near = null, nd = Infinity;
@@ -13126,6 +13192,21 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
 
     const tgt = this.interactTarget(f);
     if (!tgt) return false;
+    if (tgt.type === "escortPush") {
+      /* v4.10 护送情报箱：开推 / 松手 / 占用 */
+      if (f.pushBox) { this.escortRelease(f, false); return true; }
+      const eb = tgt.prop;
+      if (eb.pusher && eb.pusher !== f && !eb.pusher.dead) {
+        FX.float(f.x, f.y - 64, "交互占用", "#f87171", 14);
+        return true;
+      }
+      if ((f.noBoxT || 0) > 0) {
+        FX.float(f.x, f.y - 64, "手还在抖，等 " + Math.ceil(f.noBoxT) + " 秒", "#f87171", 13);
+        return true;
+      }
+      if (this.escortStartPush) this.escortStartPush(f, eb);
+      return true;
+    }
     if (tgt.type === "gift") { this.pickGift(f, tgt.prop); return true; }
     if (tgt.type === "chg") { this.startCharge(f, tgt.kind, tgt.prop); return true; }
     if (tgt.type === "locker") { this.enterLocker(f, tgt.prop); return true; }
@@ -13147,7 +13228,8 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     const t = this.interactTarget(f);
     if (!t) return "";
     /* v3.9.1：充电站与能量包都是 chg 类，得分开报——否则站在充电站旁边 P 框会写「开启能量包」 */
-    if (t.type === "chg") return t.kind === "crown" ? "争夺皇冠" : t.kind === "station" ? "充电" : "开启能量包";
+    if (t.type === "chg") return t.kind === "crown" ? "争夺皇冠" : t.kind === "station" ? "充电" : "开启道具包";
+    if (t.type === "escortPush") return t.occupied ? "占用" : (f.pushBox ? "松手" : "推箱");
     if (t.type === "car") return "上车";
     if (t.type === "locker") return "躲藏";
     if (t.type === "gift") return "拾取";
@@ -13310,7 +13392,21 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
       const f = this.fighters[i];
       if (f.dead || f.bench) continue;
       if (f.kind !== "hero") continue;              // 勇者 / 僵尸都走 hero 骨架
-      if (f.rideCar || f.hideProp) { f.windT = 0; continue; }
+      if (f.rideCar) {
+        /* v4.10 碰碰车竞技：气流适度吹动车——给车体加一点速度而不是直接位移，
+         * 让风变成「走位干扰」而不是「传送带」。 */
+        if (this.rule === "bump" && f.rideCar.bump) {
+          const cw = TT.windAt(this.terrain, f.rideCar.x, f.rideCar.y);
+          if (cw) {
+            const k = (LD.BUMP && LD.BUMP.windCarMul) || 0.35;
+            f.rideCar.vx += cw.x * k * dt;
+            f.rideCar.vy += cw.y * k * dt;
+            f.windT = 0.12;
+          } else f.windT = 0;
+        } else f.windT = 0;
+        continue;
+      }
+      if (f.hideProp) { f.windT = 0; continue; }
       const w = TT.windAt(this.terrain, f.x, f.y);
       if (!w) { f.windT = 0; continue; }
       f.windT = 0.12;
@@ -13349,6 +13445,7 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
   B.startCharge = function (f, kind, tgt) {
     if (!f || f.dead || !tgt || f.chg) return false;
     if (f.rideCar || f.hideProp || f.carryMud) return false;
+    if (f.pushBox) return false;          // v4.10 推箱中不能开包 / 加冕（先松手）
     if ((f.stun || 0) > 0 || (f.root || 0) > 0) return false;
     const c = { kind: kind, tgt: tgt, t: 0 };
     if (!chgAlive(this, c)) return false;
@@ -14157,29 +14254,34 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
 
 /* ===== 47_escort.js ===== */
 /* ============================================================
- *  47_escort.js — v4.5 护送情报箱
+ *  47_escort.js — v4.5 护送情报箱（v4.10 推箱制重做）
  * ============================================================
- *  两队（红 0 / 蓝 1）：
- *    - 场中央反复投放情报箱，任何英雄走到箱子旁自动抱起（不用按键）
- *    - 抱箱者要把它送进【敌方】交付点圈，进圈即得 1 分
- *    - 抱箱期间移速 -8%（LD.ESCORT.speedMul），阵亡则箱子掉在原地
- *    - 先到 3 分结束；时间到比分高者胜，同分比队伍剩余总血量
+ *  两队（红 0 / 蓝 1，分驻左右两端）：
+ *    - 场中央反复投放一个 2x2 的大情报箱，箱子**不能抱起来**
+ *    - 靠近按交互键进入推箱状态：箱子跟着人朝移动方向挪，推箱时移速 20%
+ *    - 推箱时挨打 → 打断 + 眩晕 1 秒 + 3 秒内不能再碰箱子
+ *    - 已有人在推时再按 = 「交互占用」；再按一次交互键 = 松手
+ *    - 把箱子推进【敌方】交付点得 1 分；先到 3 分结束
+ *    - 时间到比分高者胜，同分比队伍剩余总血量
  *
  *  实现要点：
  *    - 队伍只用 0 / 1：若房间没分队（team < 0），按座位奇偶补，避免同队互伤判定失效
  *    - 箱子是 B.escort.box 里的纯状态对象，不走 pickups（pickups 会被自动吃、有 26 秒寿命）
- *    - 移速削减在 40_battle.js 的移动速度计算里单点加 f.intel 判定，不乘进 speedMul
- *      （speedMul 是持久字段，反复乘会漂）
+ *    - 推箱移速削减在 40_battle.js 的移动速度计算里单点乘 f.pushBox（不落持久字段）
+ *    - 打断钩子挂在 B.damage 单点（escortBreakPush），和蓄力中断同一通道
  * ============================================================ */
 (function (LD) {
   "use strict";
   const B = LD.Battle, FX = LD.FX;
   const TAU = Math.PI * 2;
+  const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+  const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
   const C_RED = "#f87171", C_BLUE = "#60a5fa";
+  const GOLD = "#fbbf24";
 
   /* ==========================================================
-   *  开局：交付点 + 箱子 + 队伍归并
+   *  开局：交付点 + 箱子 + 队伍归并 + 左右分驻
    * ========================================================== */
   B.initEscort = function () {
     const E = LD.ESCORT || {};
@@ -14188,8 +14290,7 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     const inset = E.goalInset || 220;
     this.escort = {
       score: [0, 0],
-      box: { x: w / 2, y: cy, alive: true },
-      carried: false,          // true = 箱子在某个玩家手上（不对应「等待重生」）
+      box: { x: w / 2, y: cy, alive: true, pusher: null },
       respawnT: 0,
       dropT: 0,
       done: false
@@ -14199,10 +14300,26 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
       { team: 1, x: w - inset, y: cy }
     ];
     this.fighters.forEach(f => {
-      f.intel = false;
+      f.intel = false; f.pushBox = null; f.noBoxT = 0;
       if (f.kind !== "hero") return;
       if (f.team == null || f.team < 0) f.team = f.side % 2;
       f.team = f.team > 0 ? 1 : 0;      // 本模式只有两队，2/3 号队并到蓝队
+    });
+    /* v4.10 阵营分驻左右两端：红队站左交付点一带，蓝队站右交付点一带 */
+    const cnt = { 0: 0, 1: 0 };
+    this.fighters.forEach(f => {
+      if (f.kind !== "hero" || f.bench) return;
+      const t = f.team > 0 ? 1 : 0;
+      const g = this.escortGoals[t];
+      const k = cnt[t]++;
+      const ang = -0.6 + k * 0.5 + (t ? Math.PI : 0);
+      const rr = 120 + (k % 2) * 60;
+      f.x = clamp(g.x + Math.cos(ang) * rr * (t ? -1 : 1), 60, w - 60);
+      f.y = clamp(g.y + Math.sin(ang) * rr, top + 60, this.world.h - 60);
+      if (this.terrain && !LD.Terrain.clearAt(this.terrain, f.x, f.y, 26)) {
+        f.x = clamp(g.x + (t ? 150 : -150), 60, w - 60);
+        f.y = g.y + (k - 1) * 70;
+      }
     });
   };
 
@@ -14211,21 +14328,44 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     return g[team > 0 ? 1 : 0] || g[0] || null;
   };
 
-  /** 放下箱子（阵亡 / 手动） */
-  B.escortDrop = function (f) {
-    if (!this.escort) return;
+  /* ==========================================================
+   *  推箱：开始 / 松手 / 被打断
+   * ========================================================== */
+  B.escortStartPush = function (f, box) {
+    if (!f || f.dead || !box || !box.alive || box.pusher) return false;
+    box.pusher = f;
+    f.pushBox = box;
+    FX.ring(box.x, box.y, 66, "rgba(251,191,36,.9)", 5, 0.45);
+    FX.float(f.x, f.y - 72, "推箱中（移速 -80%，受击打断）", GOLD, 14);
+    return true;
+  };
+
+  /** 松手（manual=true 是主动按交互键放下） */
+  B.escortRelease = function (f, manual) {
+    const box = f && f.pushBox;
+    if (!box) return false;
+    if (box.pusher === f) box.pusher = null;
+    f.pushBox = null;
+    if (manual) FX.float(f.x, f.y - 66, "松手了", "#9fb3dd", 13);
+    return true;
+  };
+
+  /** 推箱时挨打：打断 + 眩晕 + 3 秒禁碰（B.damage 单点回调） */
+  B.escortBreakPush = function (f, src) {
     const E = LD.ESCORT || {};
-    f.intel = false;
-    const b = this.escort.box;
-    b.x = f.x; b.y = f.y; b.alive = true;
-    this.escort.carried = false;
-    this.escort.dropT = E.protect != null ? E.protect : 0.8;
-    FX.ring(f.x, f.y - 10, 46, "rgba(251,191,36,.9)", 4, 0.4);
-    FX.float(f.x, f.y - 70, "情报箱掉落", "#fbbf24", 14);
+    if (!f || !f.pushBox) return;
+    const box = f.pushBox;
+    if (box.pusher === f) box.pusher = null;
+    f.pushBox = null;
+    f.stun = Math.max(f.stun || 0, E.stun || 1.0);
+    f.noBoxT = E.noTouch || 3.0;
+    FX.ring(f.x, f.y - 16, 70, "rgba(248,113,113,.9)", 5, 0.45);
+    FX.float(f.x, f.y - 78, "推箱被打断！", "#f87171", 16);
+    this.ev.push(["t", f.x, f.y - 78, "推箱被打断！", "#f87171"]);
   };
 
   /* ==========================================================
-   *  每帧：拾取 / 交付 / 重生 / 计时
+   *  每帧：推箱位移 / 交付 / 重生 / 计时
    * ========================================================== */
   B.updateEscort = function (dt) {
     const E = LD.ESCORT || {};
@@ -14233,57 +14373,63 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     if (!st || st.done) return;
     const b = st.box;
     st.dropT = Math.max(0, (st.dropT || 0) - dt);
+    const boxHalf = (E.boxW || 80) / 2;
+    const goalR = E.goalR || 110;
 
-    /* 交付后的重新投放（被抱在手上时 carried=true，不参与重生倒计时） */
-    if (!b.alive && !st.carried) {
+    /* 交互禁令统一倒数 */
+    for (const f of this.fighters) {
+      if (f.kind !== "hero") continue;
+      if ((f.noBoxT || 0) > 0) f.noBoxT = Math.max(0, f.noBoxT - dt);
+    }
+
+    /* 推箱者失效（阵亡 / 下场 / 被晕）→ 松手 */
+    if (b.pusher && (b.pusher.dead || b.pusher.bench || b.pusher.pushBox !== b)) {
+      if (b.pusher.pushBox === b) b.pusher.pushBox = null;
+      b.pusher = null;
+    }
+    if (b.pusher && (b.pusher.stun || 0) > 0) this.escortBreakPush(b.pusher, null);
+
+    /* 交付后的重新投放 */
+    if (!b.alive) {
       st.respawnT -= dt;
       if (st.respawnT <= 0) {
         b.x = this.world.w / 2;
         b.y = (this.world.pt || 0) + (this.world.h - (this.world.pt || 0)) / 2;
-        b.alive = true;
-        FX.ring(b.x, b.y, 62, "rgba(251,191,36,.9)", 5, 0.5);
-        FX.float(b.x, b.y - 58, "情报箱已投放", "#fbbf24", 15);
-        this.ev.push(["h", b.x, b.y - 58, "情报箱已投放", "#fbbf24"]);
+        b.alive = true; b.pusher = null;
+        FX.ring(b.x, b.y, 90, "rgba(251,191,36,.9)", 5, 0.5);
+        FX.float(b.x, b.y - 66, "情报箱已投放", GOLD, 15);
+        this.ev.push(["h", b.x, b.y - 66, "情报箱已投放", GOLD]);
       }
     }
 
-    const boxR = E.boxR || 58;
-    const goalR = E.goalR || 110;
-    const need = E.need || 3;
-    for (const f of this.fighters) {
-      if (f.kind !== "hero" || f.bench) continue;
+    /* 推箱位移：箱子挂在推手面前，跟着人的朝向走（人动箱动，人停箱停） */
+    if (b.alive && b.pusher) {
+      const f = b.pusher;
+      const fc = f.facing || { x: 1, y: 0 };
+      const off = f.r + boxHalf - 8;
+      b.x = clamp(f.x + fc.x * off, boxHalf + 4, this.world.w - boxHalf - 4);
+      b.y = clamp(f.y + fc.y * off, (this.world.pt || 0) + boxHalf + 4, this.world.h - boxHalf - 4);
+      if (Math.random() < dt * 9) FX.trail(b.x + (Math.random() - 0.5) * boxHalf, b.y - boxHalf * 0.4, "#fde68a", 3, 0.3);
+    }
 
-      /* 持箱者阵亡 → 掉在原地（B.kill 之后状态才稳定，这里统一处理） */
-      if (f.intel && f.dead) { this.escortDrop(f); continue; }
-
-      /* 拾取：任何没箱子的活人都能捡，谁先贴上去算谁的 */
-      if (b.alive && !f.intel && !f.dead && st.dropT <= 0 &&
-          Math.hypot(f.x - b.x, f.y - b.y) <= boxR + f.r) {
-        b.alive = false;
-        f.intel = true;
-        st.carried = true;                 // 箱子在手上：别触发重生分支，否则会凭空多出一个
-        FX.ring(f.x, f.y - 20, 56, "rgba(251,191,36,.95)", 5, 0.45);
-        FX.burst(f.x, f.y - 26, 12, ["#fde68a", "#fff"], { speed: 150 });
-        FX.float(f.x, f.y - 76, "拿到情报箱！", "#fbbf24", 17);
-        this.ev.push(["h", f.x, f.y - 76, "拿到情报箱！", "#fbbf24"]);
-      }
-
-      /* 交付：进入敌方交付点 */
-      if (f.intel) {
-        const goal = this.escortGoalOf(f.team === 0 ? 1 : 0);
-        if (goal && Math.hypot(f.x - goal.x, f.y - goal.y) <= goalR) {
-          f.intel = false;
-          const ti = f.team > 0 ? 1 : 0;
-          st.score[ti] = (st.score[ti] || 0) + 1;
-          b.alive = false;
-          st.carried = false;
-          st.respawnT = E.respawn || 2.2;
-          FX.ring(f.x, f.y - 20, 96, "rgba(74,222,128,.95)", 7, 0.6);
-          FX.burst(f.x, f.y - 26, 20, ["#86efac", "#fff"], { speed: 210 });
-          FX.float(f.x, f.y - 86, "交付成功 +1（" + st.score[ti] + "/" + need + "）", "#4ade80", 18);
-          this.ev.push(["h", f.x, f.y - 86, "情报交付 +1", "#4ade80"]);
-          if (st.score[ti] >= need) { this.escortFinish(ti); return; }
-        }
+    /* 交付：箱子被推进某队的交付点 → 得分的是「另一个队」（推进敌方交付点） */
+    if (b.alive && b.pusher && st.dropT <= 0) {
+      for (const g of (this.escortGoals || [])) {
+        if (g.team === (b.pusher.team > 0 ? 1 : 0)) continue;   // 自己的圈不算
+        if (dist(b, g) > goalR - boxHalf * 0.4) continue;
+        const ti = b.pusher.team > 0 ? 1 : 0;
+        const need = E.need || 3;
+        st.score[ti] = (st.score[ti] || 0) + 1;
+        const pf = b.pusher;
+        if (pf) pf.pushBox = null;             // v4.10 交付后推箱状态一并解除
+        b.alive = false; b.pusher = null;
+        st.respawnT = E.respawn || 2.2;
+        FX.ring(g.x, g.y - 20, 110, "rgba(74,222,128,.95)", 7, 0.6);
+        FX.burst(g.x, g.y - 26, 24, ["#86efac", "#fff"], { speed: 210 });
+        FX.float(g.x, g.y - 92, "情报交付 +1（" + st.score[ti] + "/" + need + "）", "#4ade80", 18);
+        this.ev.push(["h", g.x, g.y - 92, "情报交付 +1", "#4ade80"]);
+        if (st.score[ti] >= need) { this.escortFinish(ti); return; }
+        break;
       }
     }
 
@@ -14331,7 +14477,7 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     const t = this.t || 0;
     const goalR = E.goalR || 110;
 
-    /* 交付点：己方的圈（站在自己圈里没有用），用队伍色 + 缓慢呼吸 */
+    /* 交付点：己方的圈（推进自己圈里没有用），用队伍色 + 缓慢呼吸 */
     (this.escortGoals || []).forEach(g => {
       const col = g.team === 0 ? C_RED : C_BLUE;
       const alive = this.fighters.some(f => f.kind === "hero" && !f.bench && !f.dead && (f.team > 0 ? 1 : 0) === g.team);
@@ -14344,7 +14490,7 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
       ctx.strokeStyle = col; ctx.lineWidth = 4;
       ctx.beginPath(); ctx.arc(g.x, g.y, goalR, 0, TAU); ctx.stroke();
       ctx.setLineDash([]);
-      /* 圈心画一面小旗，指示「往这里送」 */
+      /* 圈心画一面小旗，指示「往这里推」 */
       ctx.globalAlpha = alive ? 0.55 : 0.28;
       ctx.strokeStyle = col; ctx.lineWidth = 3;
       ctx.beginPath(); ctx.moveTo(g.x, g.y + 22); ctx.lineTo(g.x, g.y - 26); ctx.stroke();
@@ -14355,45 +14501,62 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
       ctx.restore();
     });
 
-    /* 持箱者：脚下金色光环 + 头顶箱子标记 + 指向敌方交付点的引导虚线 */
-    const carrier = this.fighters.find(f => f.kind === "hero" && f.intel && !f.dead);
-    if (carrier) {
-      const goal = this.escortGoalOf(carrier.team === 0 ? 1 : 0);
+    /* 推箱者：脚下金色光环 + 指向敌方交付点的引导虚线 */
+    const pusher = st.box && st.box.alive && st.box.pusher && !st.box.pusher.dead ? st.box.pusher : null;
+    if (pusher) {
+      const goal = this.escortGoalOf(pusher.team === 0 ? 1 : 0);
       ctx.save();
       ctx.globalAlpha = 0.55 + Math.sin(t * 5) * 0.16;
-      ctx.strokeStyle = "#fbbf24"; ctx.lineWidth = 3;
-      ctx.beginPath(); ctx.ellipse(carrier.x, carrier.y - 6, 26, 13, 0, 0, TAU); ctx.stroke();
+      ctx.strokeStyle = GOLD; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.ellipse(pusher.x, pusher.y - 6, 26, 13, 0, 0, TAU); ctx.stroke();
       if (goal) {
         ctx.globalAlpha = 0.28;
         ctx.setLineDash([10, 12]); ctx.lineDashOffset = -t * 34;
-        ctx.beginPath(); ctx.moveTo(carrier.x, carrier.y - 23); ctx.lineTo(goal.x, goal.y); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(pusher.x, pusher.y - 23); ctx.lineTo(goal.x, goal.y); ctx.stroke();
         ctx.setLineDash([]);
       }
       ctx.restore();
     }
 
-    /* 地上的箱子 */
+    /* 地上的箱子：2x2 大木箱 */
     const b = st.box;
-    if (b.alive) {
-      const bob = Math.sin(t * 3.4) * 4;
+    if (b && b.alive) {
+      const half = (E.boxW || 80) / 2;
+      const bob = Math.sin(t * 3.4) * 3;
       const y = b.y + bob;
       ctx.save();
       /* 光柱 */
-      const gr = ctx.createRadialGradient ? ctx.createRadialGradient(b.x, y, 4, b.x, y, 62) : null;
+      const gr = ctx.createRadialGradient ? ctx.createRadialGradient(b.x, y, 8, b.x, y, half * 1.7) : null;
       if (gr && gr.addColorStop) {
-        gr.addColorStop(0, "rgba(251,191,36,.34)");
+        gr.addColorStop(0, "rgba(251,191,36,.30)");
         gr.addColorStop(1, "rgba(251,191,36,0)");
         ctx.fillStyle = gr;
-        ctx.beginPath(); ctx.arc(b.x, y, 62, 0, TAU); ctx.fill();
+        ctx.beginPath(); ctx.arc(b.x, y, half * 1.7, 0, TAU); ctx.fill();
       }
-      /* 箱体 */
-      ctx.fillStyle = "#b45309"; ctx.strokeStyle = "#fde68a"; ctx.lineWidth = 2.5;
-      ctx.beginPath(); ctx.rect(b.x - 15, y - 19, 30, 24); ctx.fill(); ctx.stroke();
+      /* 箱体（2x2，画成有点高度的大箱子） */
+      ctx.fillStyle = "#b45309"; ctx.strokeStyle = "#fde68a"; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.rect(b.x - half, y - half - 10, half * 2, half * 2 - 4); ctx.fill(); ctx.stroke();
       ctx.fillStyle = "#f59e0b";
-      ctx.beginPath(); ctx.rect(b.x - 15, y - 19, 30, 7); ctx.fill();
+      ctx.fillRect(b.x - half, y - half - 10, half * 2, 14);
       ctx.fillStyle = "#fde68a";
-      ctx.fillRect(b.x - 2.5, y - 19, 5, 24);          // 竖向绑带
-      ctx.fillRect(b.x - 15, y - 8, 30, 3);            // 横向绑带
+      ctx.fillRect(b.x - 6, y - half - 10, 12, half * 2 - 4);            // 竖向绑带
+      ctx.fillRect(b.x - half, y - 14, half * 2, 6);                      // 横向绑带
+      /* 「情报」封条 */
+      ctx.globalAlpha = 0.85;
+      ctx.fillStyle = "#7c2d12";
+      ctx.fillRect(b.x - 22, y - 12, 44, 22);
+      ctx.fillStyle = "#fde68a";
+      ctx.font = "bold 13px system-ui,'Microsoft YaHei',sans-serif";
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText("情报", b.x, y);
+      /* 推箱者高亮描边 */
+      if (b.pusher) {
+        ctx.globalAlpha = 0.9;
+        ctx.strokeStyle = GOLD; ctx.lineWidth = 3;
+        ctx.setLineDash([12, 8]); ctx.lineDashOffset = -t * 30;
+        ctx.strokeRect(b.x - half - 5, y - half - 15, half * 2 + 10, half * 2 + 6);
+        ctx.setLineDash([]);
+      }
       ctx.restore();
     }
   };
@@ -14712,6 +14875,22 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
       }
       p.c0 = c0; p.c1 = c1;
 
+      /* v4.10 据点回血：站在己方已占领的据点圈里，每秒回 5 滴血（鼓励占完守点） */
+      if (p.owner >= 0 && (C.pointHeal || 0) > 0) {
+        for (const f of this.fighters) {
+          if (f.kind !== "hero" || f.dead || f.bench) continue;
+          if ((f.team > 0 ? 1 : 0) !== p.owner) continue;
+          if (Math.hypot(f.x - p.x, f.y - p.y) > p.r) continue;
+          if (f.hp >= f.maxHp) continue;
+          f.hp = Math.min(f.maxHp, f.hp + C.pointHeal * dt);
+          f.capHealAcc = (f.capHealAcc || 0) + dt;
+          if (f.capHealAcc >= 1.0) {
+            f.capHealAcc = 0;
+            FX.float(f.x + rand(-8, 8), f.y - 62, "+" + C.pointHeal, "#4ade80", 12);
+          }
+        }
+      }
+
       /* 双方都在圈里 → 僵持，谁也不推进 */
       if (c0 > 0 && c1 > 0) continue;
 
@@ -14949,19 +15128,25 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     const w = this.world.w, top = this.world.pt || 0;
     const h = this.world.h - top;
     const r = Math.min(w, h) * (C.arenaMul || 0.34);
-    return { x: w / 2, y: top + h / 2, r: r };
+    /* v4.10 中心水圈：可活动范围 = 圆环（ir = 内圈半径，0 = 没有内圈的老擂台） */
+    const ir = (C.innerMul || 0) > 0 ? r * C.innerMul : 0;
+    return { x: w / 2, y: top + h / 2, r: r, ir: ir };
   };
 
-  /** 擂台内的一个空位（离圆心 lim 以内、不压设施） */
+  /** 环带里的一个空位（离内外边缘都留 pad、不压设施） */
   B.bumpSpot = function (pad) {
     const A = this.bumpArena();
-    const lim = Math.max(40, A.r - (pad == null ? 66 : pad));
+    const pOut = pad == null ? 66 : pad;
+    const pIn = A.ir > 0 ? Math.max(40, pOut) : 0;
+    const dMin = A.ir + pIn, dMax = A.r - pOut;
+    if (dMax <= dMin) return { x: A.x + (A.ir + A.r) / 2, y: A.y };
     for (let k = 0; k < 70; k++) {
-      const a = Math.random() * TAU, d = Math.random() * lim;
+      const a = Math.random() * TAU, d = dMin + Math.random() * (dMax - dMin);
       const x = A.x + Math.cos(a) * d, y = A.y + Math.sin(a) * d;
       if (!this.terrain || !T || !T.clearAt || T.clearAt(this.terrain, x, y, 44)) return { x: x, y: y };
     }
-    return { x: A.x, y: A.y };
+    const d = (dMin + dMax) / 2;
+    return { x: A.x + d, y: A.y };
   };
 
   /** 清 / 加设施后重标占用格（地形层没有公开的 reindex，这里照抄 48_capture 的口径） */
@@ -15022,24 +15207,51 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     const map = this.terrain;
     const heroes = this.fighters.filter(f => f.kind === "hero" && !f.bench);
 
-    /* 1. 擂台外的设施全部清掉：圆外是水池，留着箱子 / 树会让车卡在岸边上不去 */
+    /* 1. 生成物减半（v4.10）：先随机砍一半，再清掉环带外 / 内圈里的（圆外圆内都是水） */
+    if (map && map.props) {
+      const keep = (C.propsKeep != null ? C.propsKeep : 1);
+      map.props = map.props.filter(o => o.kind === "car" ? false : Math.random() < keep);
+    }
+
+    /* 1.5 吹风机（v4.10）：环带里均匀摆 C.blowers 台，朝向沿切线，气流能把车吹偏航 */
+    const blowers = C.blowers || 0;
+    for (let i = 0; i < blowers; i++) {
+      const ang = (i + 0.5) / blowers * TAU + Math.random() * 0.5;
+      const d = (A.ir + A.r) / 2;
+      const x = A.x + Math.cos(ang) * d, y = A.y + Math.sin(ang) * d;
+      if (map && T && T.clearAt && !T.clearAt(map, x, y, 40)) continue;
+      /* WIND_DIR 顺序：0 右 1 下 2 左 3 上——取与半径垂直的切线方向 */
+      const tang = Math.round(((ang + Math.PI / 2) / (Math.PI / 2))) % 4;
+      map.props.push({
+        uid: 890000 + i, kind: "blower", mat: "blower_steel", shape: "blower",
+        cw: 1, ch: 1, w: 40, h: 40, x: x, y: y, ox: x, oy: y,
+        elev: 44, mass: 5, hp: 110, maxHp: 110,
+        dead: false, flash: 0, vx: 0, vy: 0, free: false, glow: null,
+        boomR: 0, boomDmg: 0, variant: (i * 97) % 997, runtime: true,
+        blockMove: true, blockProj: true, dir: tang, len: 5,
+        power: (LD.BLOWER && LD.BLOWER.force) || 420, _fuelSaid: false
+      });
+    }
+
+    /* 2. 清掉水域里的设施并重标占用格 */
     if (map && map.props) {
       map.props = map.props.filter(o => {
-        if (o.kind === "car") return false;                       // 旧车一律换成碰碰车
-        return Math.hypot(o.x - A.x, o.y - A.y) <= A.r - 26;
+        const d = Math.hypot(o.x - A.x, o.y - A.y);
+        return d <= A.r - 26 && d >= A.ir + 26;
       });
       reindex(map);
     }
 
-    /* 2. 摆车：沿擂台内圈均匀分布，车头朝圆心 */
+    /* 3. 摆车：沿环带中部均匀分布，车头朝切线方向（比赛一开始就能跑起来） */
     const n = heroes.length + (C.extraCars || 2);
     const cars = [];
     for (let i = 0; i < n; i++) {
       const ang = i / n * TAU;
-      let x = A.x + Math.cos(ang) * A.r * 0.6;
-      let y = A.y + Math.sin(ang) * A.r * 0.6;
+      const d = (A.ir + A.r) / 2;
+      let x = A.x + Math.cos(ang) * d;
+      let y = A.y + Math.sin(ang) * d;
       const o = this.mkBumper(x, y, i);
-      o.facing = { x: -Math.cos(ang), y: -Math.sin(ang) };
+      o.facing = { x: -Math.sin(ang), y: Math.cos(ang) };   // 切线方向（逆时针）
       cars.push(o);
       if (map && map.props) map.props.push(o);
     }
@@ -15217,11 +15429,12 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
       }
     }
 
-    /* ---- 3. 出圈落水 ---- */
+    /* ---- 3. 落水（v4.10 圆环擂台：冲出外圈 / 冲进中心水圈都算） ---- */
     const credit = C.credit || 3;
     for (const f of this.fighters) {
       if (f.kind !== "hero" || f.bench || f.dead || f.bumpOut) continue;
-      if (Math.hypot(f.x - A.x, f.y - A.y) <= A.r) continue;
+      const d = Math.hypot(f.x - A.x, f.y - A.y);
+      if (d <= A.r && d >= A.ir) continue;
       const by = (f.lastHitBy && !f.lastHitBy.dead && this.t - (f.lastHitT == null ? -99 : f.lastHitT) <= credit)
         ? f.lastHitBy : null;
       this.bumpDunk(f, by, false);
@@ -15288,32 +15501,50 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     const t = this.t || 0;
     const top = this.world.pt || 0;
 
-    /* 1. 擂台外：水池（整块挖掉圆内的深色 + 同心波纹） */
+    /* 1. 水池（v4.10 圆环）：外圈之外 + 中心水圈，整块挖掉 + 同心波纹 */
     ctx.save();
     ctx.beginPath();
     ctx.rect(-240, top - 240, this.world.w + 480, this.world.h - top + 480);
     ctx.arc(A.x, A.y, A.r, 0, TAU, true);
     ctx.fillStyle = "rgba(9,32,54,.80)";
     ctx.fill("evenodd");
+    if (A.ir > 0) {
+      ctx.beginPath(); ctx.arc(A.x, A.y, A.ir, 0, TAU);
+      ctx.fillStyle = "rgba(9,32,54,.80)";
+      ctx.fill();
+    }
     ctx.globalAlpha = 0.20;
     ctx.strokeStyle = "#7dd3fc"; ctx.lineWidth = 2;
     for (let k = 0; k < 4; k++) {
       const rr = A.r + 26 + ((t * 26 + k * 44) % 176);
       ctx.globalAlpha = 0.20 * (1 - k * 0.22);
       ctx.beginPath(); ctx.arc(A.x, A.y, rr, 0, TAU); ctx.stroke();
+      if (A.ir > 0) {
+        /* 内圈波纹往里收 */
+        const ri = A.ir - 26 - ((t * 26 + k * 44) % 110);
+        if (ri > 8) {
+          ctx.globalAlpha = 0.18 * (1 - k * 0.22);
+          ctx.beginPath(); ctx.arc(A.x, A.y, ri, 0, TAU); ctx.stroke();
+        }
+      }
     }
     ctx.restore();
 
-    /* 2. 擂台边缘：黄黑警示带 + 内侧柔光 */
+    /* 2. 擂台边缘（外圈 + 内圈）：黄黑警示带 + 内侧柔光 */
     ctx.save();
-    ctx.globalAlpha = 0.9;
-    ctx.setLineDash([26, 18]); ctx.lineDashOffset = -t * 26;
-    ctx.strokeStyle = "#fbbf24"; ctx.lineWidth = C.rimW || 16;
-    ctx.beginPath(); ctx.arc(A.x, A.y, A.r - (C.rimW || 16) / 2, 0, TAU); ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.globalAlpha = 0.25 + Math.sin(t * 2) * 0.06;
-    ctx.strokeStyle = "#fde68a"; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.arc(A.x, A.y, A.r - (C.rimW || 16) - 3, 0, TAU); ctx.stroke();
+    const rim = C.rimW || 16;
+    const rimRing = (rr) => {
+      ctx.globalAlpha = 0.9;
+      ctx.setLineDash([26, 18]); ctx.lineDashOffset = -t * 26;
+      ctx.strokeStyle = "#fbbf24"; ctx.lineWidth = rim;
+      ctx.beginPath(); ctx.arc(A.x, A.y, rr - rim / 2, 0, TAU); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 0.25 + Math.sin(t * 2) * 0.06;
+      ctx.strokeStyle = "#fde68a"; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(A.x, A.y, rr - rim - 3, 0, TAU); ctx.stroke();
+    };
+    rimRing(A.r);
+    if (A.ir > 0) rimRing(A.ir);
     ctx.restore();
 
     /* 3. 车辆耐久条（画在车顶上方） */
@@ -15996,7 +16227,12 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
         const dC = Math.hypot(f.x - A.x, f.y - A.y) || 1;
         const outX = (f.x - A.x) / dC, outY = (f.y - A.y) / dC;
         const aimX = tx - f.x, aimY = ty - f.y, aimD = Math.hypot(aimX, aimY) || 1;
+        /* v4.10 圆环擂台：外圈贴边 / 内圈水边还朝着水里开 → 掉头回环带中部 */
+        const ir = A.ir || 0;
         if (dC > A.r * 0.72 && (aimX / aimD) * outX + (aimY / aimD) * outY > 0.2) { tx = A.x; ty = A.y; }
+        else if (ir > 0 && dC < ir + 96 && (aimX / aimD) * outX + (aimY / aimD) * outY < -0.2) {
+          tx = A.x + outX * (A.r + ir) * 0.5; ty = A.y + outY * (A.r + ir) * 0.5;
+        }
       }
       const ax = tx - f.x, ay = ty - f.y, ad = Math.hypot(ax, ay) || 1;
       ctrl.mx = ax / ad; ctrl.my = ay / ad;
@@ -16392,27 +16628,28 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
         my += py * b._unstickDir * 1.6;
       }
     }
-    /* v4.5 护送情报箱：抱箱 → 冲敌方交付点；空手 → 抢地上的箱 / 追持箱的人。
-     * 只接管移动，攻击决策仍走下面的通用逻辑（贴身照样会出手）。 */
+    /* v4.10 护送情报箱（推箱制）：推着 → 冲敌方交付点；空手 → 奔箱子按交互键开推；
+     * 敌方在推 → 追推箱的人把他打断。只接管移动，攻击决策仍走下面的通用逻辑。 */
     if (B.rule === "escort" && B.escort) {
       const st = B.escort, box = st.box;
       const myT = f.team > 0 ? 1 : 0;
-      if (f.intel) {
+      if (f.pushBox) {
         const goal = B.escortGoalOf(myT === 0 ? 1 : 0);
         if (goal) {
           const ax = goal.x - f.x, ay = goal.y - f.y, ad = Math.hypot(ax, ay) || 1;
           mx = ax / ad * 1.8; my = ay / ad * 1.8;
         }
-      } else if (box.alive) {
+      } else if (box.alive && !box.pusher) {
         const ax = box.x - f.x, ay = box.y - f.y, ad = Math.hypot(ax, ay) || 1;
         mx = ax / ad * 1.7; my = ay / ad * 1.7;
-      } else {
-        const holder = B.fighters.find(o => o.kind === "hero" && o.intel && !o.dead &&
-          (o.team > 0 ? 1 : 0) !== myT);
-        if (holder) {
-          const ax = holder.x - f.x, ay = holder.y - f.y, ad = Math.hypot(ax, ay) || 1;
-          mx = ax / ad * 1.7; my = ay / ad * 1.7;
-        }
+        if (ad < f.r + ((LD.ESCORT || {}).pushRange || 96) * 0.7) ctrl.press.interact = true;  // 到箱边就开推
+      } else if (box.alive && box.pusher && (box.pusher.team > 0 ? 1 : 0) !== myT) {
+        const ax = box.pusher.x - f.x, ay = box.pusher.y - f.y, ad = Math.hypot(ax, ay) || 1;
+        mx = ax / ad * 1.8; my = ay / ad * 1.8;
+      } else if (box.alive && box.pusher) {
+        /* 队友在推：跟着护驾（贴在推箱人附近打掩护） */
+        const ax = box.pusher.x - f.x, ay = box.pusher.y - f.y, ad = Math.hypot(ax, ay) || 1;
+        if (ad > 150) { mx = ax / ad * 1.4; my = ay / ad * 1.4; }
       }
     }
     /* v4.7 占点争夺：挑「最需要自己」的据点——非自家的点、自家被抢的点优先，
@@ -17481,9 +17718,9 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
       '<li><b>世界末日</b>：所有玩家<b>同一阵容、互不伤害</b>，出生在地图左端的<b>圆形小岛</b>上——四周全是深渊，岛缘就是墙。中间一条 10 格长、2 格宽的<b>独木桥</b>通向右大陆：僵尸从大陆不断刷出（存活玩家越多刷得越快），<b>过桥移速 -70%</b>，守桥清怪是主业。<b>整块右大陆是危险区</b>（等同缩圈乱斗的圈外），站上去每 0.5 秒掉 5 血，头顶会亮「☠ 危险区」；回到岛上每秒回血 7。对僵尸造成的伤害与击杀都计入个人分数（1 伤 = 1 分、击杀 +10 分），击杀还掉局内金币，可按 <span class="k">B</span> 买血包 / 血量 / 移速 / 能量球，还能买<b>栅栏 / 枪台 / 炮台</b>守桥（枪台炮台会吸引僵尸仇恨）。最后存活的玩家获胜；时间到时仍有多人存活，则<b>分数最高者获胜</b>（不看剩余血量）。</li>',
       '<li><b>车轮战</b>：排队单挑，擂台上每次只有两人对决，败者永久出局，胜者回血 30% 迎接下一位挑战者。（仅本地面板可用）</li>',      '<li><b>追猎时刻</b>：开局<b>随机抽一名玩家当猎人</b>——先播一段猎人特写，猎人头顶加皇冠、血量 <b>800</b>、全部 CD 减半，且<b>伤害随存活幸存者数提升</b>（每多一名 +20%）；其余人是生存者，各自保留自己选的技能、互相同队。开场就有一个大毒圈并缓慢收缩（90 秒过去仍有大片走位空间）。猎人要在 90 秒内清场，生存者撑到倒计时结束就赢。</li>',
       '<li><b>乱斗热身</b>：限时刷分。对局时长在房间界面的「对局时间」里统一选 <b>60 / 120 / 180 / 240 / 300 秒</b>，阵亡不淘汰、1.6 秒后在随机位置复活，每次击杀得 1 分，时间到分数最高者获胜。不计回合、没有淘汰，纯粹练手。</li>',
-      '<li><b>护送情报箱</b>：两队对抗（房间界面选红队 / 蓝队，默认 2 队）。场地正中会反复投放一个<b>情报箱</b>，任何英雄<b>走到箱子旁边自动抱起</b>（不用按键）；抱着箱子走进<b>敌方交付点</b>（地图左右两侧的红 / 蓝大圈）得 <b>1 分</b>。抱箱期间<b>移速降 8%</b>，而且头顶有金色标记与指向敌方基地的虚线，是全场最显眼的活靶子，得靠队友开路。持箱者阵亡时箱子<b>掉在原地</b>，0.8 秒保护期过后任何人都能捡。先到 <b>3 分</b>直接获胜；时间到比分高者胜，同分则比两队剩余总血量。该模式<b>没有大招限制</b>，配装、商店与常规对局一致。</li>',
-      '<li><b>占点争夺</b>：两队对抗（房间界面选红队 / 蓝队）。地图 <b>2400×2400</b>，每局随机生成 <b>3~5 座据点</b>，其中最大的据点永远在地图正中（权重 ×2）。站进圈内开始读条占领，<b>人越多越快</b>：空据点单人 <b>5 秒</b>，抢敌方已经占下的据点要花<b>两倍时间</b>（10 秒）；双方都在圈里则僵持，谁也推不动。占领后据点持续产分，大点 2 分/秒、小点 1 分/秒，先到 <b>80 分</b>获胜；圈里没人时，对方留下的占领进度会缓慢回落。据点被占领后中心会升起一座<b>炮塔</b>（1200 血、伤害 26、攻速 1.05，射程就等于据点半径），只打敌方角色；据点易主时炮塔跟着换攻击目标、<b>血量不变</b>，被拆掉后本局永久消失。阵亡后在本方基地复活：首次 <b>3 秒</b>，之后每死一次 <b>+3 秒</b>（最多 24 秒），基地圈内每秒回复 5% 最大生命。时间到比分高者胜，同分则比两队剩余总血量。</li>',
-      '<li><b>碰碰车竞技</b>：圆形擂台，台外全是水池，开局每人自动坐上一辆碰碰车（电力无限，车上不能用技能，普攻只是喇叭）。开车对撞时<b>接近速度越快，伤害和击退越大</b>，主动撞人的一方也会吃到 35% 的反伤。把对手的车<b>撞爆 +2 分</b>、直接把他<b>顶出擂台 +3 分</b>，先到 <b>12 分</b>获胜。撞爆的车 4 秒后重生，掉进水里的人 2.4 秒后回到擂台中心并重新发车。诀窍是：绕到侧面撞、把人往边缘推，同时别让自己顺着惯性滑出去。</li>',
+      '<li><b>护送情报箱</b>：两队对抗（房间界面选红队 / 蓝队，默认 2 队），分驻地图左右两端。场地正中会反复投放一个 <b>2x2 的大情报箱</b>——箱子<b>不能抱起来</b>：靠近后<b>按交互键进入推箱状态</b>，箱子跟着你的移动方向走，推箱期间<b>移速只有正常的 20%</b>。把箱子推进<b>敌方交付点</b>（地图左右两侧的红 / 蓝大圈）得 <b>1 分</b>。推箱时<b>被攻击会打断</b>：眩晕 1 秒、3 秒内不能再碰箱子；已有人在推时再按会提示「交互占用」；再按一次交互键可以主动松手。先到 <b>3 分</b>直接获胜；时间到比分高者胜，同分则比两队剩余总血量。该模式<b>没有大招限制</b>，配装、商店与常规对局一致。</li>',
+      '<li><b>占点争夺</b>：两队对抗（房间界面选红队 / 蓝队）。地图 <b>1920×1920</b>，每局随机生成 <b>3~5 座据点</b>，其中最大的据点永远在地图正中（权重 ×2）。站进圈内开始读条占领，<b>人越多越快</b>：空据点单人 <b>5 秒</b>，抢敌方已经占下的据点要花<b>两倍时间</b>（10 秒）；双方都在圈里则僵持，谁也推不动。占领后据点持续产分，大点 2 分/秒、小点 1 分/秒，先到 <b>80 分</b>获胜；圈里没人时，对方留下的占领进度会缓慢回落。据点被占领后中心会升起一座<b>炮塔</b>（1200 血、伤害 26、攻速 1.05，射程就等于据点半径），只打敌方角色；据点易主时炮塔跟着换攻击目标、<b>血量不变</b>，被拆掉后本局永久消失。阵亡后在本方基地复活：首次 <b>3 秒</b>，之后每死一次 <b>+3 秒</b>（最多 24 秒），基地圈内每秒回复 5% 最大生命；站在<b>己方已占领的据点</b>圈里每秒回 <b>5 滴血</b>。时间到比分高者胜，同分则比两队剩余总血量。</li>',
+      '<li><b>碰碰车竞技</b>：圆环擂台——台外与<b>场地正中心都是水池</b>，可活动范围是一圈环形赛道。开局每人自动坐上一辆碰碰车（电力无限，<b>技能与大招全部禁用</b>，普攻只是喇叭）。开车对撞时<b>接近速度越快，伤害和击退越大</b>（击退增幅特别高，一记重撞能把人顶出半个场），主动撞人的一方也会吃到 35% 的反伤。把对手的车<b>撞爆 +2 分</b>、把他<b>顶进水里 +3 分</b>（外圈 / 内圈都算），先到 <b>12 分</b>获胜。撞爆的车 4 秒后重生，落水的人 2.4 秒后回到赛道并重新发车。场上有吹风机，<b>气流能把车吹偏航</b>——顺风抢位、逆风绕行。</li>',
       '<li><b>塔防对战</b>：3v3 单线推塔，<b>没有时间限制</b>，一直打到一方水晶爆掉。地图 2800×600，左右镜像，红蓝一塔之间留出一大片中心战区。双方每 32 秒刷 6 只机器人小兵沿兵线推进，拆掉敌塔后自家小兵变强。防御塔（1200 血 / 射程 300）与水晶（2400 血 / 射程 340）会发射<b>高速追踪弹</b>，走进敌方范围时会显示一圈红圈警告；<b>防御塔没拆完水晶免疫伤害</b>。击杀小兵 / 英雄 / 助攻都给<b>局内金币</b>，按 <span class="k">B</span> 买被动装备（生命 / 攻击 / 护盾 / 能量 / 回血 / 霸体 / 闪避等，每件一次）、<b>主动装备</b>（最多 1 件，按 <span class="k">P</span> 释放）、可重复购买的<b>小兵强化</b>，以及开车时才能买的<b>汽油桶</b>（80 金，+2000 油，不限次数）。英雄 1–6 级，升级加血加伤害；阵亡后在原地立<b>墓碑</b>显示复活倒计时（<b>5 秒 + 等级 × 5 秒</b>，1 级 10 秒、5 级 30 秒），倒计时结束回基地复活，基地回血圈每秒回复 12% 生命。房间界面可以选红队 / 蓝队。</li>',
       '<li>单人「勇者格斗」的房间就是角色卡房间：第一张卡是你（可直接换装扮 / 技能），后面的人机卡可增删（最多 5 个，塔防会自动补满 5 个凑 3v3）、可选难度（木桩 / 普通 / 困难）与配装。</li>',
       '</ul>',
@@ -17494,7 +17731,7 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
       '<li><b>回复</b>：场上每 8 秒随机掉落一个血包，吃下回复 45 点生命。</li>',
       '<li><b>僵尸</b>：场上会不断刷新僵尸干扰战局，僵尸只有<b>突刺 / 撕咬</b>两个技能，没有普攻、大招和闪避，击杀也<b>不掉</b>局内金币。</li>',
       '<li><b>技能轮盘</b>：每 12 秒全场勇者随机换一套技能与大招。</li>',
-      '<li><b>物资刷新</b>：每 30 秒按当前地图预设刷新一次物资——被打碎的可破坏物复原、车辆回到原位并加满油、空地上重生两个能量包；石柱 / 墙体等固定障碍不受影响。</li>',
+      '<li><b>物资刷新</b>：每 30 秒按当前地图预设刷新一次物资——被打碎的可破坏物复原、车辆回到原位并加满油、空地上重生两个道具包；石柱 / 墙体等固定障碍不受影响。</li>',
       '</ul>',
       '<h3>关卡（怪物规格：1 普攻 + 2 技能 + 1 大招）</h3>',
       '<ul>',
@@ -17589,7 +17826,7 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
       myTags.push(B.inDoomDanger(me.x, me.y) ? "☠ 危险区" : "🛡 安全区");
     if (B.rule === "escort" && B.escort)
       myTags.push("📦 " + ((B.escort.score && B.escort.score[0]) || 0) + " : " + ((B.escort.score && B.escort.score[1]) || 0));
-    if (B.rule === "escort" && me.intel) myTags.push("抱箱中");
+    if (B.rule === "escort" && me.pushBox) myTags.push("推箱中");
     if (B.rule === "bump" && B.bump) {
       const i = B.fighters.indexOf(me);
       myTags.push("🚗 " + Math.round(B.bump.score[i] || 0) + " 分"
@@ -17755,7 +17992,7 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
       const meH = B.hero(B.mySide == null ? 0 : B.mySide);
       subs.unshift('<span class="big">红 <b style="color:#f87171">' + (sc[0] || 0) + '</b> : <b style="color:#60a5fa">' + (sc[1] || 0) + '</b> 蓝</span>');
       subs.push("📦 先到 <b>" + ((LD.ESCORT || {}).need || 3) + "</b> 分获胜 · "
-        + (meH && meH.intel ? "抱着情报箱，冲向敌方交付点" : "去中央抢情报箱"));
+        + (meH && meH.pushBox ? "推着情报箱，冲向敌方交付点（受击会打断）" : "去中央按 P 推情报箱"));
     } else if (B.rule === "capture") {
       const st = B.capture || {};
       const sc = st.score || [0, 0];

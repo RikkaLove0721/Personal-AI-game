@@ -48,6 +48,8 @@
     if (f.hideProp) return { type: "locker", prop: f.hideProp, label: "离开", gap: 0 };
     if (f.rideCar) return { type: "car", prop: f.rideCar, label: "下车", gap: 0 };
     if (f.carryMud) return { type: "mud", prop: f.carryMud, label: "扔出", gap: 0, carry: true };
+    /* v4.10 护送情报箱：推箱是一个持续状态——再按一次交互键 = 松手停下 */
+    if (f.pushBox) return { type: "escortPush", prop: f.pushBox, label: "松手", gap: 0 };
 
     let best = null, bestGap = Infinity;
     const take = (t) => { if (t.gap <= t.lim && t.gap < bestGap) { bestGap = t.gap; best = t; } };
@@ -72,6 +74,17 @@
      * （doInteract 先下车，目标被跳过）。这两种状态下 P = 下车/离开，
      * 想让能量包重新出现，先下车站到包边即可。 */
     if (f.rideCar || f.hideProp || f.carryMud) return best;
+    /* v4.10 护送情报箱：走近按交互键开始推箱（箱子 2x2，不能抱起来）。
+     * 别人已经在推 → 目标仍在（doInteract 里报「交互占用」），但不覆盖车 / 柜子等目标。 */
+    if (this.rule === "escort" && this.escort && this.escort.box && this.escort.box.alive && !f.pushBox) {
+      const eb = this.escort.box;
+      const d = Math.hypot(f.x - eb.x, f.y - eb.y);
+      const lim = (LD.ESCORT && LD.ESCORT.pushRange) || 96;
+      if (d <= lim && !(f.noBoxT > 0)) {
+        const occ = !!eb.pusher;               // 有人推着 → 按下去只会提示占用，不给正常目标
+        return { type: "escortPush", prop: eb, label: occ ? "占用" : "推箱", gap: d, lim: lim, occupied: occ };
+      }
+    }
     if (this.pickups && this.pickups.length) {
       const lim = CFG.openRange != null ? CFG.openRange : 96;
       let near = null, nd = Infinity;
@@ -155,6 +168,21 @@
 
     const tgt = this.interactTarget(f);
     if (!tgt) return false;
+    if (tgt.type === "escortPush") {
+      /* v4.10 护送情报箱：开推 / 松手 / 占用 */
+      if (f.pushBox) { this.escortRelease(f, false); return true; }
+      const eb = tgt.prop;
+      if (eb.pusher && eb.pusher !== f && !eb.pusher.dead) {
+        FX.float(f.x, f.y - 64, "交互占用", "#f87171", 14);
+        return true;
+      }
+      if ((f.noBoxT || 0) > 0) {
+        FX.float(f.x, f.y - 64, "手还在抖，等 " + Math.ceil(f.noBoxT) + " 秒", "#f87171", 13);
+        return true;
+      }
+      if (this.escortStartPush) this.escortStartPush(f, eb);
+      return true;
+    }
     if (tgt.type === "gift") { this.pickGift(f, tgt.prop); return true; }
     if (tgt.type === "chg") { this.startCharge(f, tgt.kind, tgt.prop); return true; }
     if (tgt.type === "locker") { this.enterLocker(f, tgt.prop); return true; }
@@ -176,7 +204,8 @@
     const t = this.interactTarget(f);
     if (!t) return "";
     /* v3.9.1：充电站与能量包都是 chg 类，得分开报——否则站在充电站旁边 P 框会写「开启能量包」 */
-    if (t.type === "chg") return t.kind === "crown" ? "争夺皇冠" : t.kind === "station" ? "充电" : "开启能量包";
+    if (t.type === "chg") return t.kind === "crown" ? "争夺皇冠" : t.kind === "station" ? "充电" : "开启道具包";
+    if (t.type === "escortPush") return t.occupied ? "占用" : (f.pushBox ? "松手" : "推箱");
     if (t.type === "car") return "上车";
     if (t.type === "locker") return "躲藏";
     if (t.type === "gift") return "拾取";
@@ -339,7 +368,21 @@
       const f = this.fighters[i];
       if (f.dead || f.bench) continue;
       if (f.kind !== "hero") continue;              // 勇者 / 僵尸都走 hero 骨架
-      if (f.rideCar || f.hideProp) { f.windT = 0; continue; }
+      if (f.rideCar) {
+        /* v4.10 碰碰车竞技：气流适度吹动车——给车体加一点速度而不是直接位移，
+         * 让风变成「走位干扰」而不是「传送带」。 */
+        if (this.rule === "bump" && f.rideCar.bump) {
+          const cw = TT.windAt(this.terrain, f.rideCar.x, f.rideCar.y);
+          if (cw) {
+            const k = (LD.BUMP && LD.BUMP.windCarMul) || 0.35;
+            f.rideCar.vx += cw.x * k * dt;
+            f.rideCar.vy += cw.y * k * dt;
+            f.windT = 0.12;
+          } else f.windT = 0;
+        } else f.windT = 0;
+        continue;
+      }
+      if (f.hideProp) { f.windT = 0; continue; }
       const w = TT.windAt(this.terrain, f.x, f.y);
       if (!w) { f.windT = 0; continue; }
       f.windT = 0.12;
@@ -378,6 +421,7 @@
   B.startCharge = function (f, kind, tgt) {
     if (!f || f.dead || !tgt || f.chg) return false;
     if (f.rideCar || f.hideProp || f.carryMud) return false;
+    if (f.pushBox) return false;          // v4.10 推箱中不能开包 / 加冕（先松手）
     if ((f.stun || 0) > 0 || (f.root || 0) > 0) return false;
     const c = { kind: kind, tgt: tgt, t: 0 };
     if (!chgAlive(this, c)) return false;

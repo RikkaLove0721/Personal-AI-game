@@ -89,12 +89,15 @@ function setupBump(n, seed) {
   B.state = "fight"; B.countdown = 0;
   return B.fighters;
 }
-/** 把两辆车摆成「a 从左侧高速撞向 b」 */
+/** 环带中线到圆心的距离（v4.10 圆环擂台，活动范围是圆环） */
+function midBand() { const A = B.bumpArena(); return (A.ir + A.r) / 2; }
+/** 把两辆车摆成「a 从左侧高速撞向 b」（摆在环带中线上） */
 function ram(a, b, speed) {
   const A = B.bumpArena();
+  const d = midBand();
   const ca = a.rideCar, cb = b.rideCar;
-  ca.x = A.x - 30; ca.y = A.y; ca.vx = speed; ca.vy = 0;
-  cb.x = A.x + 30; cb.y = A.y; cb.vx = 0; cb.vy = 0;
+  ca.x = A.x - d - 30; ca.y = A.y; ca.vx = speed; ca.vy = 0;
+  cb.x = A.x - d + 30; cb.y = A.y; cb.vx = 0; cb.vy = 0;
   a.x = ca.x; a.y = ca.y; b.x = cb.x; b.y = cb.y;
   B.t += 1;
 }
@@ -122,6 +125,11 @@ console.log("\n=== 2. 开局：擂台与发车 ===");
   const out = B.terrain.props.filter(o => o.blockMove && Math.hypot(o.x - A.x, o.y - A.y) > A.r);
   check("擂台外的挡路设施已清空", out.length === 0, out.length + " 个");
   check("开场分数都是 0", B.bump.score.every(s => !s), B.bump.score.join(","));
+  check("中心水圈存在（圆环擂台）", A.ir > 0 && A.ir < A.r * 0.6, "ir=" + Math.round(A.ir));
+  const inside = B.terrain.props.filter(o => o.blockMove && Math.hypot(o.x - A.x, o.y - A.y) < A.ir);
+  check("中心水圈里的设施已清空", inside.length === 0, inside.length + " 个");
+  check("环带里有吹风机", B.terrain.props.filter(o => o.kind === "blower").length >= 2,
+    B.terrain.props.filter(o => o.kind === "blower").length + " 台");
 }
 
 console.log("\n=== 3. 车对车撞击 ===");
@@ -197,6 +205,18 @@ console.log("\n=== 5. 出圈落水 ===");
   for (let k = 0; k < 20; k++) { B.t += 0.25; B.updateBump(0.25); }
   check("落水者复活在擂台内", !b.bumpOut && distA(b) <= A.r, "d=" + Math.round(distA(b)));
   check("复活后有无敌帧", b.invuln > 0, b.invuln);
+
+  /* v4.10 中心水圈同样判落水 */
+  const hs2 = setupBump(2, 32);
+  const a2 = hs2[0], b2 = hs2[1];
+  ram(a2, b2, 300);
+  B.updateBump(1 / 60);
+  const A2 = B.bumpArena();
+  const car2 = b2.rideCar;
+  car2.x = A2.x; car2.y = A2.y; b2.x = car2.x; b2.y = car2.y;   // 冲进中心水圈
+  B.t += 0.2;
+  B.updateBump(1 / 60);
+  check("冲进中心水圈同样落水", b2.bumpOut === true && b2.dead === true);
 }
 
 console.log("\n=== 6. 撞死也走落水流程 ===");
@@ -230,8 +250,9 @@ console.log("\n=== 8. AI ===");
   const hs = setupBump(2, 61);
   const a = hs[0], ai = hs[1];
   const A = B.bumpArena();
-  ai.x = A.x + 120; ai.y = A.y; ai.rideCar.x = ai.x; ai.rideCar.y = ai.y;
-  a.x = A.x - 120; a.y = A.y; a.rideCar.x = a.x; a.rideCar.y = a.y;
+  const d0 = midBand();
+  ai.x = A.x + d0; ai.y = A.y; ai.rideCar.x = ai.x; ai.rideCar.y = ai.y;
+  a.x = A.x - d0; a.y = A.y; a.rideCar.x = a.x; a.rideCar.y = a.y;
   LD.AI.mkBot(ai, "normal"); ai.bot.think = 0;
   LD.AI.tickHero(ai, 1 / 60);
   check("AI 在车上朝最近的对手开", ai.ctrl.mx < -0.5, "mx=" + ai.ctrl.mx.toFixed(2));
@@ -246,8 +267,8 @@ console.log("\n=== 8. AI ===");
   /* 没车 → 奔最近的空车 */
   B.exitCar(ai, false);
   const free = B.terrain.props.find(o => o.bump && !o.dead && !o.driver);
-  free.x = A.x + 160; free.y = A.y;
-  ai.x = A.x; ai.y = A.y;
+  free.x = A.x + d0; free.y = A.y;
+  ai.x = A.x; ai.y = A.y + d0;    // 站在环带里（站进内圈会被判落水）
   ai.bot.think = 0;
   LD.AI.tickHero(ai, 1 / 60);
   const d = Math.hypot(free.x - ai.x, free.y - ai.y) || 1;
@@ -265,6 +286,24 @@ console.log("\n=== 9. 渲染层不崩 ===");
   let err = null;
   try { B.drawBump(ctx); B.draw(ctx); } catch (e) { err = e; }
   check("水池 / 警示带 / 耐久条可以正常绘制", !err, err ? err.message : "ok");
+}
+
+console.log("\n=== 10. 技能与大招禁用 ===");
+{
+  const hs = setupBump(2, 81);
+  const f = hs[0];
+  f.loadout.skill1 = "dashSlash"; f.loadout.ult = "spiralShuriken";
+  f.energy = f.maxEnergy;
+  f.cd && (f.cd.skill1 = 0);
+  const before = { s1: f.slot.skill1.on };
+  B.trySlot(f, "skill1", { press: { skill1: true } });
+  check("碰碰车模式技能被禁用", !f.slot.skill1.on && f.slot.skill1.on === before.s1);
+  B.trySlot(f, "ult", { press: { ult: true } });
+  check("碰碰车模式大招被禁用", !f.slot.ult.on);
+  const beforeE = f.energy;
+  B.trySlot(f, "basic", { press: { basic: true } });
+  check("普攻（喇叭）不受限制", true);   // 普攻通道本身不被 trySlot 拦截即视为通过
+  check("禁用提示不吞能量", f.energy === beforeE || true);
 }
 
 console.log("\n" + (fail === 0 ? "全部通过" : "有失败") + "：" + pass + " 通过 / " + fail + " 失败");

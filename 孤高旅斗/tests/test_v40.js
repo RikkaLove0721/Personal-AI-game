@@ -4,7 +4,7 @@
  *   2. 开局：撒充电站 + 只换两个技能槽（普攻保留、禁用大招）
  *   3. 手电筒：开关、耗电、没电自动关
  *   4. 受光判定：自己开灯 / 充电站 / 别人的光锥（本模式没有能量包）
- *   5. 黑暗条：摸黑每秒 +1、满 15 后每秒 20 血（不顿帧不打断）、受光每秒 -3
+ *   5. 黑暗条：摸黑每秒 +1、满 30 后每秒 20 血（不顿帧不打断）、受光每秒 -6
  *   6. 充电站交互：靠近起手、蓄力 1.6 秒充满、走远识别不到
  *   7. 交互键接管：没有可交互目标时 P = 手电筒开关
  *   8. 手里剑（装在 L 槽）：蓄力 0.7 秒定身、26 伤害 + 0.6 秒失明、命中即消失
@@ -112,9 +112,9 @@ console.log("=== 1. 模式与数值配置 ===");
   check("规则表里有停电夜战", !!r, r && r.name);
   check("显示名正确", r && r.name === "停电夜战", r && r.name);
   check("规则共 16 种（v4.9 新增僵尸守房）", LD.RULES.length === 16, LD.RULES.length);
-  check("黑暗条上限 15", N.darkMax === 15, N.darkMax);
+  check("黑暗条上限 30（v4.10 扩充）", N.darkMax === 30, N.darkMax);
   check("摸黑每秒 +1", N.darkUp === 1, N.darkUp);
-  check("受光每秒 -3", N.darkDown === 3, N.darkDown);
+  check("受光每秒 -6（v4.10 翻倍）", N.darkDown === 6, N.darkDown);
   check("条满每秒 20 血", N.darkDps === 20, N.darkDps);
   check("电量上限 100", N.batMax === 100, N.batMax);
   check("充电站公共光半径 40（直径两格）", N.pubR === 40, N.pubR);
@@ -265,8 +265,8 @@ console.log("=== 5. 黑暗条 ===");
   me.flash = false;
   me.x = 60; me.y = 60;
   me.dark = 0;
-  night(15, 150);
-  check("摸黑 15 秒黑暗条攒满", Math.abs(me.dark - N.darkMax) < 0.01, me.dark.toFixed(2));
+  night(30, 300);
+  check("摸黑 30 秒黑暗条攒满", Math.abs(me.dark - N.darkMax) < 0.01, me.dark.toFixed(2));
 
   /* 条满后按每秒 20 掉血。黑暗侵蚀每 0.25 秒结算一节，所以给一个节拍（5 点）的容差 */
   me.dark = N.darkMax; me.hp = me.maxHp; me.regenAcc = 0; me._darkAcc = 0;
@@ -295,7 +295,7 @@ console.log("=== 5. 黑暗条 ===");
   /* 回到公共光：每秒 -3 */
   me.x = st.x; me.y = st.y;
   night(1);
-  check("受公共光：每秒 -3", Math.abs(me.dark - (N.darkMax - N.darkDown)) < 0.2, me.dark.toFixed(2));
+  check("受公共光：每秒 -6", Math.abs(me.dark - (N.darkMax - N.darkDown)) < 0.2, me.dark.toFixed(2));
   check("受光后 f.lit 置位", me.lit === true);
   night(5);
   check("持续受光黑暗条清零", me.dark === 0, me.dark.toFixed(2));
@@ -306,7 +306,7 @@ console.log("=== 5. 黑暗条 ===");
   /* 开灯也算受光，可以自己压住黑暗条 */
   me.x = 60; me.y = 60; me.flash = true; me.dark = 10;
   night(1);
-  check("自己开灯也能压黑暗条", Math.abs(me.dark - 7) < 0.2, me.dark.toFixed(2));
+  check("自己开灯也能压黑暗条（每秒 -6）", Math.abs(me.dark - 4) < 0.2, me.dark.toFixed(2));
 }
 
 console.log("=== 6. 充电站交互 ===");
@@ -479,7 +479,8 @@ console.log("=== 10. 本模式不产能量包 ===");
   field("blackout", 2);
   B.pickups = [];
   B.dropPickup(800, 800, "energy");
-  check("强制掉能量包也不生成", B.pickups.length === 0, B.pickups.length);
+  check("强制掉能量包会转换成血包 / 移速包（v4.10）", B.pickups.length === 1 &&
+    (B.pickups[0].kind === "heal" || B.pickups[0].kind === "speed"), B.pickups[0] && B.pickups[0].kind);
   for (let i = 0; i < 30; i++) B.dropPickup(800 + i, 800);
   check("随机掉落只出 heal / speed", B.pickups.length > 0 &&
     B.pickups.every(p => p.kind === "heal" || p.kind === "speed"),
@@ -496,7 +497,7 @@ console.log("=== 11. 渲染层不崩 ===");
 {
   field("blackout", 2);
   const me = B.fighters[0];
-  me.flash = true; me.dark = 15;
+  me.flash = true; me.dark = N.darkMax;
   let err = null;
   try {
     const ctx = makeCtx();

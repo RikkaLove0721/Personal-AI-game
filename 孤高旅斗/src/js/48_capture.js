@@ -310,6 +310,22 @@
       }
       p.c0 = c0; p.c1 = c1;
 
+      /* v4.10 据点回血：站在己方已占领的据点圈里，每秒回 5 滴血（鼓励占完守点） */
+      if (p.owner >= 0 && (C.pointHeal || 0) > 0) {
+        for (const f of this.fighters) {
+          if (f.kind !== "hero" || f.dead || f.bench) continue;
+          if ((f.team > 0 ? 1 : 0) !== p.owner) continue;
+          if (Math.hypot(f.x - p.x, f.y - p.y) > p.r) continue;
+          if (f.hp >= f.maxHp) continue;
+          f.hp = Math.min(f.maxHp, f.hp + C.pointHeal * dt);
+          f.capHealAcc = (f.capHealAcc || 0) + dt;
+          if (f.capHealAcc >= 1.0) {
+            f.capHealAcc = 0;
+            FX.float(f.x + rand(-8, 8), f.y - 62, "+" + C.pointHeal, "#4ade80", 12);
+          }
+        }
+      }
+
       /* 双方都在圈里 → 僵持，谁也不推进 */
       if (c0 > 0 && c1 > 0) continue;
 

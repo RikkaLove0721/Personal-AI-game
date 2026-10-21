@@ -109,8 +109,9 @@ console.log("=== 1. 模式与参数 ===");
   const ri = LD.ruleInfo("capture");
   check("「占点争夺」已注册", ri.id === "capture" && ri.name === "占点争夺", ri.icon + " " + ri.name);
   const C = LD.CAPTURE;
-  check("地图 2400×2400（1600 的 1.5 倍）", C.world.w === 2400 && C.world.h === 2400,
+  check("地图 1920×1920（v4.10 缩到 80%）", C.world.w === 1920 && C.world.h === 1920,
     C.world.w + "×" + C.world.h);
+  check("据点圈内每秒回 5 血", C.pointHeal === 5, C.pointHeal);
   check("每局随机 3~5 座据点", C.count[0] === 3 && C.count[1] === 5, C.count.join("~"));
   check("空点单人 0.20/s（5 秒）", Math.abs(C.capRate - 0.20) < 1e-6, C.capRate);
   check("抢敌方据点耗时 ×2", C.contestMul === 2.0, C.contestMul);
@@ -127,7 +128,7 @@ console.log("\n=== 2. 开局布置（随机据点）===");
 {
   const hs = setupCapture(4);
   const st = B.capture, C = LD.CAPTURE;
-  check("地图实际尺寸 2400×2400", B.world.w === 2400 && B.world.h === 2400,
+  check("地图实际尺寸 1920×1920", B.world.w === 1920 && B.world.h === 1920,
     B.world.w + "×" + B.world.h);
   check("据点数量在 3~5 之间", st.pts.length >= 3 && st.pts.length <= 5, st.pts.length);
   check("大点固定在场地中心并权重 ×2",

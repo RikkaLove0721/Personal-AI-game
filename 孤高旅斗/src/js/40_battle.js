@@ -231,10 +231,20 @@
       const dw = LD.DOOMSDAY.world;
       this.world = { w: dw.w, h: dw.h, pt: dw.pt != null ? dw.pt : 70 };
     }
-    /* v4.7 占点争夺：地图长宽各放大 1.5 倍（1600 → 2400） */
+    /* v4.7 占点争夺：地图尺寸由 LD.CAPTURE.world 决定（v4.10 缩到 1920） */
     if (this.rule === "capture" && LD.CAPTURE && LD.CAPTURE.world) {
       const cw = LD.CAPTURE.world;
       this.world = { w: cw.w, h: cw.h, pt: cw.pt != null ? cw.pt : 120 };
+    }
+    /* v4.10 护送情报箱：地图长度 1.3 倍（2080 x 1600） */
+    if (this.rule === "escort" && LD.ESCORT && LD.ESCORT.world) {
+      const ew = LD.ESCORT.world;
+      this.world = { w: ew.w, h: ew.h, pt: ew.pt != null ? ew.pt : 120 };
+    }
+    /* v4.10 碰碰车竞技：地图扩大（1200 → 1600），圆环擂台 */
+    if (this.rule === "bump" && LD.BUMP && LD.BUMP.world) {
+      const bw = LD.BUMP.world;
+      this.world = { w: bw.w, h: bw.h, pt: bw.pt != null ? bw.pt : 120 };
     }
     this.cam = { x: 0, y: 0 };
     /* v3.0 地形：房间带 mapCfg；闯关自动读关卡预置；都不传时保持空场地（兼容旧调用与无头测试） */
@@ -382,6 +392,8 @@
       /* v3.9 被震下车后的上车禁令 / 被揪出柜子的躲藏禁令 / 能量包蓄力状态 */
       f.noCarT = 0; f._noCarSaidT = 0; f.chg = null;
       f.noHideT = 0; f._noHideSaidT = 0;
+      /* v4.10 护送情报箱：推箱状态 / 推箱禁令随回合复位 */
+      f.pushBox = null; f.noBoxT = 0;
       f.carTarget = null; f.hideT = 0; f.interactCd = 0; f.giftLock = 0;
       f.hideTimer = 0; f.hideSpotted = false; f.bushTimer = 0; f._stealthFlash = false;
       f.skillGot = { skill1: 0, skill2: 0 };
@@ -548,6 +560,11 @@
     if (src && src.dmgBonus) amt = Math.round(amt * (1 + src.dmgBonus));
     /* v2.7 追猎时刻：猎人伤害随存活幸存者数提升（1 + 20% × 存活人数） */
     if (src && src.huntDmgM && src.huntDmgM !== 1) amt = Math.round(amt * src.huntDmgM);
+    /* v4.10 隐匿状态下出手：伤害 ×1.5。口径 = 隐匿技能（stealthSlot 标记）
+     * + 柜子躲藏 + 草丛埋伏；夜战的「摸黑」是视野机制不算隐匿，否则全场常驻增伤。 */
+    if (src && src.kind === "hero" &&
+        ((src.stealthT > 0 && src.stealthSlot != null) || src.hideProp || src.bushHide))
+      amt = Math.round(amt * 1.5);
     /* v2.7 血怒：大招期间自身造成的伤害减少 25% */
     if (src && src.buff && src.buff.rage > 0) {
       const bsk = LD.skill("bloodRage");
@@ -591,6 +608,8 @@
     if (!o.soft) tgt.hitFlash = 0.16;
     /* v3.9 正在开启能量包时挨打 → 蓄力中断，需要重新按交互键再来一次 */
     if (tgt.chg && this.cancelCharge && !o.soft) this.cancelCharge(tgt, "被打断！");
+    /* v4.10 护送情报箱：推箱时挨打 → 打断 + 眩晕 1 秒 + 3 秒内不能再碰箱子 */
+    if (tgt.pushBox && this.escortBreakPush && !o.soft) this.escortBreakPush(tgt, src);
     /* v3.2 世界末日：对僵尸造成的实际伤害计入得分（溢出伤害不算） */
     if (this.rule === "doomsday" && src && src.kind === "hero" && !src.isZombie && tgt.isZombie) {
       const si = this.fighters.indexOf(src);
@@ -1590,18 +1609,22 @@
     this.ev.push(["x", x, y, r]);
   };
 
-  /* v3.1 补给箱掉落：随机血包 / 能量包 / 移速包 */
+  /* v3.1 补给箱掉落：随机血包 / 道具包（原「能量包」，v4.10 统一改名）/ 移速包 */
+  /* v4.10 道具包（+60 大招能量）只在这些模式之外的局里出现：
+   * 停电夜战（大招禁用）、世界末日（用户反馈「居然能充电」）、护送情报箱（交互被充电抢走）。
+   * 物资刷新修饰符走同一个出口，一处拦截全部生效。 */
+  B.packAllowed = function () {
+    return ["blackout", "doomsday", "escort"].indexOf(this.rule) < 0;
+  };
   B.dropPickup = function (x, y, forceKind) {
-    /* v3.9.1 停电夜战禁用大招，能量包没有用处，本模式直接不产——
-     * 只掉血包与移速包（它们在黑地里也确实救命）。 */
-    if (this.rule === "blackout") {
-      if (forceKind === "energy") return;
-      forceKind = forceKind || (Math.random() < 0.5 ? "heal" : "speed");
-      this.pickups = this.pickups || [];
-      this.pickups.push({ id: (this._pkId = (this._pkId || 0) + 1), x: x, y: y, kind: forceKind, t: 0 });
-      FX.ring(x, y - 10, 46, "rgba(125,211,252,.9)", 4, 0.4);
-      return;
+    if (forceKind === "energy" && !this.packAllowed()) {
+      /* 停电夜战：大招禁用但血包 / 移速包在黑地里救命，转换品类继续掉；
+       * 末日 / 护送：干脆不掉，场面上不要再冒出「按 P 充电」的交互。 */
+      if (this.rule !== "blackout") return;
+      forceKind = Math.random() < 0.5 ? "heal" : "speed";
     }
+    /* v3.9.1 停电夜战的大招禁用兜底：随机掉落时也不再抽到道具包 */
+    if (!forceKind && this.rule === "blackout") forceKind = Math.random() < 0.5 ? "heal" : "speed";
     const pool = ["heal", "energy", "speed"];
     const kind = forceKind || pool[(Math.random() * pool.length) | 0];
     if (!this.pickups) this.pickups = [];
@@ -1655,20 +1678,22 @@
   /* v2.7 军备竞赛：局内商店（打僵尸/杀人掉金币，金币买增益，只在当局有效） */
   B.armyShop = function () {
     const S = LD.ASHOP || {};
+    /* v4.10 世界末日：低于 10 金币的道具价格全部 ×2（末日金币好赚，低价货白送一样） */
+    const px = (p) => (this.rule === "doomsday" && p < 10 ? p * 2 : p);
     return [
-      { id: "heal", name: "血包", icon: "❤️", price: S.healPrice || 2,
+      { id: "heal", name: "血包", icon: "❤️", price: px(S.healPrice || 2),
         desc: "立刻恢复 " + (S.healAmount || 45) + " 点生命（满血时买不了）" },
-      { id: "hp", name: "血量加成", icon: "💪", price: S.hpPrice || 2,
+      { id: "hp", name: "血量加成", icon: "💪", price: px(S.hpPrice || 2),
         desc: "本局生命上限 +" + (S.hpGain || 80) + " 并回满增量，可叠加" },
-      { id: "spd", name: "移速加成", icon: "👟", price: S.spdPrice || 2,
+      { id: "spd", name: "移速加成", icon: "👟", price: px(S.spdPrice || 2),
         desc: "本局移速 +" + Math.round((S.spdGain || 0.15) * 100) + "%（最多叠 " + (S.spdMax || 3) + " 次）" },
-      { id: "energy", name: "能量球", icon: "🔮", price: S.energyPrice || 3,
+      { id: "energy", name: "能量球", icon: "🔮", price: px(S.energyPrice || 3),
         desc: "立刻补充 " + (S.energyGain || 60) + " 点大招能量（能量已满时买不了）" }
     ].concat(this.rule === "doomsday" ? (function () {
-      /* v4.1 末日专属：防御建筑，买完立在脚下（金币靠刷僵尸攒） */
+      /* v4.1 末日专属：防御建筑，买完立在脚下（金币靠刷僵尸攒）；同样吃 <10 金币翻倍 */
       const C = (LD.DOOMSDAY || {}).build || {};
       return [
-        { id: "b_fence", name: "栅栏", icon: "🚧", price: (C.fence || {}).price || 6,
+        { id: "b_fence", name: "栅栏", icon: "🚧", price: px((C.fence || {}).price || 6),
           desc: "在脚下立一段可破坏栅栏（血量 " + ((C.fence || {}).hp || 80) + "）：挡人不挡弹，飞行物可以穿过去" },
         { id: "b_turret", name: "小型枪台", icon: "🔫", price: (C.turret || {}).price || 14,
           desc: "在脚下架起枪台（血量 " + ((C.turret || {}).hp || 120) + "）：自动射击 " + ((C.turret || {}).range || 300) + " 范围内的僵尸，并优先吸引它们仇恨" },
@@ -4109,6 +4134,14 @@
 
   B.trySlot = function (f, slot, ctrl) {
     if (f.dead || f.stun > 0 || Cine_paused()) return;
+    /* v4.10 碰碰车竞技：技能与大招全部禁用，普攻（喇叭）照常 */
+    if (this.rule === "bump" && slot !== "basic") {
+      if (ctrl && ctrl.press && ctrl.press[slot] && (f._bumpNoSkillT == null || this.t - f._bumpNoSkillT > 1.2)) {
+        f._bumpNoSkillT = this.t;
+        FX.float(f.x, f.y - 56, "碰碰车上不能用技能", "#9fb3dd", 13);
+      }
+      return;
+    }
     /* v3.3：躲在柜子里 / 坐在驾驶位上时不能出招（车上只有喇叭与坦克火炮） */
     if (f.hideProp) return;
     if (f.rideCar) { if (f._rideNoSkillT == null || this.t - f._rideNoSkillT > 1.2) { f._rideNoSkillT = this.t; FX.float(f.x, f.y - 56, "车上无法使用技能", "#9fb3dd", 13); } return; }
@@ -4577,8 +4610,8 @@
         f.slot.skill1.phase === "bdash" || f.slot.skill2.phase === "bdash") canMove = false;
     if (f.buff.rush > 0) sp *= LD.skill("meatRush").mul;
     if (f.slowT > 0) sp *= 0.55;   // 被冰痕 / 苍减速
-    /* v4.5 护送情报箱：抱箱时移速降 8%（不乘进 speedMul，避免反复乘漂移） */
-    if (f.intel && LD.ESCORT) sp *= LD.ESCORT.speedMul || 0.92;
+    /* v4.10 护送情报箱：推箱时移速只有正常的 20%（同样是单点乘，不落持久字段） */
+    if (f.pushBox && LD.ESCORT) sp *= LD.ESCORT.pushSpeed || 0.2;
     /* v3.2 世界末日：僵尸在门洞减速圈里额外变慢（给守门的人留输出窗口） */
     if (f.gateSlowT > 0 && f.isZombie) sp *= (LD.DOOMSDAY && LD.DOOMSDAY.gateSlow) || 0.5;
     /* v3.1：推着汽车 / 轮胎 / 方块走时明显变慢；水池里减速；拾取移速包短暂加速 */

@@ -352,7 +352,12 @@
         const dC = Math.hypot(f.x - A.x, f.y - A.y) || 1;
         const outX = (f.x - A.x) / dC, outY = (f.y - A.y) / dC;
         const aimX = tx - f.x, aimY = ty - f.y, aimD = Math.hypot(aimX, aimY) || 1;
+        /* v4.10 圆环擂台：外圈贴边 / 内圈水边还朝着水里开 → 掉头回环带中部 */
+        const ir = A.ir || 0;
         if (dC > A.r * 0.72 && (aimX / aimD) * outX + (aimY / aimD) * outY > 0.2) { tx = A.x; ty = A.y; }
+        else if (ir > 0 && dC < ir + 96 && (aimX / aimD) * outX + (aimY / aimD) * outY < -0.2) {
+          tx = A.x + outX * (A.r + ir) * 0.5; ty = A.y + outY * (A.r + ir) * 0.5;
+        }
       }
       const ax = tx - f.x, ay = ty - f.y, ad = Math.hypot(ax, ay) || 1;
       ctrl.mx = ax / ad; ctrl.my = ay / ad;
@@ -748,27 +753,28 @@
         my += py * b._unstickDir * 1.6;
       }
     }
-    /* v4.5 护送情报箱：抱箱 → 冲敌方交付点；空手 → 抢地上的箱 / 追持箱的人。
-     * 只接管移动，攻击决策仍走下面的通用逻辑（贴身照样会出手）。 */
+    /* v4.10 护送情报箱（推箱制）：推着 → 冲敌方交付点；空手 → 奔箱子按交互键开推；
+     * 敌方在推 → 追推箱的人把他打断。只接管移动，攻击决策仍走下面的通用逻辑。 */
     if (B.rule === "escort" && B.escort) {
       const st = B.escort, box = st.box;
       const myT = f.team > 0 ? 1 : 0;
-      if (f.intel) {
+      if (f.pushBox) {
         const goal = B.escortGoalOf(myT === 0 ? 1 : 0);
         if (goal) {
           const ax = goal.x - f.x, ay = goal.y - f.y, ad = Math.hypot(ax, ay) || 1;
           mx = ax / ad * 1.8; my = ay / ad * 1.8;
         }
-      } else if (box.alive) {
+      } else if (box.alive && !box.pusher) {
         const ax = box.x - f.x, ay = box.y - f.y, ad = Math.hypot(ax, ay) || 1;
         mx = ax / ad * 1.7; my = ay / ad * 1.7;
-      } else {
-        const holder = B.fighters.find(o => o.kind === "hero" && o.intel && !o.dead &&
-          (o.team > 0 ? 1 : 0) !== myT);
-        if (holder) {
-          const ax = holder.x - f.x, ay = holder.y - f.y, ad = Math.hypot(ax, ay) || 1;
-          mx = ax / ad * 1.7; my = ay / ad * 1.7;
-        }
+        if (ad < f.r + ((LD.ESCORT || {}).pushRange || 96) * 0.7) ctrl.press.interact = true;  // 到箱边就开推
+      } else if (box.alive && box.pusher && (box.pusher.team > 0 ? 1 : 0) !== myT) {
+        const ax = box.pusher.x - f.x, ay = box.pusher.y - f.y, ad = Math.hypot(ax, ay) || 1;
+        mx = ax / ad * 1.8; my = ay / ad * 1.8;
+      } else if (box.alive && box.pusher) {
+        /* 队友在推：跟着护驾（贴在推箱人附近打掩护） */
+        const ax = box.pusher.x - f.x, ay = box.pusher.y - f.y, ad = Math.hypot(ax, ay) || 1;
+        if (ad > 150) { mx = ax / ad * 1.4; my = ay / ad * 1.4; }
       }
     }
     /* v4.7 占点争夺：挑「最需要自己」的据点——非自家的点、自家被抢的点优先，

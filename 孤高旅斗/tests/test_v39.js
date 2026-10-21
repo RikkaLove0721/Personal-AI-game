@@ -172,7 +172,7 @@ console.log("\n=== 2. 能量包：交互蓄力开包 ===");
 
   me.interactCd = 0;
   check("按交互键开始蓄力", B.doInteract(me) === true && !!me.chg && me.chg.kind === "pack");
-  check("交互提示为「开启能量包」", B.interactLabel(me) === "开启能量包", B.interactLabel(me));
+  check("交互提示为「开启道具包」", B.interactLabel(me) === "开启道具包", B.interactLabel(me));
 
   /* v3.9 修：交互半径按「两个身位」算，站在包旁边（不是贴脸）也要能开 */
   {

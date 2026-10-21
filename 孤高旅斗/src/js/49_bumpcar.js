@@ -32,19 +32,25 @@
     const w = this.world.w, top = this.world.pt || 0;
     const h = this.world.h - top;
     const r = Math.min(w, h) * (C.arenaMul || 0.34);
-    return { x: w / 2, y: top + h / 2, r: r };
+    /* v4.10 中心水圈：可活动范围 = 圆环（ir = 内圈半径，0 = 没有内圈的老擂台） */
+    const ir = (C.innerMul || 0) > 0 ? r * C.innerMul : 0;
+    return { x: w / 2, y: top + h / 2, r: r, ir: ir };
   };
 
-  /** 擂台内的一个空位（离圆心 lim 以内、不压设施） */
+  /** 环带里的一个空位（离内外边缘都留 pad、不压设施） */
   B.bumpSpot = function (pad) {
     const A = this.bumpArena();
-    const lim = Math.max(40, A.r - (pad == null ? 66 : pad));
+    const pOut = pad == null ? 66 : pad;
+    const pIn = A.ir > 0 ? Math.max(40, pOut) : 0;
+    const dMin = A.ir + pIn, dMax = A.r - pOut;
+    if (dMax <= dMin) return { x: A.x + (A.ir + A.r) / 2, y: A.y };
     for (let k = 0; k < 70; k++) {
-      const a = Math.random() * TAU, d = Math.random() * lim;
+      const a = Math.random() * TAU, d = dMin + Math.random() * (dMax - dMin);
       const x = A.x + Math.cos(a) * d, y = A.y + Math.sin(a) * d;
       if (!this.terrain || !T || !T.clearAt || T.clearAt(this.terrain, x, y, 44)) return { x: x, y: y };
     }
-    return { x: A.x, y: A.y };
+    const d = (dMin + dMax) / 2;
+    return { x: A.x + d, y: A.y };
   };
 
   /** 清 / 加设施后重标占用格（地形层没有公开的 reindex，这里照抄 48_capture 的口径） */
@@ -105,24 +111,51 @@
     const map = this.terrain;
     const heroes = this.fighters.filter(f => f.kind === "hero" && !f.bench);
 
-    /* 1. 擂台外的设施全部清掉：圆外是水池，留着箱子 / 树会让车卡在岸边上不去 */
+    /* 1. 生成物减半（v4.10）：先随机砍一半，再清掉环带外 / 内圈里的（圆外圆内都是水） */
+    if (map && map.props) {
+      const keep = (C.propsKeep != null ? C.propsKeep : 1);
+      map.props = map.props.filter(o => o.kind === "car" ? false : Math.random() < keep);
+    }
+
+    /* 1.5 吹风机（v4.10）：环带里均匀摆 C.blowers 台，朝向沿切线，气流能把车吹偏航 */
+    const blowers = C.blowers || 0;
+    for (let i = 0; i < blowers; i++) {
+      const ang = (i + 0.5) / blowers * TAU + Math.random() * 0.5;
+      const d = (A.ir + A.r) / 2;
+      const x = A.x + Math.cos(ang) * d, y = A.y + Math.sin(ang) * d;
+      if (map && T && T.clearAt && !T.clearAt(map, x, y, 40)) continue;
+      /* WIND_DIR 顺序：0 右 1 下 2 左 3 上——取与半径垂直的切线方向 */
+      const tang = Math.round(((ang + Math.PI / 2) / (Math.PI / 2))) % 4;
+      map.props.push({
+        uid: 890000 + i, kind: "blower", mat: "blower_steel", shape: "blower",
+        cw: 1, ch: 1, w: 40, h: 40, x: x, y: y, ox: x, oy: y,
+        elev: 44, mass: 5, hp: 110, maxHp: 110,
+        dead: false, flash: 0, vx: 0, vy: 0, free: false, glow: null,
+        boomR: 0, boomDmg: 0, variant: (i * 97) % 997, runtime: true,
+        blockMove: true, blockProj: true, dir: tang, len: 5,
+        power: (LD.BLOWER && LD.BLOWER.force) || 420, _fuelSaid: false
+      });
+    }
+
+    /* 2. 清掉水域里的设施并重标占用格 */
     if (map && map.props) {
       map.props = map.props.filter(o => {
-        if (o.kind === "car") return false;                       // 旧车一律换成碰碰车
-        return Math.hypot(o.x - A.x, o.y - A.y) <= A.r - 26;
+        const d = Math.hypot(o.x - A.x, o.y - A.y);
+        return d <= A.r - 26 && d >= A.ir + 26;
       });
       reindex(map);
     }
 
-    /* 2. 摆车：沿擂台内圈均匀分布，车头朝圆心 */
+    /* 3. 摆车：沿环带中部均匀分布，车头朝切线方向（比赛一开始就能跑起来） */
     const n = heroes.length + (C.extraCars || 2);
     const cars = [];
     for (let i = 0; i < n; i++) {
       const ang = i / n * TAU;
-      let x = A.x + Math.cos(ang) * A.r * 0.6;
-      let y = A.y + Math.sin(ang) * A.r * 0.6;
+      const d = (A.ir + A.r) / 2;
+      let x = A.x + Math.cos(ang) * d;
+      let y = A.y + Math.sin(ang) * d;
       const o = this.mkBumper(x, y, i);
-      o.facing = { x: -Math.cos(ang), y: -Math.sin(ang) };
+      o.facing = { x: -Math.sin(ang), y: Math.cos(ang) };   // 切线方向（逆时针）
       cars.push(o);
       if (map && map.props) map.props.push(o);
     }
@@ -300,11 +333,12 @@
       }
     }
 
-    /* ---- 3. 出圈落水 ---- */
+    /* ---- 3. 落水（v4.10 圆环擂台：冲出外圈 / 冲进中心水圈都算） ---- */
     const credit = C.credit || 3;
     for (const f of this.fighters) {
       if (f.kind !== "hero" || f.bench || f.dead || f.bumpOut) continue;
-      if (Math.hypot(f.x - A.x, f.y - A.y) <= A.r) continue;
+      const d = Math.hypot(f.x - A.x, f.y - A.y);
+      if (d <= A.r && d >= A.ir) continue;
       const by = (f.lastHitBy && !f.lastHitBy.dead && this.t - (f.lastHitT == null ? -99 : f.lastHitT) <= credit)
         ? f.lastHitBy : null;
       this.bumpDunk(f, by, false);
@@ -371,32 +405,50 @@
     const t = this.t || 0;
     const top = this.world.pt || 0;
 
-    /* 1. 擂台外：水池（整块挖掉圆内的深色 + 同心波纹） */
+    /* 1. 水池（v4.10 圆环）：外圈之外 + 中心水圈，整块挖掉 + 同心波纹 */
     ctx.save();
     ctx.beginPath();
     ctx.rect(-240, top - 240, this.world.w + 480, this.world.h - top + 480);
     ctx.arc(A.x, A.y, A.r, 0, TAU, true);
     ctx.fillStyle = "rgba(9,32,54,.80)";
     ctx.fill("evenodd");
+    if (A.ir > 0) {
+      ctx.beginPath(); ctx.arc(A.x, A.y, A.ir, 0, TAU);
+      ctx.fillStyle = "rgba(9,32,54,.80)";
+      ctx.fill();
+    }
     ctx.globalAlpha = 0.20;
     ctx.strokeStyle = "#7dd3fc"; ctx.lineWidth = 2;
     for (let k = 0; k < 4; k++) {
       const rr = A.r + 26 + ((t * 26 + k * 44) % 176);
       ctx.globalAlpha = 0.20 * (1 - k * 0.22);
       ctx.beginPath(); ctx.arc(A.x, A.y, rr, 0, TAU); ctx.stroke();
+      if (A.ir > 0) {
+        /* 内圈波纹往里收 */
+        const ri = A.ir - 26 - ((t * 26 + k * 44) % 110);
+        if (ri > 8) {
+          ctx.globalAlpha = 0.18 * (1 - k * 0.22);
+          ctx.beginPath(); ctx.arc(A.x, A.y, ri, 0, TAU); ctx.stroke();
+        }
+      }
     }
     ctx.restore();
 
-    /* 2. 擂台边缘：黄黑警示带 + 内侧柔光 */
+    /* 2. 擂台边缘（外圈 + 内圈）：黄黑警示带 + 内侧柔光 */
     ctx.save();
-    ctx.globalAlpha = 0.9;
-    ctx.setLineDash([26, 18]); ctx.lineDashOffset = -t * 26;
-    ctx.strokeStyle = "#fbbf24"; ctx.lineWidth = C.rimW || 16;
-    ctx.beginPath(); ctx.arc(A.x, A.y, A.r - (C.rimW || 16) / 2, 0, TAU); ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.globalAlpha = 0.25 + Math.sin(t * 2) * 0.06;
-    ctx.strokeStyle = "#fde68a"; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.arc(A.x, A.y, A.r - (C.rimW || 16) - 3, 0, TAU); ctx.stroke();
+    const rim = C.rimW || 16;
+    const rimRing = (rr) => {
+      ctx.globalAlpha = 0.9;
+      ctx.setLineDash([26, 18]); ctx.lineDashOffset = -t * 26;
+      ctx.strokeStyle = "#fbbf24"; ctx.lineWidth = rim;
+      ctx.beginPath(); ctx.arc(A.x, A.y, rr - rim / 2, 0, TAU); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 0.25 + Math.sin(t * 2) * 0.06;
+      ctx.strokeStyle = "#fde68a"; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(A.x, A.y, rr - rim - 3, 0, TAU); ctx.stroke();
+    };
+    rimRing(A.r);
+    if (A.ir > 0) rimRing(A.ir);
     ctx.restore();
 
     /* 3. 车辆耐久条（画在车顶上方） */
