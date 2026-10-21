@@ -74,7 +74,7 @@
   function settingBtnsHtml(r, who) {
     /* v3.7 塔防：时长与地图都由模式固定，不给按钮，避免误以为能改 */
     if (r.rule === "tower") {
-      return '<div class="setrow"><span class="sub" style="line-height:30px">塔防对战固定：无时限 · 专用窄长地图（2800 × 600）· 红蓝 3v3</span></div>';
+      return '<div class="setrow"><span class="sub" style="line-height:30px">塔防对战固定：无时限 · 专用窄长地图（2800 × 600）· 红蓝两队（人数不限）</span></div>';
     }
     const attr = who === "net" ? "data-nset" : "data-lset";
     const p = LD.mapPreset((r.map && r.map.preset) || "random");
@@ -296,15 +296,9 @@
 
   /* 人机阵营：阵营模式下默认按顺序轮流分到 4 个阵营；房主点卡片上的队伍色可手动指定 */
   function botTeam(i) {
-    /* v3.8 塔防：默认玩家队 2 个人机、对面 3 个，凑成 3v3；可手动点队伍改 */
-    if (room.rule === "tower") {
-      const bb = room.bots[i];
-      if (bb && bb.team != null && bb.team >= 0) return bb.team > 0 ? 1 : 0;
-      const mine = room.myTeam === 1 ? 1 : 0;
-      return i < 2 ? mine : 1 - mine;
-    }
-    /* v4.8 占点 / 护送：同样是红蓝两队，默认与玩家交替分边（可手动改） */
-    if (room.rule === "escort" || room.rule === "capture") {
+    /* v3.8 塔防 / v4.8 占点 / 护送：红蓝两队，默认与玩家交替分边（可手动改）。
+     * v4.11 塔防解除人数限制：不再强制凑满 3v3，双方人数可以不对等、也可以不满三个。 */
+    if (isTwoTeam(room.rule)) {
       const bb = room.bots[i];
       if (bb && bb.team != null && bb.team >= 0) return bb.team > 0 ? 1 : 0;
       const mine = room.myTeam === 1 ? 1 : 0;
@@ -414,10 +408,7 @@
   UI.roomStart = function () {
     const two = isTwoTeam(room.rule);
     if (two && room.myTeam < 0) room.myTeam = 0;
-    /* v3.7 塔防：3v3 需要 6 个座位，人机不足就自动补齐（玩家 + 5 人机） */
-    if (room.rule === "tower") {
-      while (room.bots.length < 5) room.bots.push({ level: "normal", loadout: LD.AI.randomLoadout(), look: botLook() });
-    }
+    /* v4.11 塔防不再限制人数：不强制补齐到 3v3，玩家想 1v1 / 2v3 都行。 */
     /* v4.8 占点 / 护送：和阵营模式一样按房间选择分队，且红蓝两边都必须有人 */
     if (room.rule === "team" || (two && room.rule !== "tower")) {
       const all = [{ team: myTeam() }].concat(room.bots.map((bb, i) => ({ team: botTeam(i) })));
@@ -439,16 +430,10 @@
       fighters.push(bot);
     });
     /* v3.9 霸主争霸不再放巨龙：改由天降皇冠决定霸主归属（见 B.initCrown） */
-    /* v3.8 塔防：按房间选的红/蓝分队，并自动平衡成 3v3 */
+    /* v3.8 塔防：按房间选的红/蓝分队。
+     * v4.11 去掉了「自动平衡成 3v3」——现在双方人数可以不对等，也可以不满三个。 */
     let teams = null;
-    if (two) {
-      teams = [myTeam()].concat(room.bots.map((bb, i) => botTeam(i)));
-      if (room.rule === "tower") {
-        const count = t => teams.filter(x => x === t).length;
-        while (count(0) > 3) { teams[teams.lastIndexOf(0)] = 1; }
-        while (count(1) > 3) { teams[teams.lastIndexOf(1)] = 0; }
-      }
-    }
+    if (two) teams = [myTeam()].concat(room.bots.map((bb, i) => botTeam(i)));
     B.setup({ mode: "duel", rule: room.rule, fighters, theme: {}, mods: room.mods.slice(),
       teams: teams || undefined,
       matchT: room.matchT || (LD.MATCH && LD.MATCH.def) || 120,

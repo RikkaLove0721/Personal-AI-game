@@ -246,6 +246,11 @@
       const bw = LD.BUMP.world;
       this.world = { w: bw.w, h: bw.h, pt: bw.pt != null ? bw.pt : 120 };
     }
+    /* v4.11 烫手山芋：常规 1600 场地 */
+    if (this.rule === "hotpotato" && LD.HOTPOTATO && LD.HOTPOTATO.world) {
+      const hw = LD.HOTPOTATO.world;
+      this.world = { w: hw.w, h: hw.h, pt: hw.pt != null ? hw.pt : 120 };
+    }
     this.cam = { x: 0, y: 0 };
     /* v3.0 地形：房间带 mapCfg；闯关自动读关卡预置；都不传时保持空场地（兼容旧调用与无头测试） */
     let mapCfg = cfg.mapCfg || null;
@@ -292,6 +297,12 @@
     if (this.rule === "relay") this.initRelay();
     /* v2.7 缩圈乱斗：地图上只有几个大安全圈，其余全是毒 */
     if (this.rule === "ring") this.initRing();
+    /* v4.11 跨模式状态残留清理：stations / crown 只在夜战 / 霸主的 init 里重建，
+     * 但 interactTarget 扫描它们时**不看当前规则**——上一局打过夜战，这局的
+     * 乱斗 / 塔防 / 丧尸里就会凭空冒出「充电」；霸主同理会冒出「争夺皇冠」。
+     * 必须在所有 initXxx 之前先清干净，让它们只由本局规则重新填充。 */
+    this.stations = [];
+    this.crown = null;
     /* v3.7 塔防：分队 / 等级 / 金币 / 禁大招 */
     if (this.rule === "tower" && this.initTower) this.initTower();
     /* v3.9 霸主争霸：天降皇冠循环从这里起步（每回合重来） */
@@ -394,6 +405,7 @@
       f.noHideT = 0; f._noHideSaidT = 0;
       /* v4.10 护送情报箱：推箱状态 / 推箱禁令随回合复位 */
       f.pushBox = null; f.noBoxT = 0;
+      f.escortRespawnT = (LD.ESCORT || {}).heroRespawn || 3.0;   // v4.11 复活计时复位
       f.carTarget = null; f.hideT = 0; f.interactCd = 0; f.giftLock = 0;
       f.hideTimer = 0; f.hideSpotted = false; f.bushTimer = 0; f._stealthFlash = false;
       f.skillGot = { skill1: 0, skill2: 0 };
@@ -456,8 +468,8 @@
     if (this.rule === "capture" && this.initCapture) this.initCapture();
     /* v4.8 碰碰车竞技：圆形擂台清场 + 发碰碰车 + 每人上车 */
     if (this.rule === "bump" && this.initBump) this.initBump();
-    /* v4.9 僵尸守房：全员同队 + 房子占地清场 + 摆位到房四周 */
-    if (this.rule === "zombiehouse" && this.initZombieHouse) this.initZombieHouse();
+    /* v4.11 烫手山芋：全员脱队（互不伤害）+ 抽第一个倒霉蛋 */
+    if (this.rule === "hotpotato" && this.initHotPotato) this.initHotPotato();
     this.dragonCorpseT = 0;
     /* v2.6 / v2.7 各规则回合限时：
      * 追猎 90 秒（时间到生存者胜）；缩圈无限时（毒圈就是时钟）；
@@ -886,10 +898,19 @@
       f.capRespawnT = Math.min(C.respawnMax || 24, baseT + (C.respawnStep || 3.0));
       return;
     }
-    /* v4.9 僵尸守房：打的是波次不是淘汰赛，阵亡只是退场一会儿，
-     * 别让「只剩一人」的通用结算提前把整局判掉（僵尸走更上面的通用分支）。 */
-    if (this.rule === "zombiehouse" && f.kind === "hero" && !f.isZombie) {
-      f.respawnT = (LD.ZOMBIEHOUSE || {}).respawn || 5;
+    /* v4.11 护送情报箱：同占点，阵亡只是退场一会儿（首次 3 秒，之后每次 +3，上限 24）。
+     * 必须放在「只剩一人」的通用结算之前 return，否则一方团灭会直接判掉整局。 */
+    if (this.rule === "escort" && f.kind === "hero") {
+      const E = LD.ESCORT || {};
+      const baseT = f.escortRespawnT != null ? f.escortRespawnT : (E.heroRespawn || 3.0);
+      f.respawnT = baseT;
+      f.escortRespawnT = Math.min(E.heroRespawnMax || 24, baseT + (E.heroRespawnStep || 3.0));
+      return;
+    }
+    /* v4.11 烫手山芋：本模式没有攻击手段，被炸死后计时复活继续当接盘侠 */
+    if (this.rule === "hotpotato" && f.kind === "hero") {
+      f.respawnT = (LD.HOTPOTATO || {}).respawn || 3.0;
+      if (this.potato && this.potato.holder === f) { this.potato.holder = null; this.potatoPickTarget(); }
       return;
     }
     if (this.rule === "warmup") {
@@ -1506,8 +1527,11 @@
     return { x: bx, y: by };
   };
   B.updateRespawn = function (dt) {
-    if (this.rule !== "warmup" && this.rule !== "capture") return;
-    const W = this.rule === "capture" ? (LD.CAPTURE || {}) : (LD.WARMUP || {});
+    /* v4.11 护送情报箱：阵亡后计时复活，不再一命淘汰 */
+    if (this.rule !== "warmup" && this.rule !== "capture" && this.rule !== "escort" && this.rule !== "hotpotato") return;
+    const W = this.rule === "escort" ? (LD.ESCORT || {})
+            : this.rule === "hotpotato" ? (LD.HOTPOTATO || {})
+            : this.rule === "capture" ? (LD.CAPTURE || {}) : (LD.WARMUP || {});
     for (const f of this.fighters) {
       if (!f.respawnT || f.respawnT <= 0) continue;
       f.respawnT -= dt;
@@ -1520,7 +1544,10 @@
       f.buff = { rage: 0, thousand: 0, rush: 0 };
       Object.keys(f.slot || {}).forEach(k => { f.slot[k] = { on: false, phase: "", t: 0, d: {} }; });
       if (f.cd) { f.cd.basic = 0; f.cd.skill1 = 0; f.cd.skill2 = 0; f.cd.dodge = 0; f.cd.ult = 1.5; }
-      const p = (this.rule === "capture" && this.captureSpawn) ? this.captureSpawn(f) : this.randomRespawnSpot();
+      /* v4.11 占点：阵亡改为**全图随机**复活（原固定回基地，容易被蹲家门口）。
+       * 护送：在本方交付点一带复活（阵营分驻左右两端，不会一睁眼就在敌方人堆里）。 */
+      const p = (this.rule === "escort" && this.escortSpawn) ? this.escortSpawn(f)
+              : this.randomRespawnSpot();
       f.x = p.x; f.y = p.y;
       f.invuln = W.invuln || 1.6;
       FX.ring(f.x, f.y - 26, 76, "rgba(103,232,249,.95)", 5, 0.5);
@@ -1612,9 +1639,11 @@
   /* v3.1 补给箱掉落：随机血包 / 道具包（原「能量包」，v4.10 统一改名）/ 移速包 */
   /* v4.10 道具包（+60 大招能量）只在这些模式之外的局里出现：
    * 停电夜战（大招禁用）、世界末日（用户反馈「居然能充电」）、护送情报箱（交互被充电抢走）。
+   * v4.11 补：碰碰车竞技（同样禁用大招，且玩家全程在车里，`interactTarget` 的
+   * rideCar 短路让道具包根本点不到，掉了也是白掉）；烫手山芋（禁用普攻技能大招）。
    * 物资刷新修饰符走同一个出口，一处拦截全部生效。 */
   B.packAllowed = function () {
-    return ["blackout", "doomsday", "escort"].indexOf(this.rule) < 0;
+    return ["blackout", "doomsday", "escort", "bump", "hotpotato"].indexOf(this.rule) < 0;
   };
   B.dropPickup = function (x, y, forceKind) {
     if (forceKind === "energy" && !this.packAllowed()) {
@@ -4142,6 +4171,23 @@
       }
       return;
     }
+    /* v4.11 烫手山芋：普攻 / 技能 / 大招**全部**禁用——手上这颗芋头就是全部武器 */
+    if (this.rule === "hotpotato") {
+      if (ctrl && ctrl.press && ctrl.press[slot] && (f._hotNoSkillT == null || this.t - f._hotNoSkillT > 1.2)) {
+        f._hotNoSkillT = this.t;
+        FX.float(f.x, f.y - 56, "烫手山芋里不能用招式", "#9fb3dd", 13);
+      }
+      return;
+    }
+    /* v4.11 护送情报箱：推箱期间技能 / 大招禁用（普攻照常，用来清挡路的人）。
+     * 和闪避一起构成「推箱是有代价的」——推着箱子就没法自保，只能靠队友护驾。 */
+    if (this.rule === "escort" && f.pushBox && slot !== "basic") {
+      if (ctrl && ctrl.press && ctrl.press[slot] && (f._pushNoSkillT == null || this.t - f._pushNoSkillT > 1.2)) {
+        f._pushNoSkillT = this.t;
+        FX.float(f.x, f.y - 56, "推箱时无法使用技能", "#9fb3dd", 13);
+      }
+      return;
+    }
     /* v3.3：躲在柜子里 / 坐在驾驶位上时不能出招（车上只有喇叭与坦克火炮） */
     if (f.hideProp) return;
     if (f.rideCar) { if (f._rideNoSkillT == null || this.t - f._rideNoSkillT > 1.2) { f._rideNoSkillT = this.t; FX.float(f.x, f.y - 56, "车上无法使用技能", "#9fb3dd", 13); } return; }
@@ -4303,8 +4349,8 @@
     if (this.rule === "capture" && this.updateCapture) this.updateCapture(dt);
     /* v4.8 碰碰车竞技：车对车撞击 / 出圈落水 / 复活 / 计分 */
     if (this.rule === "bump" && this.updateBump) this.updateBump(dt);
-    /* v4.9 僵尸守房：波次放怪 / 啃房掉耐久 / 击杀补记 / 喘息修房 */
-    if (this.rule === "zombiehouse" && this.updateZombieHouse) this.updateZombieHouse(dt);
+    /* v4.11 烫手山芋：山芋天降 / 传递 / 倒计时爆炸 */
+    if (this.rule === "hotpotato" && this.updateHotPotato) this.updateHotPotato(dt);
     /* v3.9 能量包蓄力：进度推进与中断判定（锁移动 / 锁技能在角色循环里） */
     if (this.updateCharging) this.updateCharging(dt);
     this.updateZones(dt);
@@ -4413,7 +4459,7 @@
     if (this.mode !== "dragon" && this.rule !== "ring" && this.rule !== "relay"
         && this.rule !== "hunt" && this.rule !== "warmup" && this.rule !== "doomsday"
         && this.rule !== "tower" && this.rule !== "escort" && this.rule !== "capture"
-        && this.rule !== "bump" && this.rule !== "zombiehouse") {
+        && this.rule !== "bump" && this.rule !== "hotpotato") {
       this.roundT = (this.roundT || 75) - dt;
       if (this.roundT <= 0) {
         /* 超时：当前血量最高者赢下回合（平血按座位号） */
@@ -4565,6 +4611,14 @@
     // 双击方向键 → 短位移闪避（无无敌帧，CD 2.5 秒）
     /* v3.1：僵尸没有闪避 */
     if (ctrl.dodge && f.isZombie) ctrl.dodge = null;
+    /* v4.11 护送情报箱：推箱时双手占在箱子上，闪避禁用（按 P 松手后才能闪） */
+    if (ctrl.dodge && this.rule === "escort" && f.pushBox) {
+      ctrl.dodge = null;
+      if (f._pushNoDodgeT == null || this.t - f._pushNoDodgeT > 1.2) {
+        f._pushNoDodgeT = this.t;
+        FX.float(f.x, f.y - 56, "推箱时无法闪避", "#9fb3dd", 13);
+      }
+    }
     if (ctrl.dodge) {
       const dv = ctrl.dodge; ctrl.dodge = null;
       // 激光蓄力中双击方向键 → 直接取消该技能（不然可以用位移把激光带到别的位置）
@@ -4612,6 +4666,8 @@
     if (f.slowT > 0) sp *= 0.55;   // 被冰痕 / 苍减速
     /* v4.10 护送情报箱：推箱时移速只有正常的 20%（同样是单点乘，不落持久字段） */
     if (f.pushBox && LD.ESCORT) sp *= LD.ESCORT.pushSpeed || 0.2;
+    /* v4.11 烫手山芋：刚接手的 2 秒减速（0.5×），熬过去之后提速到 1.2× */
+    if (f.hotMul) sp *= f.hotMul;
     /* v3.2 世界末日：僵尸在门洞减速圈里额外变慢（给守门的人留输出窗口） */
     if (f.gateSlowT > 0 && f.isZombie) sp *= (LD.DOOMSDAY && LD.DOOMSDAY.gateSlow) || 0.5;
     /* v3.1：推着汽车 / 轮胎 / 方块走时明显变慢；水池里减速；拾取移速包短暂加速 */
@@ -5290,8 +5346,8 @@
       if (this.rule === "capture" && this.drawCapture) this.drawCapture(ctx);
       /* v4.8 碰碰车竞技：场外水池 + 擂台警示带 + 车辆耐久条 */
       if (this.rule === "bump" && this.drawBump) this.drawBump(ctx);
-      /* v4.9 僵尸守房：地基圈 + 屋子本体 + 房子耐久条 */
-      if (this.rule === "zombiehouse" && this.drawZombieHouse) this.drawZombieHouse(ctx);
+      /* v4.11 烫手山芋：山芋本体 + 持有者高亮 + 倒计时 */
+      if (this.rule === "hotpotato" && this.drawHotPotato) this.drawHotPotato(ctx);
       /* v3.9.1 停电夜战：充电站（排在掉落物之前，压在人物下层） */
       if (this.drawStations) this.drawStations(ctx);
       /* v3.1 补给掉落物：血包 / 能量包 / 移速包 */

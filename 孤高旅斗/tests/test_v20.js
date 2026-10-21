@@ -481,7 +481,7 @@ console.log("\n=== 10. 角色卡房间 ===");
  * 11. 三种模式人人可玩 / 界面接线
  * ============================================================ */
 console.log("\n=== 11. 模式接线 ===");
-check("规则表含 16 种模式（v4.9 新增僵尸守房）", LD.RULES.length === 16 && ["brawl", "team", "overlord", "gifts", "ring", "auction", "doomsday", "relay", "hunt", "warmup", "escort", "capture", "tower", "blackout", "bump", "zombiehouse"].every(id => LD.ruleInfo(id).id === id));
+check("规则表含 16 种模式（v4.11 删僵尸守房、加烫手山芋）", LD.RULES.length === 16 && ["brawl", "team", "overlord", "gifts", "ring", "auction", "doomsday", "relay", "hunt", "warmup", "escort", "capture", "tower", "blackout", "bump", "hotpotato"].every(id => LD.ruleInfo(id).id === id));
 check("阵营配色 4 队", LD.TEAM_COLORS.length === 4 && LD.TEAM_NAMES.length === 4, LD.TEAM_NAMES.join("/"));
 check("自定义房间入口已接入角色卡", typeof UI.renderRoom === "function" && typeof UI.roomStart === "function");
 check("多人准备阶段渲染函数就绪", typeof UI.renderNetRoom === "function" && typeof UI.applyNetRoom === "function" && typeof UI.netHostStart === "function");

@@ -298,24 +298,66 @@
     if (foe && !B.sameTeam(f, foe)) f.lock = foe.side;    // 让 AI 也用索敌（追踪类技能会朝他瞄准）
     ctrl.press = {};
     /* ==========================================================
-     *  v4.9 僵尸守房：僵尸默认直奔房子推进；只有玩家拦在近处才交战，
-     *  交战时不做处理，交给下面的通用逻辑去咬人（贴身照样会出手）。
+     *  v4.11 烫手山芋：拿着的人去追人甩锅，没拿的人撒腿就跑。
+     *  单独 return：本模式禁用所有招式，通用战斗分支只会原地发呆。
      * ========================================================== */
-    if (B.rule === "zombiehouse" && f.isZombie && B.zh) {
-      const H = B.zh.house, C = LD.ZOMBIEHOUSE || {};
-      const aggro = C.aggro || 200;
-      let near = null, nd = Infinity;
-      B.fighters.forEach(o => {
-        if (o === f || o.dead || o.isZombie || o.kind !== "hero") return;
-        const d = Math.hypot(o.x - f.x, o.y - f.y);
-        if (d < nd) { nd = d; near = o; }
-      });
-      if (!(near && nd <= aggro)) {
-        const ax = H.x - f.x, ay = H.y - f.y, ad = Math.hypot(ax, ay) || 1;
-        const s = AI.steer(f, ax / ad, ay / ad, null);
+    if (B.rule === "hotpotato" && B.potato) {
+      const st = B.potato;
+      const carrier = st.phase === "held" ? st.holder : st.tgt;
+      if (carrier && !carrier.dead && !carrier.bench && carrier !== f) {
+        /* 远离芋头：朝背离方向跑，贴边就沿切线绕，别把自己逼到墙角。
+         * 另外要和**同样在逃的人**散开：实测里两个落单的人会挤到同一角落，
+         * 持有者只盯一个追，抱团那俩整局都拿不到芋头，轮换不起来。 */
+        const pad = 92;
+        let ax = f.x - carrier.x, ay = f.y - carrier.y;
+        B.fighters.forEach(o => {
+          if (o === f || o === carrier || o.kind !== "hero" || o.dead || o.bench) return;
+          const dx = f.x - o.x, dy = f.y - o.y, d = Math.hypot(dx, dy) || 1;
+          if (d > 240) return;
+          const k = (240 - d) / 240;
+          ax += dx / d * k * 240; ay += dy / d * k * 240;
+        });
+        let tx = f.x + ax, ty = f.y + ay;
+        const lo = pad, hi = B.world.w - pad, top = (B.world.pt || 0) + pad, bot = B.world.h - pad;
+        if (tx < lo || tx > hi || ty < top || ty > bot) {
+          const ca = Math.atan2(f.y - (top + bot) / 2, f.x - (lo + hi) / 2);
+          const cx = (lo + hi) / 2, cy = (top + bot) / 2;
+          const rr = Math.min(hi - lo, bot - top) * 0.42;
+          tx = cx + Math.cos(ca + 0.9) * rr; ty = cy + Math.sin(ca + 0.9) * rr;
+        }
+        const s = AI.steer(f, tx - f.x, ty - f.y, null);
         ctrl.mx = s.x; ctrl.my = s.y;
         return;
       }
+      /* 我是持有者：盯住一个冤大头把锅甩出去。
+       * 目标必须**锁定一段时间**：其余人也在四散奔逃，「追最近的人」会每帧换目标，
+       * 方向互相抵消，实测 30 秒引信里只能传出 1 次（等于谁被抽中谁独自挨炸）。
+       * 锁定 1.2 秒后再重新挑，既跟得上场面变化又不会原地画圈。 */
+      if (carrier === f && f === st.holder) {
+        f.hotChaseT = (f.hotChaseT || 0) - dt;
+        let best = f.hotChase;
+        const pick = (skipPrev) => {
+          let b = null, bd = Infinity;
+          B.fighters.forEach(o => {
+            if (o === f || o.kind !== "hero" || o.dead || o.bench) return;
+            if (skipPrev && o === st.prevHolder) return;      // 别传给刚甩锅给我的那个人
+            const d = Math.hypot(o.x - f.x, o.y - f.y);
+            if (d < bd) { bd = d; b = o; }
+          });
+          return b;
+        };
+        if (!best || best === f || best.dead || best.bench || f.hotChaseT <= 0) {
+          best = pick(true) || pick(false);                   // 只剩前任可选时再退回去
+          f.hotChase = best; f.hotChaseT = 1.2;
+        }
+        if (best) {
+          const s = AI.steer(f, best.x - f.x, best.y - f.y, null);
+          ctrl.mx = s.x; ctrl.my = s.y;
+        } else { ctrl.mx = 0; ctrl.my = 0; }
+        return;
+      }
+      ctrl.mx = 0; ctrl.my = 0;
+      return;
     }
     /* ==========================================================
      *  v4.8 碰碰车竞技：全程只干两件事——有车就撞最近的对手，没车就奔最近的空车。

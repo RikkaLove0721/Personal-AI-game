@@ -307,24 +307,33 @@
           a.x -= nx * pen * 0.5; a.y -= ny * pen * 0.5;
           b.x += nx * pen * 0.5; b.y += ny * pen * 0.5;
         }
-        const vrel = (a.vx - b.vx) * nx + (a.vy - b.vy) * ny;   // >0：a 撞向 b
-        const sp = Math.abs(vrel);
-        if (sp < (C.minSpd || 110)) continue;                    // 只是轻轻蹭了一下
+        const alongA = a.vx * nx + a.vy * ny;            // a 朝 b 的速度分量
+        const alongB = -(b.vx * nx + b.vy * ny);         // b 朝 a 的速度分量
+        /* 两者之和 = 接近速度（同向追尾时≈0），只用来做概念说明；
+         * v4.11 起力度与门槛都不再用它，改用下面这行的「主动方车速」。 */
+        /* v4.11 击退按「主动撞上去那一方的车速」结算，而不是接近速度。
+         * 旧公式在**同向追尾**时最吃亏：两车都开得飞快，接近速度却几乎为 0，
+         * 算出来只剩基础击退，玩家体感就是「我明明比他快，撞上去却推不动」。
+         * 现在谁冲得更猛谁就占便宜，速度对击退的增益也调高了（kbPerSpd）。 */
+        const spKb = Math.max(alongA, alongB, 0);
+        /* 门槛同样按车速判：追尾时 sp≈0，若沿用旧的接近速度门槛，
+         * 「快车从后面顶慢车」会被整个过滤掉——那正是玩家抱怨撞不动的场景。 */
+        if (spKb < (C.minSpd || 110)) continue;           // 双方都没在往对方身上冲
         st.cd[key] = this.t;
-        const atk = vrel > 0 ? a : b, vic = vrel > 0 ? b : a;
-        const sgn = vrel > 0 ? 1 : -1;
+        const atk = alongA >= alongB ? a : b, vic = atk === a ? b : a;
+        const sgn = atk === a ? 1 : -1;
         const dirx = nx * sgn, diry = ny * sgn;
-        const dmg = clamp(sp * (C.dmgPerSpd || 0.055), C.dmgMin || 6, C.dmgMax || 30);
+        const dmg = clamp(spKb * (C.dmgPerSpd || 0.055), C.dmgMin || 6, C.dmgMax || 30);
         vic.bumpHp -= dmg;
         atk.bumpHp -= dmg * (C.selfMul || 0.35);
         vic.flash = 0.18;
-        const imp = (C.kb || 300) + sp * (C.kbPerSpd || 0.62);
+        const imp = (C.kb || 300) + spKb * (C.kbPerSpd || 1.5);
         vic.vx += dirx * imp; vic.vy += diry * imp;
         atk.vx *= 0.45; atk.vy *= 0.45;
         const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
         FX.burst(mx, my - 20, 14, ["#fde68a", "#fff", "#fb923c"], { speed: 260 });
         FX.ring(mx, my - 14, 44, "rgba(253,230,138,.85)", 4, 0.35);
-        FX.shake(Math.min(11, 4 + sp * 0.02));
+        FX.shake(Math.min(11, 4 + spKb * 0.02));
         /* 归属：被撞的人 3 秒内掉进水里算攻击者的 */
         const vicF = vic.driver, atkF = atk.driver;
         if (vicF && atkF) { vicF.lastHitBy = atkF; vicF.lastHitT = this.t; FX.float(mx, my - 58, "撞击 -" + Math.round(dmg), "#fbbf24", 14); }
@@ -337,8 +346,21 @@
     const credit = C.credit || 3;
     for (const f of this.fighters) {
       if (f.kind !== "hero" || f.bench || f.dead || f.bumpOut) continue;
-      const d = Math.hypot(f.x - A.x, f.y - A.y);
-      if (d <= A.r && d >= A.ir) continue;
+      /* v4.11 车身完全离开陆地才算进水：
+       * 用车（步行时是人）的 AABB 与圆环带 [ir, r] 求交集——只要还压着一条边
+       * 就算在台上。旧版只看中心点，车头刚探出去就被判掉水，误判很频繁。 */
+      const o = (f.rideCar && f.rideCar.bump) ? f.rideCar : null;
+      const r = o ? 0 : (f.r || 18);
+      const x0 = (o ? o.x : f.x) - (o ? o.w / 2 : r), x1 = (o ? o.x : f.x) + (o ? o.w / 2 : r);
+      const y0 = (o ? o.y : f.y) - (o ? o.h / 2 : r), y1 = (o ? o.y : f.y) + (o ? o.h / 2 : r);
+      /* 圆心到 AABB 的最近距离 dMin（圆心在框内则为 0）与最远角点距离 dMax */
+      const qx = Math.max(x0, Math.min(A.x, x1)), qy = Math.max(y0, Math.min(A.y, y1));
+      const dMin = Math.hypot(A.x - qx, A.y - qy);
+      const dMax = Math.max(
+        Math.hypot(x0 - A.x, y0 - A.y), Math.hypot(x1 - A.x, y0 - A.y),
+        Math.hypot(x0 - A.x, y1 - A.y), Math.hypot(x1 - A.x, y1 - A.y));
+      /* 还压在圆环带上 → 安全；整台车都在水里（掉出外圈或陷进中心水圈）→ 落水 */
+      if (dMin <= A.r && dMax >= A.ir) continue;
       const by = (f.lastHitBy && !f.lastHitBy.dead && this.t - (f.lastHitT == null ? -99 : f.lastHitT) <= credit)
         ? f.lastHitBy : null;
       this.bumpDunk(f, by, false);

@@ -195,7 +195,8 @@ console.log("\n=== 5. 出圈落水 ===");
   B.updateBump(1 / 60);
   const A = B.bumpArena();
   const car = b.rideCar;
-  car.x = A.x + A.r + 40; car.y = A.y; b.x = car.x; b.y = car.y;
+  /* v4.11 落水判定改成「车身完全离开陆地」：整车都在圈外才沉，所以要摆得更远 */
+  car.x = A.x + A.r + car.w / 2 + 60; car.y = A.y; b.x = car.x; b.y = car.y;
   B.t += 0.2;
   B.updateBump(1 / 60);
   check("越过擂台边缘即落水", b.bumpOut === true && b.dead === true);
@@ -205,6 +206,22 @@ console.log("\n=== 5. 出圈落水 ===");
   for (let k = 0; k < 20; k++) { B.t += 0.25; B.updateBump(0.25); }
   check("落水者复活在擂台内", !b.bumpOut && distA(b) <= A.r, "d=" + Math.round(distA(b)));
   check("复活后有无敌帧", b.invuln > 0, b.invuln);
+
+  /* v4.11 车身还压着陆地就不算进水（旧版只看圆心，探头就判掉水，误判很频繁） */
+  {
+    const hs3 = setupBump(2, 33);
+    const c = hs3[1];
+    const A3 = B.bumpArena();
+    const car3 = c.rideCar;
+    /* 车心已在圈外 20px，但车尾还压在台上 → 不该落水 */
+    car3.x = A3.x + A3.r + 20; car3.y = A3.y; c.x = car3.x; c.y = car3.y;
+    B.t += 0.2; B.updateBump(1 / 60);
+    check("车尾还压在台上时不算进水", !c.bumpOut && !c.dead, "dMin=" + Math.round(A3.r));
+    /* 再往外挪，整车离开陆地 → 落水 */
+    car3.x = A3.x + A3.r + car3.w / 2 + 60; c.x = car3.x;
+    B.t += 0.2; B.updateBump(1 / 60);
+    check("整车离开陆地才判进水", c.bumpOut === true && c.dead === true);
+  }
 
   /* v4.10 中心水圈同样判落水 */
   const hs2 = setupBump(2, 32);

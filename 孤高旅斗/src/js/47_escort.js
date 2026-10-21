@@ -46,6 +46,7 @@
     ];
     this.fighters.forEach(f => {
       f.intel = false; f.pushBox = null; f.noBoxT = 0;
+      f.escortRespawnT = E.heroRespawn || 3.0;     // v4.11 阵亡复活计时（每次阵亡递增）
       if (f.kind !== "hero") return;
       if (f.team == null || f.team < 0) f.team = f.side % 2;
       f.team = f.team > 0 ? 1 : 0;      // 本模式只有两队，2/3 号队并到蓝队
@@ -71,6 +72,25 @@
   B.escortGoalOf = function (team) {
     const g = this.escortGoals || [];
     return g[team > 0 ? 1 : 0] || g[0] || null;
+  };
+
+  /* ==========================================================
+   *  v4.11 阵亡复活点：本方交付点一带随机取一个不卡障碍的点
+   *  （阵营分驻左右两端，复活也就落在自己那一侧，不至于一睁眼就在敌方人堆里）
+   * ========================================================== */
+  B.escortSpawn = function (f) {
+    const E = LD.ESCORT || {};
+    const top = this.world.pt || 0;
+    const g = this.escortGoalOf(f.team > 0 ? 1 : 0);
+    const base = g || { x: this.world.w / 2, y: top + (this.world.h - top) / 2 };
+    const r = E.goalR || 110;
+    for (let k = 0; k < 40; k++) {
+      const a = Math.random() * TAU, rr = Math.random() * r * 1.15;
+      const x = clamp(base.x + Math.cos(a) * rr, 60, this.world.w - 60);
+      const y = clamp(base.y + Math.sin(a) * rr, top + 60, this.world.h - 60);
+      if (!this.terrain || LD.Terrain.clearAt(this.terrain, x, y, 28)) return { x: x, y: y };
+    }
+    return { x: base.x, y: base.y };
   };
 
   /* ==========================================================

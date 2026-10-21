@@ -1449,7 +1449,10 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     stun: 1.0,           // 推箱被打断的眩晕
     noTouch: 3.0,        // 推箱被打断后，多久内不能再碰箱子
     respawn: 2.2,        // 交付后箱子重新投放的间隔
-    protect: 0.8         // 落地保护期：刚投放的箱子这么短时间内不能被推
+    protect: 0.8,        // 落地保护期：刚投放的箱子这么短时间内不能被推
+    /* v4.11 阵亡复活：护送是推箱竞速，不该因为一次团灭就结束比赛。
+     * 首次 3 秒，之后每阵亡一次 +3 秒，最长 24 秒（与占点同规格）。 */
+    heroRespawn: 3.0, heroRespawnStep: 3.0, heroRespawnMax: 24
   };
 
   /* ---------------------------------------------------------- v4.7 占点争夺
@@ -1484,7 +1487,11 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     spawnInset: 170,     // 基地圆心离左右边界的距离
     baseR: 190,          // 基地回血圈半径
     baseHealPct: 0.05,   // 自家基地每秒回复最大生命的比例
-    pointHeal: 5,        // v4.10 站在己方已占领的据点圈里，每秒回 5 滴血
+    pointHeal: 2,        // v4.11 站在己方已占领的据点圈里，每秒回 2 滴血（原 5 太强）
+    /* v4.11 据点数量规则：保底 3 座（左 / 中 / 右），之后每多 perExtra 名玩家再 +1 座，
+     * 最多 maxPts 座。多出来的据点随机撒（仍受 minGap / edge / baseGap 约束）。 */
+    basePts: 3, perExtra: 2, maxPts: 6,
+    turretDmgMul: 0.8,   // v4.11 据点炮塔伤害 ×80%（原样照搬塔防数值偏疼）
     /* 据点炮塔：血量 / 伤害 / 攻速 / 弹速 / 追踪全部沿用塔防防御塔，
      * 射程不在这里配 —— 直接取据点半径（见 48_capture.js） */
     turret: { hp: 1200, dmg: 26, atk: 1.05, projSpeed: 1100, homing: 3.4, elev: 70 }
@@ -1524,23 +1531,25 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     waterDmg: 0          // 掉进水里不再额外掉血（直接判出局）
   };
 
-  /* ---------------------------------------------------------- v4.9 僵尸守房
-   * 所有玩家同队守一栋房子，僵尸分波从场边涌来拆房;
-   * 房子耐久归零即失败,撑过全部波次则按击杀数排名。 */
-  LD.ZOMBIEHOUSE = {
-    hp: 1200,            // 房子耐久
-    r: 150,              // 房子判定半径(僵尸进圈就啃房)
-    waves: 5,            // 总波数
-    base: 5,             // 第 1 波僵尸数
-    grow: 3,             // 每波递增数量
-    gap: 8,              // 两波之间的喘息时间(秒,可修房)
-    spawnEvery: 0.55,    // 一波内逐个放僵尸的间隔
-    biteDmg: 22,         // 僵尸每次啃房伤害
-    biteTick: 0.8,       // 啃房间隔
-    aggro: 200,          // 僵尸这个距离内有玩家就先咬人,否则直奔房子
-    repair: 90,          // 喘息期站在房里每秒修复量
-    respawn: 5,          // 玩家阵亡后复活倒计时
-    scoreKill: 1         // 每击杀一只僵尸的计分
+  /* ---------------------------------------------------------- v4.11 烫手山芋
+   * 混战：普攻 / 技能 / 大招全部禁用（见 B.trySlot），只能靠跑位甩锅。
+   * 山芋从天而降锁定一个人 → 接手 2 秒减速（传不出去）→ 之后提速 120% 去追人
+   * → 碰到人就把山芋甩给他 → 引信 30 秒烧完爆炸扣血 → 重新抽人循环。 */
+  LD.HOTPOTATO = {
+    world: { w: 1600, h: 1600, pt: 120 },
+    warn: 3.0,           // 天降前的预警时长
+    drop: 0.85,          // 山芋从高空落到头顶的飞行时间
+    slowT: 2.0,          // 刚接手的减速时长
+    slowMul: 0.5,        // 减速到正常的 50%
+    boostMul: 1.2,       // 减速结束后提速到正常的 120%
+    fuse: 30,            // 引信：从山芋落到第一个人手上开始倒计时
+    holderDmg: 75,       // 爆炸时持有者掉的血
+    splashR: 130,        // 爆炸波及半径
+    splashDmg: 50,       // 爆炸波及到的其他人掉的血
+    passR: 44,           // 传递判定：两人边缘净距小于该值即触发
+    passCd: 0.5,         // 传递后的小冷却，防止一帧内来回弹
+    respawn: 3.0,        // 被炸死后多久复活
+    invuln: 1.2          // 复活后的无敌时间
   };
 
   /* ---------------------------------------------------------- v3.3 交互键（P）
@@ -1825,7 +1834,7 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     { id: "escort_win",  name: "情报护送者", icon: "📦", desc: "护送情报箱获胜 10 次", cond: mw("escort") },
     { id: "capture_win", name: "据点之主", icon: "🚩", desc: "占点争夺获胜 10 次", cond: mw("capture") },
     { id: "bump_win",    name: "碰碰车之王", icon: "🚗", desc: "碰碰车竞技获胜 10 次", cond: mw("bump") },
-    { id: "zombiehouse_win", name: "守房铁卫", icon: "🏠", desc: "僵尸守房获胜 10 次", cond: mw("zombiehouse") },
+    { id: "hotpotato_win", name: "甩锅高手", icon: "🥔", desc: "烫手山芋获胜 10 次", cond: mw("hotpotato") },
     { id: "zombie_50",   name: "清道夫",   icon: "🧟", desc: "累计击杀 50 只僵尸",         cond: (d, st) => st.zombieKills >= 50 },
     { id: "daily_win",   name: "死战英雄",   icon: "⚔", desc: "通关一次死战闯关",         cond: (d, st) => st.dailyWins >= 1 }
   ];
@@ -1852,7 +1861,7 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     { id: "husong",  name: "情报护送者", ach: "escort_win" },
     { id: "judian",  name: "据点之主",   ach: "capture_win" },
     { id: "pengpeng", name: "碰碰车之王", ach: "bump_win" },
-    { id: "shoufang", name: "守房铁卫", ach: "zombiehouse_win" },
+    { id: "shuaiguo", name: "甩锅高手", ach: "hotpotato_win" },
     { id: "qingdao", name: "清道夫",   ach: "zombie_50" },
     { id: "meiri",   name: "死战英雄", ach: "daily_win" }
   ];
@@ -1894,9 +1903,9 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     { id: "blackout", name: "停电夜战", icon: "🔦", short: "夜战", desc: "全场断电，每人只看得见自己身边一格。交互键变成手电筒：按下照亮前方十多格，但照亮的区域别人也看得见——开灯等于把自己暴露出去。地图上有 4 座充电站（自带 3 格公共亮光），靠近按住交互键 1.6 秒把手电筒充满。手电筒有电量，满电约能照 15 秒。摸黑时黑暗条每秒涨 1 点，攒满 30 点开始每秒掉 20 血；待在光里（自己的手电、充电站、别人的光锥）黑暗条每秒退 6 点。另外：处于<b>隐匿状态</b>（隐匿技能、柜子、草丛）的人造成的伤害提高 50%。该模式禁用大招，配装固定为 J 位移斩 + K 手里剑：手里剑蓄力 0.7 秒后高速掷出大型飞镖，命中第一个敌人造成 26 伤害并让其失明 0.6 秒。最后活着的人获胜。" },
     { id: "escort", name: "护送情报箱", icon: "📦", short: "护送", desc: "两队对抗（红 / 蓝，默认 2 队，分驻左右两端）：场地正中反复投放一个 2x2 的大情报箱。箱子不能抱起来——靠近按交互键进入推箱状态，箱子跟着你朝移动方向挪，推箱时移速只有正常的 20%；被攻击会打断推箱并眩晕 1 秒、3 秒内不能再碰箱子；已有人在推时再按会提示交互占用。把箱子推进【敌方】交付点得 1 分。先到 3 分直接获胜；时间到比分高者胜，同分则比剩余总血量（按队伍合计）。" },
     { id: "bump", name: "碰碰车竞技", icon: "🚗", short: "碰碰车", desc: "圆环擂台：外围和正中心都是水池，可活动范围是一圈环形赛道——开局每人自动坐上一辆碰碰车（电力无限，技能与大招全部禁用，普攻只是喇叭）。开车撞车：接近速度越快，造成的伤害和击退越大（击退增幅相当可观），主动撞人的一方也会吃点小亏。把对手的车撞爆（+2 分）或顶进水里（+3 分，外圈内圈都算）都能得分，先到 12 分获胜。撞爆的车 4 秒后重生，落水的人 2.4 秒后回到赛道并重新发车。场上有吹风机，气流能把车吹得偏航。" },
-    { id: "capture", name: "占点争夺", icon: "🚩", short: "占点", desc: "两队对抗（红 / 蓝）：地图 2400 × 2400，每局随机生成 3~5 座据点，其中最大的据点永远在地图正中。站进圈内读条占领，人越多越快：空据点单人 5 秒，抢敌方已经占下的据点要花两倍时间（10 秒）；双方都在圈里则僵持，谁也推不动。占领后据点每秒产分，中央大点权重 2，其余各 1，先到 80 分获胜；圈里没人时对方的占领进度会缓慢回落。据点被占领后中心会升起一座炮塔，数值与塔防防御塔相同、射程等于据点半径，只打敌方角色；据点易主时炮塔跟着换攻击目标、血量不变，被拆掉后本局永久消失。阵亡后在本方基地复活，首次 3 秒，之后每死一次 +3 秒（最多 24 秒），基地圈内可以缓慢回血。时间到比分高者胜，同分则比队伍剩余总血量。" },
-    { id: "tower", name: "塔防对战", icon: "🏰", short: "推塔", desc: "3v3 单线推塔（一局 10 分钟）：地图窄长，左右各一座水晶与两座防御塔，塔和水晶会主动攻击进入范围的敌人。双方每 22 秒刷 6 只机器人小兵沿兵线推进；拆掉敌方全部防御塔才能打水晶。击杀小兵 / 英雄 / 助攻都给局内金币，买装备强化自己；阵亡后有复活倒计时，在基地复活。水晶被拆直接获胜，时间到按队伍击杀数判胜。该模式没有大招，英雄 1-6 级，升级加血加伤害。" },
-    { id: "zombiehouse", name: "僵尸守房", icon: "🏠", short: "守房", desc: "所有人同一阵容、互不伤害,守住院子中央那栋房子。僵尸分 5 波从场地边缘涌来,一波比一波多:它们默认直奔房子啃(每次啃掉 22 点耐久),只有玩家拦在近处才会先咬人。房子耐久归零就全军覆没;两波之间有 8 秒喘息,站在房子里每秒修 90 点耐久。击杀僵尸计分,撑过全部波次后击杀数最高者获胜。" }
+    { id: "capture", name: "占点争夺", icon: "🚩", short: "占点", desc: "两队对抗（红 / 蓝）：地图 1920 × 1920，据点保底 3 座（左、中、右各一），房间每多 2 名玩家再加 1 座（最多 6 座），多出来的随机分布；中央大点权重 2，其余各 1。站进圈内读条占领，人越多越快：空据点单人 5 秒，抢敌方已经占下的据点要花两倍时间（10 秒）；双方都在圈里则僵持，谁也推不动。占领后据点每秒产分，中央大点权重 2，其余各 1，先到 80 分获胜；圈里没人时对方的占领进度会缓慢回落。据点被占领后中心会升起一座炮塔，数值与塔防防御塔相同、射程等于据点半径，只打敌方角色；据点易主时炮塔跟着换攻击目标、血量不变，被拆掉后本局永久消失。阵亡后在**全图随机位置**复活，首次 3 秒，之后每死一次 +3 秒（最多 24 秒）；站在己方已占领的据点圈里每秒回 2 点血，据点炮塔伤害为基准的 80%。时间到比分高者胜，同分则比队伍剩余总血量。" },
+    { id: "tower", name: "塔防对战", icon: "🏰", short: "推塔", desc: "两队单线推塔（人数不限、可对等也可不对等，一局 10 分钟）：地图窄长，左右各一座水晶与两座防御塔，塔和水晶会主动攻击进入范围的敌人。双方每 22 秒刷 6 只机器人小兵沿兵线推进；拆掉敌方全部防御塔才能打水晶。击杀小兵 / 英雄 / 助攻都给局内金币，买装备强化自己；阵亡后有复活倒计时，在基地复活。水晶被拆直接获胜，时间到按队伍击杀数判胜。该模式没有大招，英雄 1-6 级，升级加血加伤害。" },
+    { id: "hotpotato", name: "烫手山芋", icon: "🥔", short: "山芋", desc: "禁用普攻、技能与大招：开局随机抽一个人当「山芋」的第一任主人，先给 3 秒预警，随后山芋从天而降锁到他头上。刚接手的人会有 2 秒的 50% 减速，这 2 秒内传不出去；熬过这 2 秒后速度提升到正常的 120%（比别人快），可以去追人。碰到别人就把山芋甩给他——对方同样吃 2 秒减速且期间不能再传。从山芋落到第一个人手上开始计时，30 秒后爆炸：持有者直接掉 75 血，爆炸小范围内其他人掉 50 血。炸完重新抽人、重新计时，循环往复。" }
   ];
   LD.ruleInfo = (id) => LD.RULES.find(r => r.id === id) || LD.RULES[0];
 
@@ -6489,6 +6498,11 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
       const bw = LD.BUMP.world;
       this.world = { w: bw.w, h: bw.h, pt: bw.pt != null ? bw.pt : 120 };
     }
+    /* v4.11 烫手山芋：常规 1600 场地 */
+    if (this.rule === "hotpotato" && LD.HOTPOTATO && LD.HOTPOTATO.world) {
+      const hw = LD.HOTPOTATO.world;
+      this.world = { w: hw.w, h: hw.h, pt: hw.pt != null ? hw.pt : 120 };
+    }
     this.cam = { x: 0, y: 0 };
     /* v3.0 地形：房间带 mapCfg；闯关自动读关卡预置；都不传时保持空场地（兼容旧调用与无头测试） */
     let mapCfg = cfg.mapCfg || null;
@@ -6535,6 +6549,12 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     if (this.rule === "relay") this.initRelay();
     /* v2.7 缩圈乱斗：地图上只有几个大安全圈，其余全是毒 */
     if (this.rule === "ring") this.initRing();
+    /* v4.11 跨模式状态残留清理：stations / crown 只在夜战 / 霸主的 init 里重建，
+     * 但 interactTarget 扫描它们时**不看当前规则**——上一局打过夜战，这局的
+     * 乱斗 / 塔防 / 丧尸里就会凭空冒出「充电」；霸主同理会冒出「争夺皇冠」。
+     * 必须在所有 initXxx 之前先清干净，让它们只由本局规则重新填充。 */
+    this.stations = [];
+    this.crown = null;
     /* v3.7 塔防：分队 / 等级 / 金币 / 禁大招 */
     if (this.rule === "tower" && this.initTower) this.initTower();
     /* v3.9 霸主争霸：天降皇冠循环从这里起步（每回合重来） */
@@ -6637,6 +6657,7 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
       f.noHideT = 0; f._noHideSaidT = 0;
       /* v4.10 护送情报箱：推箱状态 / 推箱禁令随回合复位 */
       f.pushBox = null; f.noBoxT = 0;
+      f.escortRespawnT = (LD.ESCORT || {}).heroRespawn || 3.0;   // v4.11 复活计时复位
       f.carTarget = null; f.hideT = 0; f.interactCd = 0; f.giftLock = 0;
       f.hideTimer = 0; f.hideSpotted = false; f.bushTimer = 0; f._stealthFlash = false;
       f.skillGot = { skill1: 0, skill2: 0 };
@@ -6699,8 +6720,8 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     if (this.rule === "capture" && this.initCapture) this.initCapture();
     /* v4.8 碰碰车竞技：圆形擂台清场 + 发碰碰车 + 每人上车 */
     if (this.rule === "bump" && this.initBump) this.initBump();
-    /* v4.9 僵尸守房：全员同队 + 房子占地清场 + 摆位到房四周 */
-    if (this.rule === "zombiehouse" && this.initZombieHouse) this.initZombieHouse();
+    /* v4.11 烫手山芋：全员脱队（互不伤害）+ 抽第一个倒霉蛋 */
+    if (this.rule === "hotpotato" && this.initHotPotato) this.initHotPotato();
     this.dragonCorpseT = 0;
     /* v2.6 / v2.7 各规则回合限时：
      * 追猎 90 秒（时间到生存者胜）；缩圈无限时（毒圈就是时钟）；
@@ -7129,10 +7150,19 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
       f.capRespawnT = Math.min(C.respawnMax || 24, baseT + (C.respawnStep || 3.0));
       return;
     }
-    /* v4.9 僵尸守房：打的是波次不是淘汰赛，阵亡只是退场一会儿，
-     * 别让「只剩一人」的通用结算提前把整局判掉（僵尸走更上面的通用分支）。 */
-    if (this.rule === "zombiehouse" && f.kind === "hero" && !f.isZombie) {
-      f.respawnT = (LD.ZOMBIEHOUSE || {}).respawn || 5;
+    /* v4.11 护送情报箱：同占点，阵亡只是退场一会儿（首次 3 秒，之后每次 +3，上限 24）。
+     * 必须放在「只剩一人」的通用结算之前 return，否则一方团灭会直接判掉整局。 */
+    if (this.rule === "escort" && f.kind === "hero") {
+      const E = LD.ESCORT || {};
+      const baseT = f.escortRespawnT != null ? f.escortRespawnT : (E.heroRespawn || 3.0);
+      f.respawnT = baseT;
+      f.escortRespawnT = Math.min(E.heroRespawnMax || 24, baseT + (E.heroRespawnStep || 3.0));
+      return;
+    }
+    /* v4.11 烫手山芋：本模式没有攻击手段，被炸死后计时复活继续当接盘侠 */
+    if (this.rule === "hotpotato" && f.kind === "hero") {
+      f.respawnT = (LD.HOTPOTATO || {}).respawn || 3.0;
+      if (this.potato && this.potato.holder === f) { this.potato.holder = null; this.potatoPickTarget(); }
       return;
     }
     if (this.rule === "warmup") {
@@ -7749,8 +7779,11 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     return { x: bx, y: by };
   };
   B.updateRespawn = function (dt) {
-    if (this.rule !== "warmup" && this.rule !== "capture") return;
-    const W = this.rule === "capture" ? (LD.CAPTURE || {}) : (LD.WARMUP || {});
+    /* v4.11 护送情报箱：阵亡后计时复活，不再一命淘汰 */
+    if (this.rule !== "warmup" && this.rule !== "capture" && this.rule !== "escort" && this.rule !== "hotpotato") return;
+    const W = this.rule === "escort" ? (LD.ESCORT || {})
+            : this.rule === "hotpotato" ? (LD.HOTPOTATO || {})
+            : this.rule === "capture" ? (LD.CAPTURE || {}) : (LD.WARMUP || {});
     for (const f of this.fighters) {
       if (!f.respawnT || f.respawnT <= 0) continue;
       f.respawnT -= dt;
@@ -7763,7 +7796,10 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
       f.buff = { rage: 0, thousand: 0, rush: 0 };
       Object.keys(f.slot || {}).forEach(k => { f.slot[k] = { on: false, phase: "", t: 0, d: {} }; });
       if (f.cd) { f.cd.basic = 0; f.cd.skill1 = 0; f.cd.skill2 = 0; f.cd.dodge = 0; f.cd.ult = 1.5; }
-      const p = (this.rule === "capture" && this.captureSpawn) ? this.captureSpawn(f) : this.randomRespawnSpot();
+      /* v4.11 占点：阵亡改为**全图随机**复活（原固定回基地，容易被蹲家门口）。
+       * 护送：在本方交付点一带复活（阵营分驻左右两端，不会一睁眼就在敌方人堆里）。 */
+      const p = (this.rule === "escort" && this.escortSpawn) ? this.escortSpawn(f)
+              : this.randomRespawnSpot();
       f.x = p.x; f.y = p.y;
       f.invuln = W.invuln || 1.6;
       FX.ring(f.x, f.y - 26, 76, "rgba(103,232,249,.95)", 5, 0.5);
@@ -7855,9 +7891,11 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
   /* v3.1 补给箱掉落：随机血包 / 道具包（原「能量包」，v4.10 统一改名）/ 移速包 */
   /* v4.10 道具包（+60 大招能量）只在这些模式之外的局里出现：
    * 停电夜战（大招禁用）、世界末日（用户反馈「居然能充电」）、护送情报箱（交互被充电抢走）。
+   * v4.11 补：碰碰车竞技（同样禁用大招，且玩家全程在车里，`interactTarget` 的
+   * rideCar 短路让道具包根本点不到，掉了也是白掉）；烫手山芋（禁用普攻技能大招）。
    * 物资刷新修饰符走同一个出口，一处拦截全部生效。 */
   B.packAllowed = function () {
-    return ["blackout", "doomsday", "escort"].indexOf(this.rule) < 0;
+    return ["blackout", "doomsday", "escort", "bump", "hotpotato"].indexOf(this.rule) < 0;
   };
   B.dropPickup = function (x, y, forceKind) {
     if (forceKind === "energy" && !this.packAllowed()) {
@@ -10385,6 +10423,23 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
       }
       return;
     }
+    /* v4.11 烫手山芋：普攻 / 技能 / 大招**全部**禁用——手上这颗芋头就是全部武器 */
+    if (this.rule === "hotpotato") {
+      if (ctrl && ctrl.press && ctrl.press[slot] && (f._hotNoSkillT == null || this.t - f._hotNoSkillT > 1.2)) {
+        f._hotNoSkillT = this.t;
+        FX.float(f.x, f.y - 56, "烫手山芋里不能用招式", "#9fb3dd", 13);
+      }
+      return;
+    }
+    /* v4.11 护送情报箱：推箱期间技能 / 大招禁用（普攻照常，用来清挡路的人）。
+     * 和闪避一起构成「推箱是有代价的」——推着箱子就没法自保，只能靠队友护驾。 */
+    if (this.rule === "escort" && f.pushBox && slot !== "basic") {
+      if (ctrl && ctrl.press && ctrl.press[slot] && (f._pushNoSkillT == null || this.t - f._pushNoSkillT > 1.2)) {
+        f._pushNoSkillT = this.t;
+        FX.float(f.x, f.y - 56, "推箱时无法使用技能", "#9fb3dd", 13);
+      }
+      return;
+    }
     /* v3.3：躲在柜子里 / 坐在驾驶位上时不能出招（车上只有喇叭与坦克火炮） */
     if (f.hideProp) return;
     if (f.rideCar) { if (f._rideNoSkillT == null || this.t - f._rideNoSkillT > 1.2) { f._rideNoSkillT = this.t; FX.float(f.x, f.y - 56, "车上无法使用技能", "#9fb3dd", 13); } return; }
@@ -10546,8 +10601,8 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     if (this.rule === "capture" && this.updateCapture) this.updateCapture(dt);
     /* v4.8 碰碰车竞技：车对车撞击 / 出圈落水 / 复活 / 计分 */
     if (this.rule === "bump" && this.updateBump) this.updateBump(dt);
-    /* v4.9 僵尸守房：波次放怪 / 啃房掉耐久 / 击杀补记 / 喘息修房 */
-    if (this.rule === "zombiehouse" && this.updateZombieHouse) this.updateZombieHouse(dt);
+    /* v4.11 烫手山芋：山芋天降 / 传递 / 倒计时爆炸 */
+    if (this.rule === "hotpotato" && this.updateHotPotato) this.updateHotPotato(dt);
     /* v3.9 能量包蓄力：进度推进与中断判定（锁移动 / 锁技能在角色循环里） */
     if (this.updateCharging) this.updateCharging(dt);
     this.updateZones(dt);
@@ -10656,7 +10711,7 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     if (this.mode !== "dragon" && this.rule !== "ring" && this.rule !== "relay"
         && this.rule !== "hunt" && this.rule !== "warmup" && this.rule !== "doomsday"
         && this.rule !== "tower" && this.rule !== "escort" && this.rule !== "capture"
-        && this.rule !== "bump" && this.rule !== "zombiehouse") {
+        && this.rule !== "bump" && this.rule !== "hotpotato") {
       this.roundT = (this.roundT || 75) - dt;
       if (this.roundT <= 0) {
         /* 超时：当前血量最高者赢下回合（平血按座位号） */
@@ -10808,6 +10863,14 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     // 双击方向键 → 短位移闪避（无无敌帧，CD 2.5 秒）
     /* v3.1：僵尸没有闪避 */
     if (ctrl.dodge && f.isZombie) ctrl.dodge = null;
+    /* v4.11 护送情报箱：推箱时双手占在箱子上，闪避禁用（按 P 松手后才能闪） */
+    if (ctrl.dodge && this.rule === "escort" && f.pushBox) {
+      ctrl.dodge = null;
+      if (f._pushNoDodgeT == null || this.t - f._pushNoDodgeT > 1.2) {
+        f._pushNoDodgeT = this.t;
+        FX.float(f.x, f.y - 56, "推箱时无法闪避", "#9fb3dd", 13);
+      }
+    }
     if (ctrl.dodge) {
       const dv = ctrl.dodge; ctrl.dodge = null;
       // 激光蓄力中双击方向键 → 直接取消该技能（不然可以用位移把激光带到别的位置）
@@ -10855,6 +10918,8 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     if (f.slowT > 0) sp *= 0.55;   // 被冰痕 / 苍减速
     /* v4.10 护送情报箱：推箱时移速只有正常的 20%（同样是单点乘，不落持久字段） */
     if (f.pushBox && LD.ESCORT) sp *= LD.ESCORT.pushSpeed || 0.2;
+    /* v4.11 烫手山芋：刚接手的 2 秒减速（0.5×），熬过去之后提速到 1.2× */
+    if (f.hotMul) sp *= f.hotMul;
     /* v3.2 世界末日：僵尸在门洞减速圈里额外变慢（给守门的人留输出窗口） */
     if (f.gateSlowT > 0 && f.isZombie) sp *= (LD.DOOMSDAY && LD.DOOMSDAY.gateSlow) || 0.5;
     /* v3.1：推着汽车 / 轮胎 / 方块走时明显变慢；水池里减速；拾取移速包短暂加速 */
@@ -11533,8 +11598,8 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
       if (this.rule === "capture" && this.drawCapture) this.drawCapture(ctx);
       /* v4.8 碰碰车竞技：场外水池 + 擂台警示带 + 车辆耐久条 */
       if (this.rule === "bump" && this.drawBump) this.drawBump(ctx);
-      /* v4.9 僵尸守房：地基圈 + 屋子本体 + 房子耐久条 */
-      if (this.rule === "zombiehouse" && this.drawZombieHouse) this.drawZombieHouse(ctx);
+      /* v4.11 烫手山芋：山芋本体 + 持有者高亮 + 倒计时 */
+      if (this.rule === "hotpotato" && this.drawHotPotato) this.drawHotPotato(ctx);
       /* v3.9.1 停电夜战：充电站（排在掉落物之前，压在人物下层） */
       if (this.drawStations) this.drawStations(ctx);
       /* v3.1 补给掉落物：血包 / 能量包 / 移速包 */
@@ -13122,13 +13187,17 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     /* v3.9.1 停电夜战：充电站——靠近按住交互键给手电筒充电。
      * 排在能量包之后：包是消耗品（26 秒就消失），站是常驻的，两者都在范围内优先开包。
      * 判定半径沿用「两个身位」（CHARGE.station.keep = 96）。 */
-    if (this.stations && this.stations.length) {
+    /* v4.11 规则守卫：充电站只在停电夜战里存在。B.stations 是常驻数组，
+     * 光靠 initNight 重建还不够——中途换模式 / 联机同步都可能留下旧数据，
+     * 扫描时再卡一道规则，任何非夜战局都绝不会弹出「充电」。 */
+    if (this.rule === "blackout" && this.stations && this.stations.length) {
       const slim = (LD.NIGHT && LD.NIGHT.charge && LD.NIGHT.charge.keep) || 96;
       this.stations.forEach(st => {
         take({ type: "chg", prop: st, kind: "station", label: "充电", gap: Math.hypot(f.x - st.x, f.y - st.y) - f.r, lim: slim });
       });
     }
-    if (this.crown && this.crown.phase === "fallen") {
+    /* v4.11 同上：皇冠只在霸主模式里才算交互目标 */
+    if (this.rule === "overlord" && this.crown && this.crown.phase === "fallen") {
       const cw = this.crown;
       const lim = (LD.CROWN || {}).range || 40;
       const gap = Math.hypot(f.x - cw.x, f.y - cw.y) - f.r;
@@ -14301,6 +14370,7 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     ];
     this.fighters.forEach(f => {
       f.intel = false; f.pushBox = null; f.noBoxT = 0;
+      f.escortRespawnT = E.heroRespawn || 3.0;     // v4.11 阵亡复活计时（每次阵亡递增）
       if (f.kind !== "hero") return;
       if (f.team == null || f.team < 0) f.team = f.side % 2;
       f.team = f.team > 0 ? 1 : 0;      // 本模式只有两队，2/3 号队并到蓝队
@@ -14326,6 +14396,25 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
   B.escortGoalOf = function (team) {
     const g = this.escortGoals || [];
     return g[team > 0 ? 1 : 0] || g[0] || null;
+  };
+
+  /* ==========================================================
+   *  v4.11 阵亡复活点：本方交付点一带随机取一个不卡障碍的点
+   *  （阵营分驻左右两端，复活也就落在自己那一侧，不至于一睁眼就在敌方人堆里）
+   * ========================================================== */
+  B.escortSpawn = function (f) {
+    const E = LD.ESCORT || {};
+    const top = this.world.pt || 0;
+    const g = this.escortGoalOf(f.team > 0 ? 1 : 0);
+    const base = g || { x: this.world.w / 2, y: top + (this.world.h - top) / 2 };
+    const r = E.goalR || 110;
+    for (let k = 0; k < 40; k++) {
+      const a = Math.random() * TAU, rr = Math.random() * r * 1.15;
+      const x = clamp(base.x + Math.cos(a) * rr, 60, this.world.w - 60);
+      const y = clamp(base.y + Math.sin(a) * rr, top + 60, this.world.h - 60);
+      if (!this.terrain || LD.Terrain.clearAt(this.terrain, x, y, 28)) return { x: x, y: y };
+    }
+    return { x: base.x, y: base.y };
   };
 
   /* ==========================================================
@@ -14634,13 +14723,37 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     };
     const pts = [big];
 
-    /* 小点：随机撒，满足最小间距、离边界、离基地三条约束 */
-    const range = C.count || [3, 5];
-    const lo = Math.max(1, Math.min(range[0] | 0, range[1] | 0));
-    const hi = Math.max(lo, Math.max(range[0] | 0, range[1] | 0));
-    const total = lo + Math.floor(Math.random() * (hi - lo + 1));
+    /* v4.11 据点数量：保底 3 座（左 / 中 / 右），房间每多 perExtra 名玩家再 +1 座，
+     * 最多 maxPts 座（3 人 3 座 / 5 人 4 座 / 7 人 5 座 / 9 人 6 座封顶）。 */
+    const heroN = this.fighters.filter(f => f.kind === "hero" && !f.bench).length;
+    const perExtra = C.perExtra || 2;
+    const total = Math.max(C.basePts || 3, Math.min(C.maxPts || 6,
+      (C.basePts || 3) + Math.max(0, Math.floor((heroN - 3) / perExtra))));
     const names = ["A", "C", "D", "E"];
-    for (let n = 1; n < total; n++) {
+    const smallR = smallC.r || 150;
+    const mkSmall = (i, nm, x, y) => ({
+      i: i, big: false, name: nm, x: x, y: y, r: smallR, w: smallC.w || 1,
+      owner: -1, prog: 0, by: -1, c0: 0, c1: 0, flash: 0, turret: null
+    });
+    /* v4.11 左右两点：贴各自半场，纵向随机落点，和中间大点构成三足鼎立。
+     * 基地在左右两端正中，所以这两点必须往上下偏，摇不到就贴最近的顶 / 底边。 */
+    const sideX = Math.max(C.sideInset || 300, edge);
+    const yTop = top + edge, yBot = h - edge;
+    const baseClear = (C.baseR || 190) + smallR + 50;
+    const okSpot = (x, y) => bases.every(b => Math.hypot(b.x - x, b.y - y) >= baseClear)
+      && pts.every(p => Math.hypot(p.x - x, p.y - y) >= minGap * 0.8);
+    function sideSpot(cx) {
+      for (let k = 0; k < 60; k++) {
+        const x = rand(Math.max(edge, cx - 160), Math.min(w - edge, cx + 160));
+        const y = rand(yTop, yBot);
+        if (okSpot(x, y)) return { x: x, y: y };
+      }
+      return { x: cx, y: yTop };                  // 兜底：贴顶边，离两个基地都最远
+    }
+    if (total >= 2) { const p = sideSpot(sideX); pts.push(mkSmall(1, "A", p.x, p.y)); }
+    if (total >= 3) { const p = sideSpot(w - sideX); pts.push(mkSmall(2, "C", p.x, p.y)); }
+    /* 多出来的：随机撒，满足最小间距、离边界、离基地三条约束 */
+    for (let n = pts.length; n < total; n++) {
       let spot = null;
       for (let k = 0; k < 220; k++) {
         const x = rand(edge, w - edge), y = rand(top + edge, h - edge);
@@ -14658,13 +14771,7 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
         }
       }
       if (!spot) spot = { x: rand(edge, w - edge), y: rand(top + edge, h - edge) };
-      pts.push({
-        i: n, big: false,
-        name: names[n - 1] || ("P" + (n + 1)),
-        x: spot.x, y: spot.y,
-        r: smallC.r || 150, w: smallC.w || 1,
-        owner: -1, prog: 0, by: -1, c0: 0, c1: 0, flash: 0, turret: null
-      });
+      pts.push(mkSmall(n, names[n - 1] || ("P" + (n + 1)), spot.x, spot.y));
     }
     /* 按横坐标排序，读起来就是「左 → 右」，小点命名也稳定 */
     const rest = pts.slice(1).sort((a, b) => a.x - b.x || a.y - b.y);
@@ -14827,7 +14934,8 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
       const pr = this.spawnProj({
         x: o.x + Math.cos(a) * 20, y: oy + Math.sin(a) * 12,
         vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
-        r: 9, dmg: cfg.dmg || 26, life: 2.2,
+        /* v4.11 据点炮塔伤害 ×turretDmgMul（原样照搬塔防数值偏疼，削到 80%） */
+        r: 9, dmg: Math.round((cfg.dmg || 26) * (C.turretDmgMul == null ? 1 : C.turretDmgMul)), life: 2.2,
         owner: this.towerSrc(o),
         color: o.side === 0 ? "#fca5a5" : "#93c5fd", core: "#fff",
         type: "towerbolt", kindTag: "skill", trail: true,
@@ -15403,24 +15511,33 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
           a.x -= nx * pen * 0.5; a.y -= ny * pen * 0.5;
           b.x += nx * pen * 0.5; b.y += ny * pen * 0.5;
         }
-        const vrel = (a.vx - b.vx) * nx + (a.vy - b.vy) * ny;   // >0：a 撞向 b
-        const sp = Math.abs(vrel);
-        if (sp < (C.minSpd || 110)) continue;                    // 只是轻轻蹭了一下
+        const alongA = a.vx * nx + a.vy * ny;            // a 朝 b 的速度分量
+        const alongB = -(b.vx * nx + b.vy * ny);         // b 朝 a 的速度分量
+        /* 两者之和 = 接近速度（同向追尾时≈0），只用来做概念说明；
+         * v4.11 起力度与门槛都不再用它，改用下面这行的「主动方车速」。 */
+        /* v4.11 击退按「主动撞上去那一方的车速」结算，而不是接近速度。
+         * 旧公式在**同向追尾**时最吃亏：两车都开得飞快，接近速度却几乎为 0，
+         * 算出来只剩基础击退，玩家体感就是「我明明比他快，撞上去却推不动」。
+         * 现在谁冲得更猛谁就占便宜，速度对击退的增益也调高了（kbPerSpd）。 */
+        const spKb = Math.max(alongA, alongB, 0);
+        /* 门槛同样按车速判：追尾时 sp≈0，若沿用旧的接近速度门槛，
+         * 「快车从后面顶慢车」会被整个过滤掉——那正是玩家抱怨撞不动的场景。 */
+        if (spKb < (C.minSpd || 110)) continue;           // 双方都没在往对方身上冲
         st.cd[key] = this.t;
-        const atk = vrel > 0 ? a : b, vic = vrel > 0 ? b : a;
-        const sgn = vrel > 0 ? 1 : -1;
+        const atk = alongA >= alongB ? a : b, vic = atk === a ? b : a;
+        const sgn = atk === a ? 1 : -1;
         const dirx = nx * sgn, diry = ny * sgn;
-        const dmg = clamp(sp * (C.dmgPerSpd || 0.055), C.dmgMin || 6, C.dmgMax || 30);
+        const dmg = clamp(spKb * (C.dmgPerSpd || 0.055), C.dmgMin || 6, C.dmgMax || 30);
         vic.bumpHp -= dmg;
         atk.bumpHp -= dmg * (C.selfMul || 0.35);
         vic.flash = 0.18;
-        const imp = (C.kb || 300) + sp * (C.kbPerSpd || 0.62);
+        const imp = (C.kb || 300) + spKb * (C.kbPerSpd || 1.5);
         vic.vx += dirx * imp; vic.vy += diry * imp;
         atk.vx *= 0.45; atk.vy *= 0.45;
         const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
         FX.burst(mx, my - 20, 14, ["#fde68a", "#fff", "#fb923c"], { speed: 260 });
         FX.ring(mx, my - 14, 44, "rgba(253,230,138,.85)", 4, 0.35);
-        FX.shake(Math.min(11, 4 + sp * 0.02));
+        FX.shake(Math.min(11, 4 + spKb * 0.02));
         /* 归属：被撞的人 3 秒内掉进水里算攻击者的 */
         const vicF = vic.driver, atkF = atk.driver;
         if (vicF && atkF) { vicF.lastHitBy = atkF; vicF.lastHitT = this.t; FX.float(mx, my - 58, "撞击 -" + Math.round(dmg), "#fbbf24", 14); }
@@ -15433,8 +15550,21 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     const credit = C.credit || 3;
     for (const f of this.fighters) {
       if (f.kind !== "hero" || f.bench || f.dead || f.bumpOut) continue;
-      const d = Math.hypot(f.x - A.x, f.y - A.y);
-      if (d <= A.r && d >= A.ir) continue;
+      /* v4.11 车身完全离开陆地才算进水：
+       * 用车（步行时是人）的 AABB 与圆环带 [ir, r] 求交集——只要还压着一条边
+       * 就算在台上。旧版只看中心点，车头刚探出去就被判掉水，误判很频繁。 */
+      const o = (f.rideCar && f.rideCar.bump) ? f.rideCar : null;
+      const r = o ? 0 : (f.r || 18);
+      const x0 = (o ? o.x : f.x) - (o ? o.w / 2 : r), x1 = (o ? o.x : f.x) + (o ? o.w / 2 : r);
+      const y0 = (o ? o.y : f.y) - (o ? o.h / 2 : r), y1 = (o ? o.y : f.y) + (o ? o.h / 2 : r);
+      /* 圆心到 AABB 的最近距离 dMin（圆心在框内则为 0）与最远角点距离 dMax */
+      const qx = Math.max(x0, Math.min(A.x, x1)), qy = Math.max(y0, Math.min(A.y, y1));
+      const dMin = Math.hypot(A.x - qx, A.y - qy);
+      const dMax = Math.max(
+        Math.hypot(x0 - A.x, y0 - A.y), Math.hypot(x1 - A.x, y0 - A.y),
+        Math.hypot(x0 - A.x, y1 - A.y), Math.hypot(x1 - A.x, y1 - A.y));
+      /* 还压在圆环带上 → 安全；整台车都在水里（掉出外圈或陷进中心水圈）→ 落水 */
+      if (dMin <= A.r && dMax >= A.ir) continue;
       const by = (f.lastHitBy && !f.lastHitBy.dead && this.t - (f.lastHitT == null ? -99 : f.lastHitT) <= credit)
         ? f.lastHitBy : null;
       this.bumpDunk(f, by, false);
@@ -15565,309 +15695,244 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
   };
 })(window.LD = window.LD || {});
 
-/* ===== 49_zombiehouse.js ===== */
+/* ===== 49_hotpotato.js ===== */
 /* ============================================================
- *  49_zombiehouse.js — v4.9 僵尸守房
+ *  49_hotpotato.js — v4.11 烫手山芋
  * ============================================================
- *  全员同队守一栋房子,僵尸分波从场边涌来拆房:
- *    - 僵尸默认直奔房子,只有玩家拦在近处才先咬人(AI 分支见 50_ai.js)
- *    - 僵尸进房子判定圈后按间隔啃房,房子耐久归零即全军覆没
- *    - 一波清空后进入喘息期,站在房子里每秒修复耐久
- *    - 撑过全部波次后按击杀数排名,击杀最多者获胜
+ *  混战：普攻 / 技能 / 大招全部禁用，全场只剩一件事——把山芋甩给别人。
+ *    - 开局随机抽一个人：先给 warn 秒预警（他头顶有红圈），随后山芋
+ *      从高空锁定飞到他头上（飞行 drop 秒，期间甩不掉）
+ *    - 刚接手的人 slowT 秒内减速到 slowMul，且这段时间**传不出去**
+ *    - 熬过 slowT 后速度变成 boostMul（比别人快），用来追人甩锅
+ *    - 碰到别人就把山芋甩给他，对方同样吃 slowT 秒减速
+ *    - 从山芋落到第一个人手上开始 fuse 秒倒计时，到点爆炸：
+ *      持有者 -holderDmg，爆炸小范围内其他人 -splashDmg
+ *    - 炸完重新抽人、重新计时，循环；血空的人出局，最后一个站着的赢
  *
- *  实现要点:
- *    - 僵尸复用 B.mkZombie(team 8,与所有人敌对),本模块自建波次调度,
- *      不接入 B.updateZombies(它只对 auction / doomsday 生效,节奏不受控)。
- *    - 击杀归属在 update 里补记:僵尸死亡时读 lastHitBy,避免改动 B.kill 的通用分支。
- *    - 计分按 side 存,不按下标存:僵尸会插进 fighters,下标会漂移。
+ *  实现要点：
+ *    - 全员 team = -1（同队互不伤害），所以传递**不走** B.damage：
+ *      那会被 sameTeam 直接挡掉，只能手动扣血。
+ *    - 每帧先把所有人 hotMul 清零，再由当前持有者写入，保证「一换手
+ *      立刻失效」，不会有人永久带着减速 / 加速跑。
+ *    - 山芋坐标存在 B.potato.x / y 上，传递判定与渲染共用同一份。
  * ============================================================ */
 (function (LD) {
   "use strict";
-  const B = LD.Battle, FX = LD.FX, T = LD.Terrain;
+  const B = LD.Battle, FX = LD.FX;
   const TAU = Math.PI * 2;
   const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
-  const rand = (a, b) => a + Math.random() * (b - a);
 
-  /* 清 / 加设施后重标占用格(照抄 49_bumpcar 的口径,地形层没有公开的 reindex) */
-  function reindex(map) {
-    if (!map || !map.occ) return;
-    const tile = map.tile || 40, top = map.top != null ? map.top : 0;
-    for (let r = 0; r < map.rows; r++) { const row = map.occ[r]; if (row) for (let c = 0; c < row.length; c++) row[c] = 0; }
-    (map.props || []).forEach(p => {
-      if (!p.blockMove || p.dead) return;
-      const c0 = Math.max(0, Math.floor((p.x - p.w / 2) / tile));
-      const c1 = Math.min(map.cols - 1, Math.floor((p.x + p.w / 2 - 1) / tile));
-      const r0 = Math.max(0, Math.floor((p.y - p.h / 2 - top) / tile));
-      const r1 = Math.min(map.rows - 1, Math.floor((p.y + p.h / 2 - 1 - top) / tile));
-      for (let r = r0; r <= r1; r++) if (map.occ[r]) for (let c = c0; c <= c1; c++) map.occ[r][c] = 1;
-    });
-  }
+  const C_GOLD = "#fbbf24", C_HOT = "#f97316", C_SKIN = "#c08552";
 
-  /* ==========================================================
-   *  房子与刷点
-   * ========================================================== */
-  B.zhHouse = function () {
-    const C = LD.ZOMBIEHOUSE || {};
-    const top = this.world.pt || 0;
-    return {
-      x: this.world.w / 2,
-      y: top + (this.world.h - top) / 2,
-      r: C.r || 150
-    };
-  };
+  const cfg = () => LD.HOTPOTATO || {};
+  const C = cfg();
 
-  /* 场边刷点:离房子足够远,不卡在设施里,也别贴脸刷 */
-  B.zhSpawnSpot = function () {
-    const H = this.zhHouse();
-    const w = this.world.w, top = this.world.pt || 0;
-    for (let k = 0; k < 40; k++) {
-      const a = Math.random() * TAU;
-      const d = rand(w * 0.36, w * 0.46);
-      const x = clamp(H.x + Math.cos(a) * d, 60, w - 60);
-      const y = clamp(H.y + Math.sin(a) * d, top + 40, this.world.h - 60);
-      if (Math.hypot(x - H.x, y - H.y) < H.r + 140) continue;
-      if (this.humans(true).some(f => Math.hypot(f.x - x, f.y - y) < 200)) continue;
-      if (!this.terrain || !T || !T.clearAt || T.clearAt(this.terrain, x, y, 26)) return { x: x, y: y };
-    }
-    /* 兜底:房子正左或正右一段距离 */
-    const s = Math.random() < 0.5 ? -1 : 1;
-    return {
-      x: clamp(H.x + s * (H.r + 260), 60, w - 60),
-      y: clamp(H.y, top + 40, this.world.h - 60)
-    };
-  };
-
-  B.zhSpawnZombie = function () {
-    const p = this.zhSpawnSpot();
-    const z = this.mkZombie(p.x, p.y);
-    this.fighters.push(z);          /* 必须入列,否则只是造出来不进战斗 */
-    FX.ring(p.x, p.y - 26, 60, "rgba(163,230,53,.9)", 5, 0.5);
-    return z;
-  };
-
-  /** 开第 n 波(从 1 起):算好本波总数压进待刷队列 */
-  B.zhStartWave = function (n) {
-    const C = LD.ZOMBIEHOUSE || {};
-    const st = this.zh;
-    if (!st) return;
-    st.wave = n;
-    st.phase = "fight";
-    st.gapT = 0;
-    st.queue = (C.base || 5) + (n - 1) * (C.grow || 3);
-    st.spawnT = 0.4;
-    const H = st.house;
-    FX.ring(H.x, H.y - 40, H.r + 70, "rgba(248,113,113,.9)", 8, 0.7);
-    FX.float(H.x, H.y - 132, "第 " + n + " 波来袭", "#f87171", 22);
-    this.ev.push(["h", H.x, H.y - 132, "第 " + n + " 波来袭", "#f87171"]);
-  };
+  /* 山芋挂在头顶的高度 */
+  const RIDE_Y = 62;
 
   /* ==========================================================
    *  开局
    * ========================================================== */
-  B.initZombieHouse = function () {
-    const C = LD.ZOMBIEHOUSE || {};
-    const H = this.zhHouse();
-    const heroes = this.fighters.filter(f => f.kind === "hero" && !f.isZombie && !f.bench);
-
-    /* 全员同队:互不伤害,枪口一致对外 */
-    heroes.forEach(f => { f.team = 0; });
-
-    /* 清掉房子占地里的设施,免得房里卡着树和箱子 */
-    if (this.terrain && this.terrain.props) {
-      this.terrain.props = this.terrain.props.filter(o => Math.hypot(o.x - H.x, o.y - H.y) > H.r - 12);
-      reindex(this.terrain);
-    }
-
-    /* 把人摆到房子四周 */
-    heroes.forEach((f, i) => {
-      const a = i / Math.max(1, heroes.length) * TAU;
-      f.x = H.x + Math.cos(a) * (H.r + 48);
-      f.y = H.y + Math.sin(a) * (H.r + 48);
-      f.vx = 0; f.vy = 0;
-    });
-
-    this.zh = {
-      house: { x: H.x, y: H.y, r: H.r, hp: C.hp || 1200, maxHp: C.hp || 1200 },
-      wave: 0,
-      phase: "gap",          /* gap = 喘息期,fight = 交战中 */
-      gapT: 3,               /* 开局先给 3 秒喘息 */
-      queue: 0,
-      spawnT: 0,
-      score: {},             /* side -> 分数 */
-      kills: {},             /* side -> 击杀数 */
-      biteT: {},             /* side -> 下次啃房倒计时 */
-      cred: {},              /* side -> 已补记过击杀 */
-      done: false
+  B.initHotPotato = function () {
+    /* 混战：所有人同队，互相打不到（也就没法用伤害甩锅） */
+    this.fighters.forEach(f => { if (f.kind === "hero") f.team = -1; });
+    this.potato = {
+      phase: "warn",     // warn（预警）→ fly（天降）→ held（持有中）
+      tgt: null,
+      holder: null,
+      holdT: 0,
+      t: C.warn || 3.0,
+      fuse: C.fuse || 30,
+      boomT: 0,
+      x: this.world.w / 2,
+      y: this.world.h / 2,
+      fx: this.world.w / 2,
+      fy: this.world.h / 2,
+      round: 0
     };
+    this.potatoPickTarget();
   };
 
-  B.zhScoreOf = function (side) {
-    const st = this.zh;
-    return (st && st.score && st.score[side]) || 0;
+  /** 随机抽一个活着的英雄当下一任「倒霉蛋」 */
+  B.potatoPickTarget = function () {
+    const st = this.potato;
+    if (!st) return null;
+    const alive = this.fighters.filter(f => f.kind === "hero" && !f.dead && !f.bench);
+    if (!alive.length) { st.phase = "idle"; st.tgt = null; st.holder = null; return null; }
+    st.round++;
+    st.phase = "warn";
+    st.t = C.warn || 3.0;
+    st.tgt = alive[(Math.random() * alive.length) | 0];
+    st.holder = null;
+    st.prevHolder = null;
+    st.holdT = 0;
+    st.x = st.tgt.x; st.y = st.tgt.y - 300;
+    st.fx = st.x; st.fy = st.y;
+    FX.ring(st.tgt.x, st.tgt.y - 30, 72, "rgba(251,191,36,.85)", 5, 0.5);
+    FX.float(st.tgt.x, st.tgt.y - 98, "山芋锁定：" + (st.tgt.name || "?"), C_GOLD, 17);
+    return st.tgt;
   };
 
   /* ==========================================================
    *  每帧
    * ========================================================== */
-  B.updateZombieHouse = function (dt) {
-    const C = LD.ZOMBIEHOUSE || {};
-    const st = this.zh;
-    if (!st || st.done) return;
-    const H = st.house;
+  B.updateHotPotato = function (dt) {
+    const st = this.potato;
+    if (!st || st.phase === "idle") return;
+    const slowT = C.slowT || 2.0, slowMul = C.slowMul || 0.5, boostMul = C.boostMul || 1.2;
+    const passR = C.passR || 44, passCd = C.passCd || 0.5;
 
-    /* ---- 1. 喘息期:站进房子里修房,倒计时结束开下一波 ---- */
-    if (st.phase === "gap") {
-      st.gapT -= dt;
-      const rate = C.repair || 90;
-      if (rate > 0 && H.hp < H.maxHp) {
-        const inside = this.fighters.some(f => f.kind === "hero" && !f.isZombie && !f.bench && !f.dead
-          && Math.hypot(f.x - H.x, f.y - H.y) <= H.r);
-        if (inside) {
-          H.hp = Math.min(H.maxHp, H.hp + rate * dt);
-          if (Math.random() < dt * 5) FX.float(H.x + rand(-46, 46), H.y - 58, "修复中", "#4ade80", 13);
-        }
-      }
-      if (st.gapT <= 0) this.zhStartWave(st.wave + 1);
+    /* 速度倍率每帧重算：先全部清零，再写当前持有者——换手即失效 */
+    for (const f of this.fighters) if (f.kind === "hero") f.hotMul = 0;
+
+    st.t -= dt;
+    if ((st.passLockT || 0) > 0) st.passLockT = Math.max(0, st.passLockT - dt);
+    if (st.boomT > 0) st.boomT = Math.max(0, st.boomT - dt);
+
+    if (st.phase === "warn") {
+      /* 预警期：红圈跟着目标，warn 秒后山芋开始下落 */
+      const t = st.tgt;
+      if (!t || t.dead) { this.potatoPickTarget(); return; }
+      st.x = t.x; st.y = t.y - 300;
+      st.fx = st.x; st.fy = st.y;
+      /* 1e-6 容差：dt 反复累加会留下 1e-16 级别的残值，严格 <=0 会让预警 / 天降各多卡一帧 */
+      if (st.t <= 1e-6) { st.phase = "fly"; st.t = C.drop || 0.85; }
       return;
     }
 
-    /* ---- 2. 本波僵尸逐个放出 ---- */
-    if (st.queue > 0) {
-      st.spawnT -= dt;
-      if (st.spawnT <= 0) {
-        st.spawnT = C.spawnEvery || 0.55;
-        this.zhSpawnZombie();
-        st.queue--;
-      }
-    }
-
-    /* ---- 3. 僵尸啃房:进圈就咬,每只各走各的冷却 ---- */
-    const biteTick = C.biteTick || 0.8, biteDmg = C.biteDmg || 22;
-    for (const z of this.fighters) {
-      if (!z.isZombie || z.dead) continue;
-      if (Math.hypot(z.x - H.x, z.y - H.y) > H.r) continue;
-      const key = z.side;
-      st.biteT[key] = (st.biteT[key] || 0) - dt;
-      if (st.biteT[key] > 0) continue;
-      st.biteT[key] = biteTick;
-      H.hp -= biteDmg;
-      FX.burst(z.x, z.y - 18, 10, ["#a3e635", "#fca5a5"], { speed: 220 });
-      FX.float(H.x, H.y - 100, "房子 -" + biteDmg, "#f87171", 16);
-      this.ev.push(["h", H.x, H.y - 100, "房子 -" + biteDmg, "#f87171"]);
-    }
-
-    /* ---- 4. 击杀补记:僵尸刚死就把分记到最后一击的人头上 ---- */
-    for (const f of this.fighters) {
-      if (!f.isZombie || !f.dead || st.cred[f.side]) continue;
-      st.cred[f.side] = 1;
-      const by = f.lastHitBy;
-      if (!by || by.isZombie || by.kind !== "hero") continue;
-      const pts = C.scoreKill || 1;
-      st.score[by.side] = (st.score[by.side] || 0) + pts;
-      st.kills[by.side] = (st.kills[by.side] || 0) + 1;
-      FX.float(by.x, by.y - 92, "击杀 +" + pts, "#fcd34d", 15);
-    }
-
-    /* ---- 5. 本波清空 → 进喘息;全部波次打完 → 结算 ---- */
-    const alive = this.fighters.filter(f => f.isZombie && !f.dead).length;
-    if (st.queue === 0 && alive === 0) {
-      if (st.wave >= (C.waves || 5)) { this.zhFinish(false); return; }
-      st.phase = "gap";
-      st.gapT = C.gap || 8;
-      FX.float(H.x, H.y - 116, "第 " + st.wave + " 波清空", "#4ade80", 20);
-      this.ev.push(["h", H.x, H.y - 116, "第 " + st.wave + " 波清空", "#4ade80"]);
+    if (st.phase === "fly") {
+      const t = st.tgt;
+      if (!t || t.dead) { this.potatoPickTarget(); return; }
+      const dur = C.drop || 0.85;
+      const k = clamp(1 - st.t / dur, 0, 1);
+      const tx = t.x, ty = t.y - RIDE_Y;
+      st.x = st.fx + (tx - st.fx) * k;
+      st.y = st.fy + (ty - st.fy) * k;
+      if (Math.random() < dt * 30) FX.trail(st.x, st.y, C_GOLD, 3, 0.3);
+      if (st.t <= 1e-6) { st.holder = t; st.holdT = 0; st.phase = "held"; st.fuse = C.fuse || 30; }
       return;
     }
 
-    /* ---- 6. 房子被打穿 ---- */
-    if (H.hp <= 0) { H.hp = 0; this.zhFinish(true); }
+    /* ---- 持有中 ---- */
+    const h = st.holder;
+    if (!h || h.dead || h.bench) { this.potatoPickTarget(); return; }
+
+    st.holdT += dt;
+    st.fuse -= dt;
+    st.x = h.x; st.y = h.y - RIDE_Y;
+
+    /* 减速期结束后才提速（前 slowT 秒是「懵」的状态） */
+    h.hotMul = st.holdT < slowT ? slowMul : boostMul;
+
+    /* 传递：碰到别人就把山芋甩过去（减速期内传不出去） */
+    if (st.holdT >= slowT && !(st.passLockT > 0)) {
+      for (const o of this.fighters) {
+        if (o === h || o.kind !== "hero" || o.dead || o.bench) continue;
+        const gap = Math.hypot(o.x - h.x, o.y - h.y) - h.r - o.r;
+        if (gap > passR) continue;
+        /* 记下上一任：AI 选目标时会跳过他。刚传完时前任就在身边且正减速（50%），
+         * 是最好追的目标，不跳过就会变成两个人原地来回弹球，其余人全程轮不到。 */
+        st.prevHolder = h;
+        st.holder = o; st.holdT = 0;
+        st.passLockT = C.passCd || 0.5;
+        FX.ring(o.x, o.y - 30, 78, "rgba(249,115,22,.9)", 5, 0.45);
+        FX.burst(o.x, o.y - 26, 18, [C_GOLD, "#fff", C_HOT], { speed: 250 });
+        FX.float(o.x, o.y - 94, "接锅！", C_HOT, 17);
+        this.ev.push(["h", o.x, o.y - 94, "接锅！", C_HOT]);
+        break;
+      }
+    }
+
+    if (st.fuse <= 0) this.potatoBoom();
   };
 
-  /**
-   * 结算。broken = 房子被打穿(全员失败);否则按击杀数排名,最多者获胜。
-   */
-  B.zhFinish = function (broken) {
-    const st = this.zh;
-    if (!st || st.done) return;
-    st.done = true;
-    const heroes = this.fighters.filter(f => f.kind === "hero" && !f.isZombie && !f.bench);
-    let best = null, bs = -1;
-    heroes.forEach(f => {
-      const s = st.score[f.side] || 0;
-      if (s > bs) { bs = s; best = f; }
-    });
-    const me = this.hero(this.mySide == null ? 0 : this.mySide);
-    const kills = best ? (st.kills[best.side] || 0) : 0;
-
-    if (broken) {
-      this.matchWinner = -1;
-      if (best) LD.Cine.start(best, "房子被攻破", "", "#f87171", "击杀 " + kills + " · 守房失败");
-      this.finish(false);
-      return;
+  /** 山芋爆炸：持有者吃 holderDmg，范围内其他人吃 splashDmg */
+  B.potatoBoom = function () {
+    const st = this.potato;
+    if (!st) return;
+    const h = st.holder;
+    const R = C.splashR || 130;
+    st.boomT = 0.5;
+    st.phase = "boom";
+    const bx = st.x, by = st.y;
+    FX.ring(bx, by, R, "rgba(249,115,22,.95)", 7, 0.6);
+    FX.burst(bx, by, 28, [C_HOT, C_GOLD, "#fff"], { speed: 330 });
+    FX.shake(13); FX.flash(0.18, "249,115,22");
+    this.ev.push(["x", bx, by, R]);
+    /* 传递不走 B.damage（全员同队会被 sameTeam 挡掉），这里手动结算 */
+    if (h && !h.dead) {
+      h.hp = Math.max(0, h.hp - (C.holderDmg || 75));
+      FX.float(h.x, h.y - 100, "烫手了！-" + (C.holderDmg || 75), C_HOT, 19);
+      if (h.hp <= 0) this.kill(h, null, { type: "env" });
     }
-    if (!best) { this.finish(false); return; }
-    this.matchWinner = best.side;
-    LD.Cine.start(best, "胜者:" + (best.name || ("玩家" + (best.side + 1))), "", "#fcd34d", kills + " 杀 · 守房铁卫");
-    this.finish(!!(me && best && me.side === best.side));
+    this.fighters.forEach(o => {
+      if (o === h || o.kind !== "hero" || o.dead || o.bench) return;
+      if (Math.hypot(o.x - bx, o.y - by) > R + o.r * 0.5) return;
+      o.hp = Math.max(0, o.hp - (C.splashDmg || 50));
+      FX.float(o.x, o.y - 88, "-" + (C.splashDmg || 50), C_HOT, 16);
+      if (o.hp <= 0) this.kill(o, null, { type: "env" });
+    });
+    /* 炸完重新抽人 */
+    this.potatoPickTarget();
   };
 
   /* ==========================================================
-   *  渲染(世界坐标,ctx 已随摄像机平移)
+   *  渲染（世界坐标）
    * ========================================================== */
-  B.drawZombieHouse = function (ctx) {
-    const st = this.zh;
-    if (!st) return;
-    const H = st.house;
-    const t = this.t || 0;
-    const k = clamp(H.hp / (H.maxHp || 1), 0, 1);
+  B.drawHotPotato = function (ctx) {
+    const st = this.potato;
+    if (!st || st.phase === "idle" || st.phase === "boom") return;
 
-    /* 1. 地基圈:安全区 / 判定范围提示 */
+    /* 预警：目标头顶红圈 + 落点提示 */
+    if (st.phase === "warn" && st.tgt && !st.tgt.dead) {
+      const t = st.tgt;
+      ctx.save();
+      ctx.globalAlpha = 0.5 + Math.sin((this.t || 0) * 9) * 0.25;
+      ctx.strokeStyle = C_HOT; ctx.lineWidth = 4;
+      ctx.setLineDash([10, 9]); ctx.lineDashOffset = -(this.t || 0) * 40;
+      ctx.beginPath(); ctx.arc(t.x, t.y - RIDE_Y, 40, 0, TAU); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = C_HOT;
+      ctx.font = "bold 13px system-ui,'Microsoft YaHei',sans-serif";
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText("山芋来了 " + Math.max(0, st.t).toFixed(1) + "s", t.x, t.y - RIDE_Y - 34);
+      ctx.restore();
+    }
+
+    const h = st.holder;
+    if (!h || h.dead) return;
+
+    const x = st.x, y = st.y;
+    /* 快炸了就抖得厉害 */
+    const hot = st.fuse != null && st.fuse < 6;
+    const jit = hot ? Math.sin((this.t || 0) * 42) * 3 : 0;
     ctx.save();
+    /* 阴影 */
+    ctx.globalAlpha = 0.22;
+    ctx.fillStyle = "#000";
+    ctx.beginPath(); ctx.ellipse(x + jit, y + 18, 16, 6, 0, 0, TAU); ctx.fill();
+    /* 芋体 */
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = C_SKIN;
+    ctx.beginPath(); ctx.ellipse(x + jit, y, 17, 13, 0.3, 0, TAU); ctx.fill();
+    ctx.strokeStyle = "#8a5a2b"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.ellipse(x + jit, y, 17, 13, 0.3, 0, TAU); ctx.stroke();
+    /* 芽眼 */
+    ctx.fillStyle = "#8a5a2b";
+    ctx.beginPath(); ctx.arc(x - 6 + jit, y - 3, 2.2, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(x + 5 + jit, y + 2, 2.6, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(x + 1 + jit, y - 7, 1.8, 0, TAU); ctx.fill();
+    /* 引信 + 火花：颜色随剩余时间越来越红 */
+    const k = clamp(1 - (st.fuse == null ? 30 : st.fuse) / (C.fuse || 30), 0, 1);
+    ctx.strokeStyle = "#7c5c3a"; ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.arc(H.x, H.y, H.r, 0, TAU);
-    ctx.fillStyle = "rgba(74,222,128,.10)";
-    ctx.fill();
-    ctx.setLineDash([18, 14]);
-    ctx.lineDashOffset = -t * 18;
-    ctx.strokeStyle = "rgba(74,222,128,.55)";
-    ctx.lineWidth = 3;
+    ctx.moveTo(x + 9 + jit, y - 8);
+    ctx.quadraticCurveTo(x + 17 + jit, y - 20, x + 12 + jit, y - 30);
     ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.restore();
-
-    /* 2. 房子本体:墙 + 屋顶 + 门 */
-    const bw = H.r * 1.05, bh = H.r * 0.76;
-    ctx.save();
-    ctx.fillStyle = "#7c5c3a";
-    ctx.fillRect(H.x - bw / 2, H.y - bh / 2, bw, bh);
-    ctx.fillStyle = "#5b4227";
-    ctx.fillRect(H.x - bw / 2, H.y - bh / 2, bw, 9);
+    ctx.fillStyle = k > 0.6 ? "#ef4444" : C_GOLD;
     ctx.beginPath();
-    ctx.moveTo(H.x - bw / 2 - 15, H.y - bh / 2);
-    ctx.lineTo(H.x, H.y - bh / 2 - 48);
-    ctx.lineTo(H.x + bw / 2 + 15, H.y - bh / 2);
-    ctx.closePath();
-    ctx.fillStyle = "#b45309";
+    ctx.arc(x + 12 + jit, y - 31, 3 + k * 3, 0, TAU);
     ctx.fill();
-    ctx.fillStyle = "#3f2d17";
-    ctx.fillRect(H.x - 17, H.y + bh / 2 - 46, 34, 46);
-    /* 两侧窗 */
-    ctx.fillStyle = "#fde68a";
-    ctx.fillRect(H.x - bw / 2 + 18, H.y - 12, 30, 26);
-    ctx.fillRect(H.x + bw / 2 - 48, H.y - 12, 30, 26);
-    ctx.restore();
-
-    /* 3. 耐久条 */
-    const barW = 138, barH = 11;
-    const bx = H.x - barW / 2, by = H.y - bh / 2 - 78;
-    ctx.save();
-    ctx.fillStyle = "rgba(6,10,22,.78)";
-    ctx.fillRect(bx - 1, by - 1, barW + 2, barH + 2);
-    ctx.fillStyle = k > 0.5 ? "#4ade80" : k > 0.25 ? "#fbbf24" : "#f87171";
-    ctx.fillRect(bx, by, barW * k, barH);
-    ctx.strokeStyle = "rgba(226,232,240,.6)";
-    ctx.lineWidth = 1;
-    ctx.strokeRect(bx - 0.5, by - 0.5, barW + 1, barH + 1);
     ctx.restore();
   };
 })(window.LD = window.LD || {});
@@ -16173,24 +16238,66 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
     if (foe && !B.sameTeam(f, foe)) f.lock = foe.side;    // 让 AI 也用索敌（追踪类技能会朝他瞄准）
     ctrl.press = {};
     /* ==========================================================
-     *  v4.9 僵尸守房：僵尸默认直奔房子推进；只有玩家拦在近处才交战，
-     *  交战时不做处理，交给下面的通用逻辑去咬人（贴身照样会出手）。
+     *  v4.11 烫手山芋：拿着的人去追人甩锅，没拿的人撒腿就跑。
+     *  单独 return：本模式禁用所有招式，通用战斗分支只会原地发呆。
      * ========================================================== */
-    if (B.rule === "zombiehouse" && f.isZombie && B.zh) {
-      const H = B.zh.house, C = LD.ZOMBIEHOUSE || {};
-      const aggro = C.aggro || 200;
-      let near = null, nd = Infinity;
-      B.fighters.forEach(o => {
-        if (o === f || o.dead || o.isZombie || o.kind !== "hero") return;
-        const d = Math.hypot(o.x - f.x, o.y - f.y);
-        if (d < nd) { nd = d; near = o; }
-      });
-      if (!(near && nd <= aggro)) {
-        const ax = H.x - f.x, ay = H.y - f.y, ad = Math.hypot(ax, ay) || 1;
-        const s = AI.steer(f, ax / ad, ay / ad, null);
+    if (B.rule === "hotpotato" && B.potato) {
+      const st = B.potato;
+      const carrier = st.phase === "held" ? st.holder : st.tgt;
+      if (carrier && !carrier.dead && !carrier.bench && carrier !== f) {
+        /* 远离芋头：朝背离方向跑，贴边就沿切线绕，别把自己逼到墙角。
+         * 另外要和**同样在逃的人**散开：实测里两个落单的人会挤到同一角落，
+         * 持有者只盯一个追，抱团那俩整局都拿不到芋头，轮换不起来。 */
+        const pad = 92;
+        let ax = f.x - carrier.x, ay = f.y - carrier.y;
+        B.fighters.forEach(o => {
+          if (o === f || o === carrier || o.kind !== "hero" || o.dead || o.bench) return;
+          const dx = f.x - o.x, dy = f.y - o.y, d = Math.hypot(dx, dy) || 1;
+          if (d > 240) return;
+          const k = (240 - d) / 240;
+          ax += dx / d * k * 240; ay += dy / d * k * 240;
+        });
+        let tx = f.x + ax, ty = f.y + ay;
+        const lo = pad, hi = B.world.w - pad, top = (B.world.pt || 0) + pad, bot = B.world.h - pad;
+        if (tx < lo || tx > hi || ty < top || ty > bot) {
+          const ca = Math.atan2(f.y - (top + bot) / 2, f.x - (lo + hi) / 2);
+          const cx = (lo + hi) / 2, cy = (top + bot) / 2;
+          const rr = Math.min(hi - lo, bot - top) * 0.42;
+          tx = cx + Math.cos(ca + 0.9) * rr; ty = cy + Math.sin(ca + 0.9) * rr;
+        }
+        const s = AI.steer(f, tx - f.x, ty - f.y, null);
         ctrl.mx = s.x; ctrl.my = s.y;
         return;
       }
+      /* 我是持有者：盯住一个冤大头把锅甩出去。
+       * 目标必须**锁定一段时间**：其余人也在四散奔逃，「追最近的人」会每帧换目标，
+       * 方向互相抵消，实测 30 秒引信里只能传出 1 次（等于谁被抽中谁独自挨炸）。
+       * 锁定 1.2 秒后再重新挑，既跟得上场面变化又不会原地画圈。 */
+      if (carrier === f && f === st.holder) {
+        f.hotChaseT = (f.hotChaseT || 0) - dt;
+        let best = f.hotChase;
+        const pick = (skipPrev) => {
+          let b = null, bd = Infinity;
+          B.fighters.forEach(o => {
+            if (o === f || o.kind !== "hero" || o.dead || o.bench) return;
+            if (skipPrev && o === st.prevHolder) return;      // 别传给刚甩锅给我的那个人
+            const d = Math.hypot(o.x - f.x, o.y - f.y);
+            if (d < bd) { bd = d; b = o; }
+          });
+          return b;
+        };
+        if (!best || best === f || best.dead || best.bench || f.hotChaseT <= 0) {
+          best = pick(true) || pick(false);                   // 只剩前任可选时再退回去
+          f.hotChase = best; f.hotChaseT = 1.2;
+        }
+        if (best) {
+          const s = AI.steer(f, best.x - f.x, best.y - f.y, null);
+          ctrl.mx = s.x; ctrl.my = s.y;
+        } else { ctrl.mx = 0; ctrl.my = 0; }
+        return;
+      }
+      ctrl.mx = 0; ctrl.my = 0;
+      return;
     }
     /* ==========================================================
      *  v4.8 碰碰车竞技：全程只干两件事——有车就撞最近的对手，没车就奔最近的空车。
@@ -17722,7 +17829,8 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
       '<li><b>占点争夺</b>：两队对抗（房间界面选红队 / 蓝队）。地图 <b>1920×1920</b>，每局随机生成 <b>3~5 座据点</b>，其中最大的据点永远在地图正中（权重 ×2）。站进圈内开始读条占领，<b>人越多越快</b>：空据点单人 <b>5 秒</b>，抢敌方已经占下的据点要花<b>两倍时间</b>（10 秒）；双方都在圈里则僵持，谁也推不动。占领后据点持续产分，大点 2 分/秒、小点 1 分/秒，先到 <b>80 分</b>获胜；圈里没人时，对方留下的占领进度会缓慢回落。据点被占领后中心会升起一座<b>炮塔</b>（1200 血、伤害 26、攻速 1.05，射程就等于据点半径），只打敌方角色；据点易主时炮塔跟着换攻击目标、<b>血量不变</b>，被拆掉后本局永久消失。阵亡后在本方基地复活：首次 <b>3 秒</b>，之后每死一次 <b>+3 秒</b>（最多 24 秒），基地圈内每秒回复 5% 最大生命；站在<b>己方已占领的据点</b>圈里每秒回 <b>5 滴血</b>。时间到比分高者胜，同分则比两队剩余总血量。</li>',
       '<li><b>碰碰车竞技</b>：圆环擂台——台外与<b>场地正中心都是水池</b>，可活动范围是一圈环形赛道。开局每人自动坐上一辆碰碰车（电力无限，<b>技能与大招全部禁用</b>，普攻只是喇叭）。开车对撞时<b>接近速度越快，伤害和击退越大</b>（击退增幅特别高，一记重撞能把人顶出半个场），主动撞人的一方也会吃到 35% 的反伤。把对手的车<b>撞爆 +2 分</b>、把他<b>顶进水里 +3 分</b>（外圈 / 内圈都算），先到 <b>12 分</b>获胜。撞爆的车 4 秒后重生，落水的人 2.4 秒后回到赛道并重新发车。场上有吹风机，<b>气流能把车吹偏航</b>——顺风抢位、逆风绕行。</li>',
       '<li><b>塔防对战</b>：3v3 单线推塔，<b>没有时间限制</b>，一直打到一方水晶爆掉。地图 2800×600，左右镜像，红蓝一塔之间留出一大片中心战区。双方每 32 秒刷 6 只机器人小兵沿兵线推进，拆掉敌塔后自家小兵变强。防御塔（1200 血 / 射程 300）与水晶（2400 血 / 射程 340）会发射<b>高速追踪弹</b>，走进敌方范围时会显示一圈红圈警告；<b>防御塔没拆完水晶免疫伤害</b>。击杀小兵 / 英雄 / 助攻都给<b>局内金币</b>，按 <span class="k">B</span> 买被动装备（生命 / 攻击 / 护盾 / 能量 / 回血 / 霸体 / 闪避等，每件一次）、<b>主动装备</b>（最多 1 件，按 <span class="k">P</span> 释放）、可重复购买的<b>小兵强化</b>，以及开车时才能买的<b>汽油桶</b>（80 金，+2000 油，不限次数）。英雄 1–6 级，升级加血加伤害；阵亡后在原地立<b>墓碑</b>显示复活倒计时（<b>5 秒 + 等级 × 5 秒</b>，1 级 10 秒、5 级 30 秒），倒计时结束回基地复活，基地回血圈每秒回复 12% 生命。房间界面可以选红队 / 蓝队。</li>',
-      '<li>单人「勇者格斗」的房间就是角色卡房间：第一张卡是你（可直接换装扮 / 技能），后面的人机卡可增删（最多 5 个，塔防会自动补满 5 个凑 3v3）、可选难度（木桩 / 普通 / 困难）与配装。</li>',
+      '<li><b>烫手山芋</b>：混战模式，<b>普攻、技能与大招全部禁用</b>，只能靠跑位。开局随机抽一名玩家：先播放 <b>3 秒预警</b>（他头顶出现落点圈），随后山芋<b>从天而降、锁定飞到他头上</b>——飞行途中甩不掉。刚接手的人会陷入 <b>2 秒减速（移速 50%）</b>，且这 2 秒内<b>无法把山芋传给别人</b>；熬过这 2 秒后，速度提升到正常的 <b>120%</b>（比其他人快），可以主动去追人。持有者碰到别人就把山芋甩过去，接手者同样吃 2 秒减速且期间不能再传。从山芋落到第一个人手上开始 <b>30 秒</b>引信倒计时，到点<b>爆炸</b>：持有者掉 <b>75 血</b>，爆炸小范围内其他人掉 <b>50 血</b>。炸完重新抽人、重新计时，循环往复；血量归零者出局，最后一个站着的人获胜。</li>',
+      '<li>单人「勇者格斗」的房间就是角色卡房间：第一张卡是你（可直接换装扮 / 技能），后面的人机卡可增删（最多 5 个，塔防不再限制人数，可对等也可不对等）、可选难度（木桩 / 普通 / 困难）与配装。</li>',
       '</ul>',
       '<h3>规则修饰符（可多选叠加）</h3>',
       '<ul>',
@@ -17839,11 +17947,14 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
       const own = pts.filter(p => p.owner === myT).length;
       myTags.push("🚩 " + Math.round(sc[0]) + " : " + Math.round(sc[1]) + " · 据点 " + own + "/" + pts.length);
     }
-    if (B.rule === "zombiehouse" && B.zh) {
-      const hp = Math.max(0, Math.round(B.zh.house.hp || 0));
-      const ks = B.zhScoreOf ? B.zhScoreOf(me.side) : 0;
-      const inside = Math.hypot(me.x - B.zh.house.x, me.y - B.zh.house.y) <= B.zh.house.r;
-      myTags.push("🏠 房子 " + hp + " · 击杀 " + ks + (inside ? " · 修房中" : ""));
+    /* v4.11 烫手山芋：全员贴一个「我是锅」的标签，方便全场知道该躲谁 */
+    if (B.rule === "hotpotato" && B.potato) {
+      const st = B.potato, h = st.holder, H = LD.HOTPOTATO || {};
+      if (st.phase === "warn") myTags.push("🥔 预警 " + Math.max(0, st.t).toFixed(1) + "s");
+      else if (st.phase === "fly") myTags.push("🥔 天降中");
+      else if (h === me) {
+        myTags.push(st.holdT < (H.slowT || 2) ? "🥔 减速中（无法传递）" : "🥔 提速 120%");
+      } else myTags.push("🥔 持有者：" + (h ? h.name : "无人"));
     }
     /* v3.9 顺序统一为 血条 → 能量条 → 击杀/死亡；塔防也要显示能量条（之前被整条跳过） */
     /* v3.9.1 停电夜战：血量、能量之后补两条——手电筒电量与黑暗条。
@@ -18035,20 +18146,21 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
           subs.push('<span class="warn">没车！走到碰碰车旁按 P 上车</span>');
         }
       }
-    } else if (B.rule === "zombiehouse" && B.zh) {
-      const Z = LD.ZOMBIEHOUSE || {};
-      const H = B.zh.house;
-      const wv = B.zh.wave || 0, tot = Z.waves || 5;
-      const pct = Math.round(Math.max(0, H.hp) / (H.maxHp || 1) * 100);
-      if (B.zh.phase === "gap") {
-        subs.push("🏠 第 <b>" + (wv + 1) + "</b> / " + tot + " 波 · 准备中 <b>"
-          + Math.max(0, Math.ceil(B.zh.gapT || 0)) + "</b> 秒 · 站在房子里修房");
-      } else {
-        const left = (B.zh.queue || 0) + B.fighters.filter(f => f.isZombie && !f.dead).length;
-        subs.push("🏠 第 <b>" + wv + "</b> / " + tot + " 波 · 本波剩余僵尸 <b>" + left + "</b>");
-      }
-      subs.push(pct > 50 ? "房子耐久 <b>" + pct + "%</b> · 别放僵尸贴上来"
-        : '<span class="warn">房子耐久只剩 <b>' + pct + "%</b> —— 快清怪，趁喘息期站回房里</span>");
+    } else if (B.rule === "hotpotato" && B.potato) {
+      const H = LD.HOTPOTATO || {}, st = B.potato, h = st.holder;
+      /* 本分支里没有现成的 me，得自己取「我」（buildHud 里那个 me 是另一个作用域） */
+      const meH = B.hero(B.mySide == null ? 0 : B.mySide);
+      const nm = h ? (h.name || ("玩家" + (h.side + 1))) : "无人";
+      const left = Math.max(0, st.fuse || 0);
+      subs.unshift('<span class="big">' + (st.phase === "held" ? "🥔 " : "⚠ ") + '<b style="color:'
+        + (left < 6 ? "#f87171" : "#fbbf24") + '">' + nm + "</b> · <b>" + left.toFixed(1) + "</b>s</span>");
+      if (st.phase === "warn") subs.push("山芋即将从天而降——被锁定的人甩不掉");
+      else if (st.phase === "fly") subs.push("山芋下落中：命中后减速 2 秒，期间无法传递");
+      else if (h === meH) {
+        subs.push(st.holdT < (H.slowT || 2)
+          ? '<span class="warn">刚接锅：减速中，且 2 秒内传不出去</span>'
+          : "你提速到 120% —— 去贴别人，把锅甩出去");
+      } else subs.push("别被 <b>" + nm + "</b> 贴上");
     } else if (B.rule === "relay" && B.relay) {
       const onStage = B.fighters.filter(f => f.kind === "hero" && !f.dead && !f.bench);
       subs.push("擂台上 " + onStage.map(f => f.name).join(" vs ") + " · 剩余 " + B.fighters.filter(f => f.kind === "hero" && !f.dead).length + " 人");
@@ -18856,7 +18968,7 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
   function settingBtnsHtml(r, who) {
     /* v3.7 塔防：时长与地图都由模式固定，不给按钮，避免误以为能改 */
     if (r.rule === "tower") {
-      return '<div class="setrow"><span class="sub" style="line-height:30px">塔防对战固定：无时限 · 专用窄长地图（2800 × 600）· 红蓝 3v3</span></div>';
+      return '<div class="setrow"><span class="sub" style="line-height:30px">塔防对战固定：无时限 · 专用窄长地图（2800 × 600）· 红蓝两队（人数不限）</span></div>';
     }
     const attr = who === "net" ? "data-nset" : "data-lset";
     const p = LD.mapPreset((r.map && r.map.preset) || "random");
@@ -19078,15 +19190,9 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
 
   /* 人机阵营：阵营模式下默认按顺序轮流分到 4 个阵营；房主点卡片上的队伍色可手动指定 */
   function botTeam(i) {
-    /* v3.8 塔防：默认玩家队 2 个人机、对面 3 个，凑成 3v3；可手动点队伍改 */
-    if (room.rule === "tower") {
-      const bb = room.bots[i];
-      if (bb && bb.team != null && bb.team >= 0) return bb.team > 0 ? 1 : 0;
-      const mine = room.myTeam === 1 ? 1 : 0;
-      return i < 2 ? mine : 1 - mine;
-    }
-    /* v4.8 占点 / 护送：同样是红蓝两队，默认与玩家交替分边（可手动改） */
-    if (room.rule === "escort" || room.rule === "capture") {
+    /* v3.8 塔防 / v4.8 占点 / 护送：红蓝两队，默认与玩家交替分边（可手动改）。
+     * v4.11 塔防解除人数限制：不再强制凑满 3v3，双方人数可以不对等、也可以不满三个。 */
+    if (isTwoTeam(room.rule)) {
       const bb = room.bots[i];
       if (bb && bb.team != null && bb.team >= 0) return bb.team > 0 ? 1 : 0;
       const mine = room.myTeam === 1 ? 1 : 0;
@@ -19196,10 +19302,7 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
   UI.roomStart = function () {
     const two = isTwoTeam(room.rule);
     if (two && room.myTeam < 0) room.myTeam = 0;
-    /* v3.7 塔防：3v3 需要 6 个座位，人机不足就自动补齐（玩家 + 5 人机） */
-    if (room.rule === "tower") {
-      while (room.bots.length < 5) room.bots.push({ level: "normal", loadout: LD.AI.randomLoadout(), look: botLook() });
-    }
+    /* v4.11 塔防不再限制人数：不强制补齐到 3v3，玩家想 1v1 / 2v3 都行。 */
     /* v4.8 占点 / 护送：和阵营模式一样按房间选择分队，且红蓝两边都必须有人 */
     if (room.rule === "team" || (two && room.rule !== "tower")) {
       const all = [{ team: myTeam() }].concat(room.bots.map((bb, i) => ({ team: botTeam(i) })));
@@ -19221,16 +19324,10 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="data:image/png;base64,iVBORw0K
       fighters.push(bot);
     });
     /* v3.9 霸主争霸不再放巨龙：改由天降皇冠决定霸主归属（见 B.initCrown） */
-    /* v3.8 塔防：按房间选的红/蓝分队，并自动平衡成 3v3 */
+    /* v3.8 塔防：按房间选的红/蓝分队。
+     * v4.11 去掉了「自动平衡成 3v3」——现在双方人数可以不对等，也可以不满三个。 */
     let teams = null;
-    if (two) {
-      teams = [myTeam()].concat(room.bots.map((bb, i) => botTeam(i)));
-      if (room.rule === "tower") {
-        const count = t => teams.filter(x => x === t).length;
-        while (count(0) > 3) { teams[teams.lastIndexOf(0)] = 1; }
-        while (count(1) > 3) { teams[teams.lastIndexOf(1)] = 0; }
-      }
-    }
+    if (two) teams = [myTeam()].concat(room.bots.map((bb, i) => botTeam(i)));
     B.setup({ mode: "duel", rule: room.rule, fighters, theme: {}, mods: room.mods.slice(),
       teams: teams || undefined,
       matchT: room.matchT || (LD.MATCH && LD.MATCH.def) || 120,

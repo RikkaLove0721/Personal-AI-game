@@ -98,13 +98,17 @@
     /* v3.9.1 停电夜战：充电站——靠近按住交互键给手电筒充电。
      * 排在能量包之后：包是消耗品（26 秒就消失），站是常驻的，两者都在范围内优先开包。
      * 判定半径沿用「两个身位」（CHARGE.station.keep = 96）。 */
-    if (this.stations && this.stations.length) {
+    /* v4.11 规则守卫：充电站只在停电夜战里存在。B.stations 是常驻数组，
+     * 光靠 initNight 重建还不够——中途换模式 / 联机同步都可能留下旧数据，
+     * 扫描时再卡一道规则，任何非夜战局都绝不会弹出「充电」。 */
+    if (this.rule === "blackout" && this.stations && this.stations.length) {
       const slim = (LD.NIGHT && LD.NIGHT.charge && LD.NIGHT.charge.keep) || 96;
       this.stations.forEach(st => {
         take({ type: "chg", prop: st, kind: "station", label: "充电", gap: Math.hypot(f.x - st.x, f.y - st.y) - f.r, lim: slim });
       });
     }
-    if (this.crown && this.crown.phase === "fallen") {
+    /* v4.11 同上：皇冠只在霸主模式里才算交互目标 */
+    if (this.rule === "overlord" && this.crown && this.crown.phase === "fallen") {
       const cw = this.crown;
       const lim = (LD.CROWN || {}).range || 40;
       const gap = Math.hypot(f.x - cw.x, f.y - cw.y) - f.r;

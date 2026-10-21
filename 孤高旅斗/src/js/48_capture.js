@@ -69,13 +69,37 @@
     };
     const pts = [big];
 
-    /* 小点：随机撒，满足最小间距、离边界、离基地三条约束 */
-    const range = C.count || [3, 5];
-    const lo = Math.max(1, Math.min(range[0] | 0, range[1] | 0));
-    const hi = Math.max(lo, Math.max(range[0] | 0, range[1] | 0));
-    const total = lo + Math.floor(Math.random() * (hi - lo + 1));
+    /* v4.11 据点数量：保底 3 座（左 / 中 / 右），房间每多 perExtra 名玩家再 +1 座，
+     * 最多 maxPts 座（3 人 3 座 / 5 人 4 座 / 7 人 5 座 / 9 人 6 座封顶）。 */
+    const heroN = this.fighters.filter(f => f.kind === "hero" && !f.bench).length;
+    const perExtra = C.perExtra || 2;
+    const total = Math.max(C.basePts || 3, Math.min(C.maxPts || 6,
+      (C.basePts || 3) + Math.max(0, Math.floor((heroN - 3) / perExtra))));
     const names = ["A", "C", "D", "E"];
-    for (let n = 1; n < total; n++) {
+    const smallR = smallC.r || 150;
+    const mkSmall = (i, nm, x, y) => ({
+      i: i, big: false, name: nm, x: x, y: y, r: smallR, w: smallC.w || 1,
+      owner: -1, prog: 0, by: -1, c0: 0, c1: 0, flash: 0, turret: null
+    });
+    /* v4.11 左右两点：贴各自半场，纵向随机落点，和中间大点构成三足鼎立。
+     * 基地在左右两端正中，所以这两点必须往上下偏，摇不到就贴最近的顶 / 底边。 */
+    const sideX = Math.max(C.sideInset || 300, edge);
+    const yTop = top + edge, yBot = h - edge;
+    const baseClear = (C.baseR || 190) + smallR + 50;
+    const okSpot = (x, y) => bases.every(b => Math.hypot(b.x - x, b.y - y) >= baseClear)
+      && pts.every(p => Math.hypot(p.x - x, p.y - y) >= minGap * 0.8);
+    function sideSpot(cx) {
+      for (let k = 0; k < 60; k++) {
+        const x = rand(Math.max(edge, cx - 160), Math.min(w - edge, cx + 160));
+        const y = rand(yTop, yBot);
+        if (okSpot(x, y)) return { x: x, y: y };
+      }
+      return { x: cx, y: yTop };                  // 兜底：贴顶边，离两个基地都最远
+    }
+    if (total >= 2) { const p = sideSpot(sideX); pts.push(mkSmall(1, "A", p.x, p.y)); }
+    if (total >= 3) { const p = sideSpot(w - sideX); pts.push(mkSmall(2, "C", p.x, p.y)); }
+    /* 多出来的：随机撒，满足最小间距、离边界、离基地三条约束 */
+    for (let n = pts.length; n < total; n++) {
       let spot = null;
       for (let k = 0; k < 220; k++) {
         const x = rand(edge, w - edge), y = rand(top + edge, h - edge);
@@ -93,13 +117,7 @@
         }
       }
       if (!spot) spot = { x: rand(edge, w - edge), y: rand(top + edge, h - edge) };
-      pts.push({
-        i: n, big: false,
-        name: names[n - 1] || ("P" + (n + 1)),
-        x: spot.x, y: spot.y,
-        r: smallC.r || 150, w: smallC.w || 1,
-        owner: -1, prog: 0, by: -1, c0: 0, c1: 0, flash: 0, turret: null
-      });
+      pts.push(mkSmall(n, names[n - 1] || ("P" + (n + 1)), spot.x, spot.y));
     }
     /* 按横坐标排序，读起来就是「左 → 右」，小点命名也稳定 */
     const rest = pts.slice(1).sort((a, b) => a.x - b.x || a.y - b.y);
@@ -262,7 +280,8 @@
       const pr = this.spawnProj({
         x: o.x + Math.cos(a) * 20, y: oy + Math.sin(a) * 12,
         vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
-        r: 9, dmg: cfg.dmg || 26, life: 2.2,
+        /* v4.11 据点炮塔伤害 ×turretDmgMul（原样照搬塔防数值偏疼，削到 80%） */
+        r: 9, dmg: Math.round((cfg.dmg || 26) * (C.turretDmgMul == null ? 1 : C.turretDmgMul)), life: 2.2,
         owner: this.towerSrc(o),
         color: o.side === 0 ? "#fca5a5" : "#93c5fd", core: "#fff",
         type: "towerbolt", kindTag: "skill", trail: true,

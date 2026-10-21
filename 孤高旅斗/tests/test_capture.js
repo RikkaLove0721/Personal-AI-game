@@ -111,8 +111,9 @@ console.log("=== 1. 模式与参数 ===");
   const C = LD.CAPTURE;
   check("地图 1920×1920（v4.10 缩到 80%）", C.world.w === 1920 && C.world.h === 1920,
     C.world.w + "×" + C.world.h);
-  check("据点圈内每秒回 5 血", C.pointHeal === 5, C.pointHeal);
-  check("每局随机 3~5 座据点", C.count[0] === 3 && C.count[1] === 5, C.count.join("~"));
+  check("据点圈内每秒回 2 血（v4.11 从 5 下调）", C.pointHeal === 2, C.pointHeal);
+  check("保底 3 座据点", C.basePts === 3, C.basePts);
+  check("每多 2 名玩家 +1 座", C.perExtra === 2, C.perExtra);
   check("空点单人 0.20/s（5 秒）", Math.abs(C.capRate - 0.20) < 1e-6, C.capRate);
   check("抢敌方据点耗时 ×2", C.contestMul === 2.0, C.contestMul);
   check("阵亡 3 秒复活、每次 +3 秒", C.respawn === 3.0 && C.respawnStep === 3.0,
@@ -280,9 +281,11 @@ console.log("\n=== 8. 复活递增 / 基地回血 ===");
   check("第一次复活 3 秒", Math.abs(me.respawnT - 3.0) < 1e-6, me.respawnT);
   for (let i = 0; i < 200; i++) B.updateRespawn(1 / 60);
   check("3 秒后复活", me.dead === false && me.hp === me.maxHp, "hp=" + me.hp);
+  /* v4.11：阵亡不再回基地，改为全图随机位置复活 */
   const b0 = B.captureBase(0);
-  check("在自家基地圈里复活", Math.hypot(me.x - b0.x, me.y - b0.y) <= b0.r + 1,
-    Math.round(Math.hypot(me.x - b0.x, me.y - b0.y)));
+  check("在全图随机位置复活（不再回基地）",
+    me.x >= 40 && me.x <= B.world.w - 40 && me.y >= (B.world.pt || 0) + 40 && me.y <= B.world.h - 40,
+    Math.round(me.x) + "," + Math.round(me.y) + " 距基地 " + Math.round(Math.hypot(me.x - b0.x, me.y - b0.y)));
   check("复活带无敌", me.invuln > 0, me.invuln.toFixed(2));
 
   B.kill(me, foe);
@@ -327,8 +330,8 @@ console.log("\n=== 9. 据点炮塔 ===");
   B.updateCaptureTurrets(1 / 60);
   check("敌人进入据点范围即开火", B.projs.length === 1, B.projs.length);
   const pr = B.projs[0];
-  check("炮塔弹伤害 26、锁定敌人",
-    !!pr && pr.dmg === 26 && pr.data && pr.data.tgt === enemy,
+  check("炮塔弹伤害 21（26 × 0.8）、锁定敌人",
+    !!pr && pr.dmg === 21 && pr.data && pr.data.tgt === enemy,
     pr ? pr.dmg + " / " + (pr.data && pr.data.tgt && pr.data.tgt.name) : "无");
   check("炮塔不打自家角色", (pr && pr.data && pr.data.tgt) !== ally);
 
@@ -426,6 +429,39 @@ console.log("\n=== 11. 房间分队（占点）===");
   UI.roomStart();
   UI.toast = toast0;
   check("红蓝全同队时拒绝开局", before === "idle" && !!warned, warned || "没有提示");
+}
+
+console.log("\n=== 11b. v4.11 据点数量与布局 ===");
+{
+  function ptsFor(n) { setupCapture(n); return B.capture.pts.length; }
+  const c3 = ptsFor(3), c4 = ptsFor(4), c5 = ptsFor(5), c7 = ptsFor(7);
+  check("3 人 = 3 座据点（保底）", c3 === 3, c3);
+  check("4 人仍是 3 座", c4 === 3, c4);
+  check("5 人 = 4 座（每多 2 人 +1）", c5 === 4, c5);
+  check("7 人 = 5 座", c7 === 5, c7);
+
+  /* 保底三点：左 / 中 / 右 */
+  setupCapture(3);
+  const st = B.capture, pts = st.pts;
+  const midX = B.world.w / 2;
+  check("大点恒在地图正中",
+    Math.abs(st.big.x - midX) < 1 && Math.abs(st.big.y - playMidY()) < 1,
+    Math.round(st.big.x) + "," + Math.round(st.big.y));
+  const left = pts.filter(p => p.x < midX - 120), right = pts.filter(p => p.x > midX + 120);
+  check("左右各有一座据点", left.length === 1 && right.length === 1, left.length + " / " + right.length);
+  const bs = [B.captureBase(0), B.captureBase(1)];
+  check("据点都不压在双方基地上",
+    pts.every(p => bs.every(b => Math.hypot(p.x - b.x, p.y - b.y) >= (LD.CAPTURE.baseR || 190) + p.r)), "ok");
+
+  /* 据点回血：站在己方据点圈里每秒 +2 */
+  const hs = setupCapture(2);
+  const pt = B.capture.pts[0], me = hs[0];
+  pt.owner = 0;
+  me.x = pt.x; me.y = pt.y;
+  me.hp = me.maxHp * 0.5;
+  const before = me.hp;
+  for (let i = 0; i < 61; i++) B.updateCapture(1 / 60);
+  check("己方据点圈内每秒回 2 血", Math.abs((me.hp - before) - 2) < 0.6, (me.hp - before).toFixed(2));
 }
 
 console.log("\n=== 12. 渲染层不崩 ===");

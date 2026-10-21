@@ -413,7 +413,7 @@ console.log("=== 16. 手机端索敌按钮 ===");
 console.log("=== 17. 模式称号：十四种模式各自获胜 10 次 ===");
 {
   const RULE_IDS = LD.RULES.map(r => r.id);
-  check("成就 25 项 / 称号 25 个（v4.9 新增僵尸守房）", LD.ACHIEVEMENTS.length === 25 && LD.TITLES.length === 25,
+  check("成就 25 项 / 称号 25 个（v4.11 删僵尸守房、加烫手山芋）", LD.ACHIEVEMENTS.length === 25 && LD.TITLES.length === 25,
     LD.ACHIEVEMENTS.length + " / " + LD.TITLES.length);
   check("十四种模式各有一个专属称号", RULE_IDS.every(id => LD.TITLES.some(t => t.ach === id + "_win")),
     LD.TITLES.filter(t => /_win$/.test(t.ach)).map(t => t.name + "(" + t.ach.replace("_win", "") + ")").join(" "));

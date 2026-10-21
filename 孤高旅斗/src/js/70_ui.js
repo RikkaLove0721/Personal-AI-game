@@ -395,7 +395,8 @@
       '<li><b>占点争夺</b>：两队对抗（房间界面选红队 / 蓝队）。地图 <b>1920×1920</b>，每局随机生成 <b>3~5 座据点</b>，其中最大的据点永远在地图正中（权重 ×2）。站进圈内开始读条占领，<b>人越多越快</b>：空据点单人 <b>5 秒</b>，抢敌方已经占下的据点要花<b>两倍时间</b>（10 秒）；双方都在圈里则僵持，谁也推不动。占领后据点持续产分，大点 2 分/秒、小点 1 分/秒，先到 <b>80 分</b>获胜；圈里没人时，对方留下的占领进度会缓慢回落。据点被占领后中心会升起一座<b>炮塔</b>（1200 血、伤害 26、攻速 1.05，射程就等于据点半径），只打敌方角色；据点易主时炮塔跟着换攻击目标、<b>血量不变</b>，被拆掉后本局永久消失。阵亡后在本方基地复活：首次 <b>3 秒</b>，之后每死一次 <b>+3 秒</b>（最多 24 秒），基地圈内每秒回复 5% 最大生命；站在<b>己方已占领的据点</b>圈里每秒回 <b>5 滴血</b>。时间到比分高者胜，同分则比两队剩余总血量。</li>',
       '<li><b>碰碰车竞技</b>：圆环擂台——台外与<b>场地正中心都是水池</b>，可活动范围是一圈环形赛道。开局每人自动坐上一辆碰碰车（电力无限，<b>技能与大招全部禁用</b>，普攻只是喇叭）。开车对撞时<b>接近速度越快，伤害和击退越大</b>（击退增幅特别高，一记重撞能把人顶出半个场），主动撞人的一方也会吃到 35% 的反伤。把对手的车<b>撞爆 +2 分</b>、把他<b>顶进水里 +3 分</b>（外圈 / 内圈都算），先到 <b>12 分</b>获胜。撞爆的车 4 秒后重生，落水的人 2.4 秒后回到赛道并重新发车。场上有吹风机，<b>气流能把车吹偏航</b>——顺风抢位、逆风绕行。</li>',
       '<li><b>塔防对战</b>：3v3 单线推塔，<b>没有时间限制</b>，一直打到一方水晶爆掉。地图 2800×600，左右镜像，红蓝一塔之间留出一大片中心战区。双方每 32 秒刷 6 只机器人小兵沿兵线推进，拆掉敌塔后自家小兵变强。防御塔（1200 血 / 射程 300）与水晶（2400 血 / 射程 340）会发射<b>高速追踪弹</b>，走进敌方范围时会显示一圈红圈警告；<b>防御塔没拆完水晶免疫伤害</b>。击杀小兵 / 英雄 / 助攻都给<b>局内金币</b>，按 <span class="k">B</span> 买被动装备（生命 / 攻击 / 护盾 / 能量 / 回血 / 霸体 / 闪避等，每件一次）、<b>主动装备</b>（最多 1 件，按 <span class="k">P</span> 释放）、可重复购买的<b>小兵强化</b>，以及开车时才能买的<b>汽油桶</b>（80 金，+2000 油，不限次数）。英雄 1–6 级，升级加血加伤害；阵亡后在原地立<b>墓碑</b>显示复活倒计时（<b>5 秒 + 等级 × 5 秒</b>，1 级 10 秒、5 级 30 秒），倒计时结束回基地复活，基地回血圈每秒回复 12% 生命。房间界面可以选红队 / 蓝队。</li>',
-      '<li>单人「勇者格斗」的房间就是角色卡房间：第一张卡是你（可直接换装扮 / 技能），后面的人机卡可增删（最多 5 个，塔防会自动补满 5 个凑 3v3）、可选难度（木桩 / 普通 / 困难）与配装。</li>',
+      '<li><b>烫手山芋</b>：混战模式，<b>普攻、技能与大招全部禁用</b>，只能靠跑位。开局随机抽一名玩家：先播放 <b>3 秒预警</b>（他头顶出现落点圈），随后山芋<b>从天而降、锁定飞到他头上</b>——飞行途中甩不掉。刚接手的人会陷入 <b>2 秒减速（移速 50%）</b>，且这 2 秒内<b>无法把山芋传给别人</b>；熬过这 2 秒后，速度提升到正常的 <b>120%</b>（比其他人快），可以主动去追人。持有者碰到别人就把山芋甩过去，接手者同样吃 2 秒减速且期间不能再传。从山芋落到第一个人手上开始 <b>30 秒</b>引信倒计时，到点<b>爆炸</b>：持有者掉 <b>75 血</b>，爆炸小范围内其他人掉 <b>50 血</b>。炸完重新抽人、重新计时，循环往复；血量归零者出局，最后一个站着的人获胜。</li>',
+      '<li>单人「勇者格斗」的房间就是角色卡房间：第一张卡是你（可直接换装扮 / 技能），后面的人机卡可增删（最多 5 个，塔防不再限制人数，可对等也可不对等）、可选难度（木桩 / 普通 / 困难）与配装。</li>',
       '</ul>',
       '<h3>规则修饰符（可多选叠加）</h3>',
       '<ul>',
@@ -512,11 +513,14 @@
       const own = pts.filter(p => p.owner === myT).length;
       myTags.push("🚩 " + Math.round(sc[0]) + " : " + Math.round(sc[1]) + " · 据点 " + own + "/" + pts.length);
     }
-    if (B.rule === "zombiehouse" && B.zh) {
-      const hp = Math.max(0, Math.round(B.zh.house.hp || 0));
-      const ks = B.zhScoreOf ? B.zhScoreOf(me.side) : 0;
-      const inside = Math.hypot(me.x - B.zh.house.x, me.y - B.zh.house.y) <= B.zh.house.r;
-      myTags.push("🏠 房子 " + hp + " · 击杀 " + ks + (inside ? " · 修房中" : ""));
+    /* v4.11 烫手山芋：全员贴一个「我是锅」的标签，方便全场知道该躲谁 */
+    if (B.rule === "hotpotato" && B.potato) {
+      const st = B.potato, h = st.holder, H = LD.HOTPOTATO || {};
+      if (st.phase === "warn") myTags.push("🥔 预警 " + Math.max(0, st.t).toFixed(1) + "s");
+      else if (st.phase === "fly") myTags.push("🥔 天降中");
+      else if (h === me) {
+        myTags.push(st.holdT < (H.slowT || 2) ? "🥔 减速中（无法传递）" : "🥔 提速 120%");
+      } else myTags.push("🥔 持有者：" + (h ? h.name : "无人"));
     }
     /* v3.9 顺序统一为 血条 → 能量条 → 击杀/死亡；塔防也要显示能量条（之前被整条跳过） */
     /* v3.9.1 停电夜战：血量、能量之后补两条——手电筒电量与黑暗条。
@@ -708,20 +712,21 @@
           subs.push('<span class="warn">没车！走到碰碰车旁按 P 上车</span>');
         }
       }
-    } else if (B.rule === "zombiehouse" && B.zh) {
-      const Z = LD.ZOMBIEHOUSE || {};
-      const H = B.zh.house;
-      const wv = B.zh.wave || 0, tot = Z.waves || 5;
-      const pct = Math.round(Math.max(0, H.hp) / (H.maxHp || 1) * 100);
-      if (B.zh.phase === "gap") {
-        subs.push("🏠 第 <b>" + (wv + 1) + "</b> / " + tot + " 波 · 准备中 <b>"
-          + Math.max(0, Math.ceil(B.zh.gapT || 0)) + "</b> 秒 · 站在房子里修房");
-      } else {
-        const left = (B.zh.queue || 0) + B.fighters.filter(f => f.isZombie && !f.dead).length;
-        subs.push("🏠 第 <b>" + wv + "</b> / " + tot + " 波 · 本波剩余僵尸 <b>" + left + "</b>");
-      }
-      subs.push(pct > 50 ? "房子耐久 <b>" + pct + "%</b> · 别放僵尸贴上来"
-        : '<span class="warn">房子耐久只剩 <b>' + pct + "%</b> —— 快清怪，趁喘息期站回房里</span>");
+    } else if (B.rule === "hotpotato" && B.potato) {
+      const H = LD.HOTPOTATO || {}, st = B.potato, h = st.holder;
+      /* 本分支里没有现成的 me，得自己取「我」（buildHud 里那个 me 是另一个作用域） */
+      const meH = B.hero(B.mySide == null ? 0 : B.mySide);
+      const nm = h ? (h.name || ("玩家" + (h.side + 1))) : "无人";
+      const left = Math.max(0, st.fuse || 0);
+      subs.unshift('<span class="big">' + (st.phase === "held" ? "🥔 " : "⚠ ") + '<b style="color:'
+        + (left < 6 ? "#f87171" : "#fbbf24") + '">' + nm + "</b> · <b>" + left.toFixed(1) + "</b>s</span>");
+      if (st.phase === "warn") subs.push("山芋即将从天而降——被锁定的人甩不掉");
+      else if (st.phase === "fly") subs.push("山芋下落中：命中后减速 2 秒，期间无法传递");
+      else if (h === meH) {
+        subs.push(st.holdT < (H.slowT || 2)
+          ? '<span class="warn">刚接锅：减速中，且 2 秒内传不出去</span>'
+          : "你提速到 120% —— 去贴别人，把锅甩出去");
+      } else subs.push("别被 <b>" + nm + "</b> 贴上");
     } else if (B.rule === "relay" && B.relay) {
       const onStage = B.fighters.filter(f => f.kind === "hero" && !f.dead && !f.bench);
       subs.push("擂台上 " + onStage.map(f => f.name).join(" vs ") + " · 剩余 " + B.fighters.filter(f => f.kind === "hero" && !f.dead).length + " 人");
