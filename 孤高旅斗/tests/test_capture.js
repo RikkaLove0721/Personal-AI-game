@@ -121,12 +121,12 @@ console.log("\n=== 3. 单人占领 / 多人加速 ===");
   for (let i = 0; i < 300; i++) B.updateCapture(1 / 60);
   check("读满后归红队", pt.owner === 0 && pt.prog === 0, "owner=" + pt.owner);
 
-  /* 双人：同样 1 秒进度更快 */
+  /* 双人：v4.12 起人数线性叠加，1 秒进度翻倍 */
   const hs2 = setupCapture(4);
   const pt2 = B.capture.pts.find(p => p !== B.capture.big);
   isolate(hs2, [hs2[0], hs2[2]], pt2);       // 两个红队
   for (let i = 0; i < 60; i++) B.updateCapture(1 / 60);
-  check("两人占领比单人快（+45%）", pt2.prog > 0.26 && pt2.prog < 0.32, pt2.prog.toFixed(3));
+  check("两人同队 = 2 倍速（1 秒 40%）", Math.abs(pt2.prog - 0.40) < 0.03, pt2.prog.toFixed(3));
 }
 
 console.log("\n=== 4. 抢点耗时 ×2 / 僵持 / 回落 ===");
@@ -158,6 +158,52 @@ console.log("\n=== 4. 抢点耗时 ×2 / 僵持 / 回落 ===");
   for (let i = 0; i < 30; i++) B.updateCapture(1 / 60);
   check("己方站在自家点上会把敌方进度退回", pt3.prog < before - 0.05,
     before.toFixed(2) + " → " + pt3.prog.toFixed(2));
+}
+
+console.log("\n=== 4b. v4.12 净值争夺 / 人数线性倍率 ===");
+{
+  const TEAMS = [0, 0, 0, 1, 1, 1];            // 前三红、后三蓝
+  const pick = () => B.capture.pts.find(p => p !== B.capture.big);
+
+  /* 基准：单人红队 1 秒 20% */
+  const h0 = setupCapture(6, TEAMS), p0 = pick();
+  isolate(h0, [h0[0]], p0);
+  for (let i = 0; i < 60; i++) B.updateCapture(1 / 60);
+  const solo = p0.prog;
+
+  /* 3 红同队 → 3 倍：0.5 秒 30% */
+  const h1 = setupCapture(6, TEAMS), p1 = pick();
+  isolate(h1, [h1[0], h1[1], h1[2]], p1);
+  for (let i = 0; i < 30; i++) B.updateCapture(1 / 60);
+  check("3 人同队 = 3 倍速（0.5 秒 30%）", Math.abs(p1.prog - 0.30) < 0.03, p1.prog.toFixed(3));
+
+  /* 2 红 1 蓝 → 净值 1 红，与单人基准同速（不是僵持） */
+  const h2 = setupCapture(6, TEAMS), p2 = pick();
+  isolate(h2, [h2[0], h2[1], h2[3]], p2);
+  for (let i = 0; i < 60; i++) B.updateCapture(1 / 60);
+  check("2 红 1 蓝 → 净值 1 红（1 秒 20%）", Math.abs(p2.prog - 0.20) < 0.03, p2.prog.toFixed(3));
+  check("净值结果与单人基准一致", Math.abs(p2.prog - solo) < 0.02,
+    p2.prog.toFixed(3) + " vs " + solo.toFixed(3));
+
+  /* 1 红 2 蓝 → 净值 1 蓝，方向反过来推 */
+  const h3 = setupCapture(6, TEAMS), p3 = pick();
+  isolate(h3, [h3[0], h3[3], h3[4]], p3);
+  for (let i = 0; i < 60; i++) B.updateCapture(1 / 60);
+  check("1 红 2 蓝 → 净值归蓝队推进", p3.by === 1 && Math.abs(p3.prog - 0.20) < 0.03,
+    "by=" + p3.by + " " + p3.prog.toFixed(3));
+
+  /* 2v2 → 净值 0 → 僵持，进度原地冻结（不推进也不回落） */
+  const h4 = setupCapture(6, TEAMS), p4 = pick();
+  p4.prog = 0.5; p4.by = 0;
+  isolate(h4, [h4[0], h4[1], h4[3], h4[4]], p4);
+  for (let i = 0; i < 60; i++) B.updateCapture(1 / 60);
+  check("2v2 净值 0 → 僵持冻结", Math.abs(p4.prog - 0.5) < 1e-6, p4.prog.toFixed(3));
+
+  /* 净值上限 = stackMax(3)：4 红 0 蓝 也只按 3 人算（0.5 秒 30%，不是 40%） */
+  const h5 = setupCapture(6, [0, 0, 0, 0, 1, 1]), p5 = pick();
+  isolate(h5, [h5[0], h5[1], h5[2], h5[3]], p5);
+  for (let i = 0; i < 30; i++) B.updateCapture(1 / 60);
+  check("净值倍率有上限（4 人仍按 3 人算）", Math.abs(p5.prog - 0.30) < 0.03, p5.prog.toFixed(3));
 }
 
 console.log("\n=== 5. 产分（大点权重 ×2）===");

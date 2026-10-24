@@ -55,7 +55,7 @@ console.log("=== 1. 模式与数值配置 ===");
   const r = LD.RULES.find(x => x.id === "blackout");
   check("规则表里有停电夜战", !!r, r && r.name);
   check("显示名正确", r && r.name === "停电夜战", r && r.name);
-  check("规则共 16 种（v4.11 删僵尸守房、加烫手山芋）", LD.RULES.length === 16, LD.RULES.length);
+  check("规则共 22 种（v4.12 加娱乐模式批次：木头人 / 抢椅子 / 躲猫猫 / 岩浆 / 弹幕 / 滑壶）", LD.RULES.length === 22, LD.RULES.length);
   check("黑暗条上限 30（v4.10 扩充）", N.darkMax === 30, N.darkMax);
   check("摸黑每秒 +1", N.darkUp === 1, N.darkUp);
   check("受光每秒 -6（v4.10 翻倍）", N.darkDown === 6, N.darkDown);

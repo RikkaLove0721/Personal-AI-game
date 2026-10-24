@@ -464,6 +464,51 @@ console.log("\n=== 9. 交互提示与按键 ===");
   check("大招回到 O 键", LD.UI.ctrl.press.ult === true && LD.UI.ctrl.press.interact !== true);
 }
 
+console.log("\n=== 9. v4.12 补给箱：走近按 P 搜刮 ===");
+{
+  const hs = mkField({ supply: 2 });
+  const me = hs[0], foe = hs[1];
+  const sup = B.terrain.props.filter(o => o.kind === "supply" && !o.dead)[0];
+  check("地图生成补给箱", !!sup, sup ? "hp=" + sup.hp : "无");
+  if (!sup) { console.log("  （补给箱没生成，本节跳过）"); }
+  else {
+    sup.x = 800; sup.y = 800;
+    foe.x = 100; foe.y = 1500;
+    me.x = sup.x; me.y = sup.y + sup.h / 2 + 26;
+    me.interactCd = 0;
+    const t = B.interactTarget(me);
+    check("走近补给箱出现交互目标（以前一直显示「无」）",
+      !!t && t.type === "chg" && t.kind === "supply", t ? t.type + "/" + t.kind : "无");
+    check("提示文案为「搜刮补给箱」", B.interactLabel(me) === "搜刮补给箱", B.interactLabel(me));
+    check("按 P 起手蓄力", B.doInteract(me) === true && !!me.chg && me.chg.kind === "supply",
+      me.chg ? me.chg.kind : "无");
+
+    /* 走远 → 中断，箱子不能白拿 */
+    me.x = sup.x + 400;
+    B.updateCharging(1 / 60);
+    check("走远会中断蓄力", !me.chg, me.chg ? "仍在蓄" : "已中断");
+    check("中断后箱子还在", !sup.dead);
+
+    /* 站回去读满 1.5 秒 → 开箱掉落 */
+    me.x = sup.x; me.y = sup.y + sup.h / 2 + 26;
+    me.chg = null; me.interactCd = 0;
+    B.doInteract(me);
+    const n0 = (B.pickups || []).length;
+    for (let i = 0; i < 95; i++) B.updateCharging(1 / 60);   // 1.58s > need 1.5
+    check("蓄满后箱子被搜掉", sup.dead === true, sup.dead);
+    check("蓄力状态清空", !me.chg);
+    LD.Terrain.update(B.terrain, 1 / 60, B);
+    const pk = B.pickups || [];
+    check("掉出一个补给包", pk.length === n0 + 1,
+      (pk.length - n0) + " 个：" + pk.slice(n0).map(p => p.kind).join(","));
+    check("掉落品类合法（血包 / 道具包 / 移速包）",
+      pk.length > n0 && ["heal", "energy", "speed"].indexOf(pk[pk.length - 1].kind) >= 0,
+      pk.length > n0 ? pk[pk.length - 1].kind : "-");
+    check("搜刮配置 1.5 秒 / 半径 96", LD.CHARGE.supply.need === 1.5 && LD.CHARGE.supply.keep === 96,
+      LD.CHARGE.supply.need + "s / " + LD.CHARGE.supply.keep);
+  }
+}
+
 console.log("\n=== 结果 ===");
 console.log("通过 " + pass + " 项，失败 " + fail + " 项");
 process.exit(fail ? 1 : 0);

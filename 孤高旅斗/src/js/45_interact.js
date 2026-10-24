@@ -52,6 +52,8 @@
     if (f.pushBox) return { type: "escortPush", prop: f.pushBox, label: "松手", gap: 0 };
 
     let best = null, bestGap = Infinity;
+    /* v4.12 补给箱只作兜底候选：没有任何其它交互目标时才轮到它 */
+    let nearSupply = null, supGap = Infinity;
     const take = (t) => { if (t.gap <= t.lim && t.gap < bestGap) { bestGap = t.gap; best = t; } };
 
     /* 天外来物 / 缩圈乱斗掉落物 */
@@ -127,6 +129,16 @@
           if ((f.noHideT || 0) > 0) continue;
           const gap = propGap(f, o);
           take({ type: "locker", prop: o, label: "躲藏", gap: gap, lim: rangeOf("range") });
+        } else if (o.kind === "supply") {
+          /* v4.12 补给箱：以前只能靠打碎，走近了 P 框一直显示「无」，玩家以为坏了。
+           * 现在补上交互：按住 1.5 秒搜刮，掉落走 breakProp 同一条链路。
+           * 只作兜底候选（见循环末尾）：柜子 / 车 / 泥土 / 道具包 / 充电站都优先，
+           * 免得抢走 AI 已经锁定在追的目标。 */
+          const gap = propGap(f, o);
+          if (gap <= rangeOf("range") + 20 && gap < supGap) {
+            supGap = gap;
+            nearSupply = { type: "chg", prop: o, kind: "supply", label: "搜刮", gap: gap, lim: rangeOf("range") + 20 };
+          }
         } else if (o.kind === "car") {
           if (o.driver) continue;
           /* v3.9 上车禁令期间：车根本不出现在交互目标里，P 框也不显示「上车」 */
@@ -137,6 +149,8 @@
         }
       }
     }
+    /* 附近确实没有别的交互目标了，才把补给箱推上来 */
+    if (!best) best = nearSupply;
     return best;
   };
 
@@ -208,7 +222,8 @@
     const t = this.interactTarget(f);
     if (!t) return "";
     /* v3.9.1：充电站与能量包都是 chg 类，得分开报——否则站在充电站旁边 P 框会写「开启能量包」 */
-    if (t.type === "chg") return t.kind === "crown" ? "争夺皇冠" : t.kind === "station" ? "充电" : "开启道具包";
+    if (t.type === "chg") return t.kind === "crown" ? "争夺皇冠" : t.kind === "station" ? "充电"
+      : t.kind === "supply" ? "搜刮补给箱" : "开启道具包";
     if (t.type === "escortPush") return t.occupied ? "占用" : (f.pushBox ? "松手" : "推箱");
     if (t.type === "car") return "上车";
     if (t.type === "locker") return "躲藏";
@@ -416,6 +431,8 @@
     /* v3.9.1 充电站：夜战里是常驻设施，只要还在场上就能继续充 */
     if (c.kind === "station") return !!B.stations && B.stations.indexOf(c.tgt) >= 0;
     if (c.kind === "crown") return !!B.crown && B.crown === c.tgt && B.crown.phase === "fallen";
+    /* v4.12 补给箱：箱子还在场上且没被别人打碎 / 搜走就算活着 */
+    if (c.kind === "supply") return !c.tgt.dead && !!B.terrain && B.terrain.props.indexOf(c.tgt) >= 0;
     return false;
   }
   function chgPos(c) {
@@ -480,6 +497,21 @@
     else if (c.kind === "crown") this.finishCrown(f, c.tgt);
     /* v3.9.1 充电站：蓄满 = 手电筒电量补满（不满也按已蓄比例给） */
     else if (c.kind === "station" && this.finishStation) this.finishStation(f, c.tgt, c.t);
+    /* v4.12 补给箱：蓄满 = 开箱掉物资 */
+    else if (c.kind === "supply") this.finishSupply(f, c.tgt);
+    return true;
+  };
+
+  /* v4.12 搜刮补给箱：直接走地形层的 breakProp，
+   * 掉落（血包 / 道具包 / 移速包）与「用攻击打碎」完全一致，不另写一套。 */
+  B.finishSupply = function (f, o) {
+    if (!o || o.dead) return false;
+    if (T && T.breakProp) T.breakProp(this.terrain, o);
+    FX.ring(f.x, f.y - 24, 70, "rgba(125,211,252,.95)", 5, 0.4);
+    FX.burst(f.x, f.y - 24, 16, ["#7dd3fc", "#fff", "#38bdf8"], { speed: 220 });
+    FX.float(f.x, f.y - 74, "搜到补给！", "#7dd3fc", 16);
+    this.ev.push(["t", f.x, f.y - 74, "搜到补给！", "#7dd3fc"]);
+    LD.Audio && LD.Audio.beep && LD.Audio.beep(660, 0.12, "triangle", 0.05);
     return true;
   };
 

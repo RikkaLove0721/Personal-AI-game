@@ -47,12 +47,12 @@ check("双子剑客无技能 2 槽位", LD.BOSS.twin.skill2 == null);
 check("镜影配装为空（运行时复制）", LD.BOSS.mirror.loadout === null && LD.BOSS.mirror.cdMul === 1.3);
 check("关卡共 9 关", LD.LEVELS.length === 9, LD.LEVELS.length);
 check("关卡 4-9 BOSS 依次正确", LD.LEVELS.slice(3).map(l => l.boss).join(",") === "bee,frost,twin,gambler,mirror,tesla", LD.LEVELS.slice(3).map(l => l.boss).join(","));
-check("规则共 16 种（v4.11 删僵尸守房、加烫手山芋）", LD.RULES.length === 16, LD.RULES.length);
+check("规则共 22 种（v4.12 加娱乐模式批次：木头人 / 抢椅子 / 躲猫猫 / 岩浆 / 弹幕 / 滑壶）", LD.RULES.length === 22, LD.RULES.length);
 check("杂兵目录：工蜂", LD.MINIONS && LD.MINIONS.beeDrone && LD.MINIONS.beeDrone.dmg === 9);
 check("修饰符共 6 种（v3.3 新增定期刷新）", LD.MODS.length === 6 && LD.MODS.every(m => m.id && m.name && m.desc), LD.MODS.map(m => m.id).join(","));
 check("词条池共 6 条", LD.PERKS.length === 6 && LD.PERKS.every(p => typeof p.apply === "function"));
-check("成就共 25 项（v4.11 删僵尸守房、加烫手山芋）", LD.ACHIEVEMENTS.length === 25, LD.ACHIEVEMENTS.length);
-check("称号共 25 个且 id 合法", LD.TITLES.length === 25 && LD.TITLES.every(t => t.id === t.id.trim() && t.ach));
+check("成就共 31 项（v4.12 加娱乐模式批次六个）", LD.ACHIEVEMENTS.length === 31, LD.ACHIEVEMENTS.length);
+check("称号共 31 个且 id 合法", LD.TITLES.length === 31 && LD.TITLES.every(t => t.id === t.id.trim() && t.ach));
 check("新成就：热身达人 / 清道夫", LD.ACHIEVEMENTS.some(a => a.id === "warmup_win") && LD.ACHIEVEMENTS.some(a => a.id === "zombie_50"));
 
 console.log("=== 2. BOSS 技能注册 ===");

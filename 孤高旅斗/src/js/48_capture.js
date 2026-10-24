@@ -3,7 +3,8 @@
  * ============================================================
  *  两队（红 0 / 蓝 1）抢据点：
  *    - 每局随机 3~5 座，大点（B）恒定在地图正中，小点撒在外围
- *    - 站进圈里读条占领，人越多越快；双方都在圈里则僵持（进度冻结）
+ *    - 站进圈里读条占领，人越多越快（v4.12 起线性叠加：2 人 ×2 / 3 人 ×3）
+ *    - 多队同抢一个点按净值结算（2 红 1 蓝 = 1 红的速度）；人数相等则僵持冻结
  *    - 空点 5 秒占下，抢敌方已占的点要两倍时间（10 秒）
  *    - 占领后每秒产分，大点权重 2、小点 1，先到 need 分获胜
  *    - 占领时据点中心升起炮塔（数值同塔防防御塔、射程 = 据点半径）；
@@ -299,7 +300,7 @@
     const C = LD.CAPTURE || {};
     const st = this.capture;
     if (!st || st.done) return;
-    const rate = C.capRate || 0.20, stack = C.capStack || 0.45;
+    const rate = C.capRate || 0.20, stack = C.stackMul != null ? C.stackMul : 1.0;
     const smax = C.stackMax || 3, decay = C.decay || 0.16;
     const contest = C.contestMul || 2.0;
 
@@ -345,12 +346,12 @@
         }
       }
 
-      /* 双方都在圈里 → 僵持，谁也不推进 */
-      if (c0 > 0 && c1 > 0) continue;
-
-      if (c0 > 0 || c1 > 0) {
-        const t = c0 > 0 ? 0 : 1;
-        const n = Math.min(smax, c0 > 0 ? c0 : c1);
+      /* v4.12 净值争夺：两队在圈里的人两两抵消，只有净多出来的那部分人在推进占领。
+       * 例：2 红 1 蓝 → 按 1 个红队的人在抢；1v1 / 2v2 → 净值 0，冻结并回落。 */
+      const net = c0 - c1;
+      if (net !== 0) {
+        const t = net > 0 ? 0 : 1;
+        const n = Math.min(smax, Math.abs(net));
         if (p.owner === t) {
           /* 己方已经占着：把对方残留的进度退回去 */
           p.prog = Math.max(0, p.prog - decay * dt);
@@ -359,6 +360,7 @@
           if (p.by !== t) { p.by = t; p.prog = 0; }
           /* 抢敌方已占的据点耗时 ×contest（×2 → 速度减半） */
           const mode = p.owner >= 0 ? 1 / contest : 1;
+          /* 人数倍率：stack = 1.0 → 2 人 ×2 / 3 人 ×3（线性叠加） */
           p.prog += rate * mode * (1 + stack * (n - 1)) * dt;
           if (p.prog >= 1) {
             p.prog = 0; p.by = -1; p.owner = t; p.flash = 0.7;
@@ -369,11 +371,12 @@
             this.captureSetTurret(p, t);
           }
         }
-      } else {
-        /* 圈里没人：读条进度缓慢回落 */
+      } else if (c0 === 0) {
+        /* 圈里没人：已积累的进度缓慢回落 */
         p.prog = Math.max(0, p.prog - decay * dt);
         if (p.prog <= 0.001) { p.prog = 0; p.by = -1; }
       }
+      /* net === 0 且 c0 > 0：双方人数相等 → 僵持，进度原地冻结（不推进也不回落） */
     }
 
     this.updateCaptureTurrets(dt);
@@ -474,6 +477,10 @@
     pts.forEach(p => {
       const col = p.owner >= 0 ? colOf(p.owner) : C_NEU;
       const contested = p.c0 > 0 && p.c1 > 0;
+      /* v4.12 净值：把场内人数对比直接写出来，玩家一眼看得出谁在推进 */
+      const netTxt = contested && p.c0 !== p.c1
+        ? (p.c0 > p.c1 ? "红" : "蓝") + Math.max(p.c0, p.c1) + ":" + Math.min(p.c0, p.c1) + " "
+        : "";
       const tur = this.captureTurretOf(p);
       ctx.save();
 
@@ -540,7 +547,7 @@
       if (contested) {
         ctx.font = "bold 15px system-ui,'Microsoft YaHei',sans-serif";
         ctx.fillStyle = "#fde68a";
-        ctx.fillText("争夺中", p.x, p.y + (tur ? 118 : (p.w > 1 ? 48 : 26)));
+        ctx.fillText(netTxt + (netTxt ? "推进" : "僵持"), p.x, p.y + (tur ? 118 : (p.w > 1 ? 48 : 26)));
       }
       ctx.restore();
     });

@@ -55,8 +55,9 @@ console.log("=== 1. 模式与参数 ===");
   check("接手减速 2 秒、降到 50%", C.slowT === 2.0 && C.slowMul === 0.5, C.slowT + "s / " + C.slowMul);
   check("减速后提速到 120%", C.boostMul === 1.2, C.boostMul);
   check("引信 30 秒", C.fuse === 30, C.fuse);
-  check("爆炸：持有者 -75、范围 -50", C.holderDmg === 75 && C.splashDmg === 50,
-    C.holderDmg + " / " + C.splashDmg);
+  check("持有者伤害 = 25 + 存活数 × 25", C.holderBase === 25 && C.holderPerAlive === 25,
+    C.holderBase + " + n×" + C.holderPerAlive);
+  check("余波伤害固定 50（不随人数变化）", C.splashDmg === 50, C.splashDmg);
   check("成就含「甩锅高手」", LD.ACHIEVEMENTS.some(a => a.id === "hotpotato_win"));
   check("称号含「甩锅高手」", LD.TITLES.some(t => t.ach === "hotpotato_win"));
 }
@@ -148,11 +149,65 @@ console.log("\n=== 7. 爆炸：持有者 75 / 范围 50 / 重新抽人 ===");
   const h0 = h.hp, n0 = near.hp, f0 = far.hp;
   st.fuse = 0.005;
   step(1);
-  check("引信烧完即爆炸", h.hp === Math.max(0, h0 - 75), h0 + " → " + h.hp);
+  check("引信烧完即爆炸（4 人存活 → 持有者 -125）", h.hp === Math.max(0, h0 - 125), h0 + " → " + h.hp);
   check("范围内其他人 -50", near.hp === Math.max(0, n0 - 50), n0 + " → " + near.hp);
   check("范围外的人不受影响", far.hp === f0, f0 + " → " + far.hp);
   check("爆炸后重新抽人", st.phase === "warn" && !!st.tgt, st.phase);
   check("爆炸后进入新一轮", st.round >= 2, st.round);
+}
+
+console.log("\n=== 7b. v4.12 引信逐轮递减（30 → 25 → 20 → 15 固定）===");
+{
+  const C = LD.HOTPOTATO;
+  check("配置：每轮 −5 秒、下限 15 秒", C.fuseStep === 5 && C.fuseMin === 15,
+    C.fuseStep + " / " + C.fuseMin);
+
+  const hs = setupHot(4);
+  const st = B.potato;
+  check("第 1 轮引信 30 秒", st.round === 1 && st.fuse === 30, st.round + " → " + st.fuse);
+
+  /* 每轮直接把引信烧到爆炸，看下一轮抽到的引信值 */
+  const seq = [];
+  for (let r = 0; r < 4; r++) {
+    giveTo(hs[0]);
+    st.holder.maxHp = 99999; st.holder.hp = 99999;   // 别炸死，保证能继续抽人
+    st.fuse = 0.005;
+    step(1);
+    seq.push(st.fuse);
+  }
+  check("第 2 轮 25 秒", seq[0] === 25, seq[0]);
+  check("第 3 轮 20 秒", seq[1] === 20, seq[1]);
+  check("第 4 轮 15 秒", seq[2] === 15, seq[2]);
+  check("第 5 轮仍 15 秒（触底固定）", seq[3] === 15, seq[3]);
+}
+
+console.log("\n=== 7c. v4.12 持有者伤害随存活人数（25 + n×25）===");
+{
+  /** 让 n 人局炸一次，返回持有者实际掉的血 */
+  const dmgOf = (n) => {
+    const hs = setupHot(n);
+    const st = giveTo(hs[0]);
+    const h = hs[0];
+    h.maxHp = 99999; h.hp = 99999;
+    st.fuse = 0.005;
+    step(1);
+    return 99999 - h.hp;
+  };
+  const d2 = dmgOf(2), d4 = dmgOf(4), d6 = dmgOf(6);
+  check("2 人存活 → -75", d2 === 75, d2);
+  check("4 人存活 → -125", d4 === 125, d4);
+  check("6 人存活 → -175", d6 === 175, d6);
+
+  /* 余波固定：5 人局里贴着的人仍然只吃 50 */
+  const hs = setupHot(5);
+  const st = giveTo(hs[0]);
+  const h = hs[0], near = hs[1];
+  h.maxHp = 99999; h.hp = 99999;
+  near.maxHp = 99999; near.hp = 99999;
+  near.x = h.x + 40; near.y = h.y;
+  st.fuse = 0.005;
+  step(1);
+  check("余波不随人数变化（5 人局仍是 -50）", 99999 - near.hp === 50, 99999 - near.hp);
 }
 
 console.log("\n=== 8. 禁用普攻 / 技能 / 大招 ===");

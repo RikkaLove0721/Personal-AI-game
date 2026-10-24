@@ -262,6 +262,22 @@
   }
 
   /* ---------------- 单人对决房间 ---------------- */
+  /* v4.12 模式分组：战斗模式 / 娱乐模式各占一行。
+   * 娱乐模式（碰碰车、烫手山芋 + 本批六个新玩法）单独成组，
+   * 否则它们会被淹没在一长排战斗模式里，而这批玩法的定位本来就完全不同。 */
+  function ruleBarHtml(sel, exclude, attr, disabled) {
+    const attrName = attr || "rule";
+    return [["战斗模式", "combat"], ["娱乐模式", "casual"]].map(pair => {
+      const list = (LD.rulesBy ? LD.rulesBy(pair[1]) : []).filter(r => !exclude || exclude.indexOf(r.id) < 0);
+      if (!list.length) return "";
+      return '<div class="sub" style="margin:2px 0 4px">' + pair[0] + '</div>' +
+        '<div class="rulebar">' + list.map(r =>
+          '<button class="rule' + (sel === r.id ? " sel" : "") + '" data-' + attrName + '="' + r.id + '"' +
+          (disabled ? " disabled" : "") + ' title="' + r.desc + '"><b>' + r.icon + " " + r.name + '</b></button>').join("") +
+        '</div>';
+    }).join("");
+  }
+
   UI.renderRoom = function () {
     const host = document.getElementById("roomBody");
     if (!host) return;
@@ -271,9 +287,7 @@
       room.bots.push({ level: "normal", loadout: LD.AI.randomLoadout(), look: botLook() });
       if (room.myTeam < 0) room.myTeam = 0;
     }
-    const netRules = LD.RULES.filter(r => r.id !== "relay");   // 车轮战仅本地面板
-    const ruleBar = '<div class="rulebar">' + netRules.map(r =>
-      '<button class="rule' + (room.rule === r.id ? " sel" : "") + '" data-rule="' + r.id + '" title="' + r.desc + '"><b>' + r.icon + " " + r.name + '</b></button>').join("") + '</div>';
+    const ruleBar = ruleBarHtml(room.rule, ["relay"]);   // 车轮战仅本地面板
     const modsBar = '<div class="sub" style="margin:2px 0 6px">规则修饰符（可多选叠加）</div>' + modsBarHtml(room.mods);
     const matchBar = settingBtnsHtml(room, "local")
       + modalHtml("timeModal", "对局时间", matchBarHtml(room.matchT, "local"))
@@ -501,10 +515,9 @@
     /* 占点 / 护送也要给每个座位落到红蓝（否则开局前 R.teams 是空的） */
     if (R.rule === "team" || netTwo) players.forEach((p, i) => netTeamOf(players, i));
 
-    const netRules = LD.RULES.filter(r => r.id !== "relay" && r.id !== "tower");   // 车轮战 / 塔防仅本地面板
-    const ruleBar = '<div class="rulebar">' + netRules.map(r =>
-      '<button class="rule' + (R.rule === r.id ? " sel" : "") + '"' + (isHost ? ' data-nrule="' + r.id + '"' : " disabled") +
-      ' title="' + r.desc + '"><b>' + r.icon + " " + r.name + '</b></button>').join("") + '</div>';
+    /* v4.12 分组排布；车轮战 / 塔防仅本地面板。
+     * 非房主时整排按钮 disabled（保留分组标题，房主选了什么一眼看得出来）。 */
+    const ruleBar = ruleBarHtml(R.rule, ["relay", "tower"], "nrule", !isHost);
 
     const cards = players.map((p, i) => cardHtml(i, null, {
       kind: p.mine ? "me" : "player", name: p.name, look: p.look,

@@ -8,7 +8,9 @@
  *    - 熬过 slowT 后速度变成 boostMul（比别人快），用来追人甩锅
  *    - 碰到别人就把山芋甩给他，对方同样吃 slowT 秒减速
  *    - 从山芋落到第一个人手上开始 fuse 秒倒计时，到点爆炸：
- *      持有者 -holderDmg，爆炸小范围内其他人 -splashDmg
+ *      持有者 -(holderBase + 存活人数 × holderPerAlive)，小范围内其他人 -splashDmg
+ *    - v4.12 引信逐轮加速：第 1 轮 fuse 秒，此后每个新山芋 −fuseStep 秒
+ *      （30 → 25 → 20 → 15），降到 fuseMin 后固定在该值
  *    - 炸完重新抽人、重新计时，循环；血空的人出局，最后一个站着的赢
  *
  *  实现要点：
@@ -32,6 +34,24 @@
   /* 山芋挂在头顶的高度 */
   const RIDE_Y = 62;
 
+  /* v4.12 本轮引信时长：第 1 轮 fuse 秒，之后每轮 −fuseStep，下限 fuseMin。
+   * 例：30 → 25 → 20 → 15 → 15 → ...  （round 从 1 起算） */
+  const potatoFuse = function () {
+    const base = C.fuse || 30;
+    const step = C.fuseStep || 0;
+    const min = C.fuseMin != null ? C.fuseMin : base;
+    const r = Math.max(1, (B.potato && B.potato.round) || 1);
+    return Math.max(min, base - step * (r - 1));
+  };
+
+  /* v4.12 持有者伤害：base + 场上存活人数 × per。
+   * 人越多炸得越疼，逼玩家别磨到最后——只剩两个人时是 75，满员 6 人是 175。 */
+  const holderDmgOf = function () {
+    let alive = 0;
+    for (const f of B.fighters) if (f.kind === "hero" && !f.dead && !f.bench) alive++;
+    return (C.holderBase || 25) + alive * (C.holderPerAlive || 25);
+  };
+
   /* ==========================================================
    *  开局
    * ========================================================== */
@@ -44,7 +64,7 @@
       holder: null,
       holdT: 0,
       t: C.warn || 3.0,
-      fuse: C.fuse || 30,
+      fuse: 0,             // 真正的值在 potatoPickTarget 里按轮次写入
       boomT: 0,
       x: this.world.w / 2,
       y: this.world.h / 2,
@@ -64,6 +84,7 @@
     st.round++;
     st.phase = "warn";
     st.t = C.warn || 3.0;
+    st.fuse = potatoFuse();            // v4.12 本轮引信（逐轮变短，下限 fuseMin）
     st.tgt = alive[(Math.random() * alive.length) | 0];
     st.holder = null;
     st.prevHolder = null;
@@ -72,6 +93,8 @@
     st.fx = st.x; st.fy = st.y;
     FX.ring(st.tgt.x, st.tgt.y - 30, 72, "rgba(251,191,36,.85)", 5, 0.5);
     FX.float(st.tgt.x, st.tgt.y - 98, "山芋锁定：" + (st.tgt.name || "?"), C_GOLD, 17);
+    /* 第 2 轮起提示本轮引信变短了，让玩家知道节奏在加快 */
+    if (st.round > 1) FX.float(st.tgt.x, st.tgt.y - 124, "引信 " + st.fuse + "s", C_HOT, 15);
     return st.tgt;
   };
 
@@ -111,7 +134,7 @@
       st.x = st.fx + (tx - st.fx) * k;
       st.y = st.fy + (ty - st.fy) * k;
       if (Math.random() < dt * 30) FX.trail(st.x, st.y, C_GOLD, 3, 0.3);
-      if (st.t <= 1e-6) { st.holder = t; st.holdT = 0; st.phase = "held"; st.fuse = C.fuse || 30; }
+      if (st.t <= 1e-6) { st.holder = t; st.holdT = 0; st.phase = "held"; st.fuse = potatoFuse(); }
       return;
     }
 
@@ -148,7 +171,7 @@
     if (st.fuse <= 0) this.potatoBoom();
   };
 
-  /** 山芋爆炸：持有者吃 holderDmg，范围内其他人吃 splashDmg */
+  /** 山芋爆炸：持有者吃动态伤害（人越多越疼），范围内其他人吃 splashDmg */
   B.potatoBoom = function () {
     const st = this.potato;
     if (!st) return;
@@ -163,8 +186,9 @@
     this.ev.push(["x", bx, by, R]);
     /* 传递不走 B.damage（全员同队会被 sameTeam 挡掉），这里手动结算 */
     if (h && !h.dead) {
-      h.hp = Math.max(0, h.hp - (C.holderDmg || 75));
-      FX.float(h.x, h.y - 100, "烫手了！-" + (C.holderDmg || 75), C_HOT, 19);
+      const dmg = holderDmgOf();
+      h.hp = Math.max(0, h.hp - dmg);
+      FX.float(h.x, h.y - 100, "烫手了！-" + dmg, C_HOT, 19);
       if (h.hp <= 0) this.kill(h, null, { type: "env" });
     }
     this.fighters.forEach(o => {
@@ -225,7 +249,9 @@
     ctx.beginPath(); ctx.arc(x + 5 + jit, y + 2, 2.6, 0, TAU); ctx.fill();
     ctx.beginPath(); ctx.arc(x + 1 + jit, y - 7, 1.8, 0, TAU); ctx.fill();
     /* 引信 + 火花：颜色随剩余时间越来越红 */
-    const k = clamp(1 - (st.fuse == null ? 30 : st.fuse) / (C.fuse || 30), 0, 1);
+    /* 按「本轮引信满值」归一化，短引信也能烧到最红 */
+    const full = potatoFuse();
+    const k = clamp(1 - (st.fuse == null ? full : st.fuse) / full, 0, 1);
     ctx.strokeStyle = "#7c5c3a"; ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.moveTo(x + 9 + jit, y - 8);

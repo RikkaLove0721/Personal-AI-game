@@ -1,6 +1,7 @@
 # 临时文件与备份
 temp/
 .agents/
+.workbuddy/
 *.log
 
 # 分发包
