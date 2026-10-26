@@ -30,14 +30,28 @@ if [ -z "$PY" ]; then
 fi
 
 if [ "$DAEMON" = "1" ]; then
-  nohup "$PY" server.py --server --port "$PORT" >> server.log 2>&1 &
+  # --strict-port：端口被占就报错退出，不顺延到 8124。
+  # 公网部署下顺延等于「换了地址但没人知道」，外面打到的还是旧进程。
+  nohup "$PY" server.py --server --port "$PORT" --strict-port >> server.log 2>&1 &
   echo $! > server.pid
   sleep 1
   if kill -0 "$(cat server.pid)" 2>/dev/null; then
     echo "已后台启动（PID $(cat server.pid)）"
     echo "  日志：tail -f server.log"
     echo "  停止：./stop.sh"
-    echo "  游戏：http://<本机IP或域名>:$PORT/"
+    # 端口被占时 server.py 会自动顺延到 8124/8125…，而这里以前只打印请求的端口，
+    # 于是「日志说 8123，实际在 8124」，外面访问 8123 打到的还是旧进程 ——
+    # 这个坑排查了很久。从日志里把真实端口读出来。
+    REAL=$(grep -o 'localhost:[0-9]*' server.log 2>/dev/null | tail -1 | cut -d: -f2)
+    [ -z "$REAL" ] && REAL="$PORT"
+    if [ "$REAL" != "$PORT" ]; then
+      echo ""
+      echo "  ⚠️  端口 $PORT 已被占用，实际监听的是 $REAL"
+      echo "     对外地址要改成 :$REAL，否则访问 $PORT 打到的还是旧进程。"
+      echo "     多半是上一个实例没被杀干净：pkill -f 'server.py --server' 再重启。"
+      echo ""
+    fi
+    echo "  游戏：http://<本机IP或域名>:$REAL/"
   else
     echo "[错误] 启动失败，最近日志：" >&2
     tail -20 server.log >&2

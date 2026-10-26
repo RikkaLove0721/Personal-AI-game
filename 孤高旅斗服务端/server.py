@@ -506,7 +506,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path == "/status":
             # 顺带体检：远程也能一眼看出「HTML 引用了 game.js 但文件没上传」这种状态
             body = json.dumps({
-                "rooms": len(HUB.rooms), "ok": True, "ver": "v4.24",
+                "rooms": len(HUB.rooms), "ok": True, "ver": "v4.25",
                 "game_js": os.path.exists(resource_path("game.js")),
                 "assets": os.path.isdir(os.path.join(app_dir(), "assets")),
             }, ensure_ascii=False).encode("utf-8")
@@ -746,13 +746,27 @@ def log(msg):
             pass
 
 
-def start_server(port):
-    for attempt in range(12):
+def start_server(port, strict=False):
+    """绑定端口。
+
+    strict=True 时不顺延：端口被占就直接报错退出。
+    公网服务器必须这样 —— 对外地址是固定的 :8123，一旦静默顺延到 8124，
+    外面访问 8123 打到的还是上一个没杀干净的旧进程（页面看着正常、代码是旧的），
+    这种「假活」比直接报错难查一百倍。桌面启动器仍然允许顺延（开第二个实例用）。
+    """
+    for attempt in range(1 if strict else 12):
         try:
             httpd = ThreadingServer(("0.0.0.0", port), Handler)
             threading.Thread(target=httpd.serve_forever, daemon=True).start()
             return httpd, port
         except OSError:
+            if strict:
+                log("")
+                log("  ✗ 端口 %d 已经被占用 —— 多半是上一个实例没杀干净。" % port)
+                log("    旧进程还在对外服务旧代码，页面看着正常但功能是旧的。")
+                log("    先清理再启动：pkill -f 'server.py --server'")
+                log("")
+                raise SystemExit(1)
             log("[提示] 端口 %d 被占用，改用 %d …" % (port, port + 1))
             port += 1
     raise SystemExit("[错误] 连续 12 个端口都被占用，无法启动服务器。")
@@ -919,6 +933,7 @@ def main():
         except (IndexError, ValueError):
             port = BASE_PORT
     server_only = "--server" in args
+    strict_port = "--strict-port" in args
     if not server_only and os.name != "nt":
         # Linux / macOS 没有 pywebview 桌面壳（也不该开窗口），自动退化为纯服务器模式，
         # 免得在 VPS 上跑出「No module named webview」
@@ -972,7 +987,7 @@ def main():
         log("      请用 dist/web/ 里的整套（孤高旅斗.html + game.js + assets/ + music/）覆盖。")
         log("")
 
-    httpd, port = start_server(port)
+    httpd, port = start_server(port, strict=strict_port)
     print_banner(port)
     # 自动 pull 的部署里没人会记得重启；这里自己盯着源文件（打包成 exe 时没有源文件，跳过）
     if server_only and not getattr(sys, "frozen", False):
