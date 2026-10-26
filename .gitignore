@@ -4,6 +4,9 @@ temp/
 .workbuddy/
 *.log
 
+# 部署令牌（含机密，绝不入库）
+deploy.token
+
 # 分发包
 *.zip
 

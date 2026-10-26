@@ -18,6 +18,7 @@
 import base64
 import gzip
 import hashlib
+import hmac
 import http.server
 import io
 import json
@@ -25,6 +26,7 @@ import os
 import random
 import socket
 import socketserver
+import subprocess
 import struct
 import tempfile
 import sys
@@ -151,6 +153,44 @@ def music_dir_path():
     dev = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                        os.pardir, os.pardir, "dist", "music")
     return dev
+
+
+def deploy_token():
+    """Webhook 令牌：环境变量 LD_DEPLOY_TOKEN 优先，其次 server.py 旁边的 deploy.token。
+
+    两个都没有 = 关闭 /deploy（返回 404），不会意外开出一个公网可触发的部署口。
+    """
+    tok = (os.environ.get("LD_DEPLOY_TOKEN") or "").strip()
+    if tok:
+        return tok
+    try:
+        with io.open(os.path.join(app_dir(), "deploy.token"), encoding="utf-8") as f:
+            return f.read().strip()
+    except OSError:
+        return ""
+
+
+def run_deploy(root):
+    """后台执行 git pull。不重启进程 ——
+
+    内容类文件（html / game.js / assets）每次请求都从磁盘现读，pull 完立刻生效；
+    server.py 自己变了则由 watch_reload 自动 index 重启。所以这里只管拉代码。
+    """
+    log("  ⬇️  webhook 触发部署：git pull --ff-only")
+    try:
+        r = subprocess.run(["git", "-C", root, "pull", "--ff-only"],
+                           capture_output=True, text=True, timeout=180)
+        out = ((r.stdout or "") + (r.stderr or "")).strip()
+        for line in out.splitlines()[:20]:
+            log("     " + line)
+        try:
+            with io.open(os.path.join(root, "deploy.log"), "a", encoding="utf-8") as f:
+                f.write("[%s] rc=%d\n%s\n\n" % (time.strftime("%Y-%m-%d %H:%M:%S"), r.returncode, out))
+        except OSError:
+            pass
+        log("  ✅  部署完成（rc=%d）" % r.returncode)
+    except Exception as e:              # noqa: BLE001
+        log("  ⚠️  部署失败：%s" % e)
 
 
 def profile_path():
@@ -500,6 +540,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
             name = os.path.basename(unquote(path[len("/music/"):]))   # 解 URL 编码 + 只取文件名防目录穿越
             self.serve_file(resource_path(os.path.join("music", name)), mime_of(name), immutable=True)
             return
+        if path == "/deploy":
+            # 只做连通性自检：浏览器打开能返回 ready 就说明 GitHub 也能打进来
+            tok = deploy_token()
+            if not tok:
+                self._json(404, {"ok": False, "msg": "deploy 未启用（没有配置 token）"})
+            else:
+                self._json(200, {"ok": True, "deploy": "ready"})
+            return
         if path == "/api/profile":
             self.handle_profile_get()
             return
@@ -599,6 +647,41 @@ class Handler(http.server.BaseHTTPRequestHandler):
         fp = os.path.join(app_dir(), "assets", *parts)
         self.serve_file(fp, mime_of(fp), immutable=True)
 
+    def _json(self, code, obj):
+        body = json.dumps(obj, ensure_ascii=False).encode("utf-8")
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def handle_deploy(self):
+        """GitHub webhook 接收端。
+
+        必须是「立刻回 202、后台再干活」：GitHub 只等 10 秒，
+        而 git pull 遇到大文件可能磨蹭，超时会被记成 delivery failed。
+        """
+        tok = deploy_token()
+        if not tok:
+            self._json(404, {"ok": False, "msg": "deploy 未启用（没有配置 token）"})
+            return
+        from urllib.parse import parse_qs, urlparse
+        q = parse_qs(urlparse(self.path).query)
+        got = (q.get("token") or [""])[0] or self.headers.get("X-Deploy-Token") or ""
+        # 先把 body 读干净，否则 keep-alive 连接上残留的数据会串到下一个请求
+        try:
+            n = int(self.headers.get("Content-Length") or 0)
+            if 0 < n:
+                self.rfile.read(min(n, 4 * 1024 * 1024))
+        except Exception:               # noqa: BLE001
+            pass
+        if not hmac.compare_digest(got, tok):
+            self._json(403, {"ok": False, "msg": "token 不对"})
+            return
+        threading.Thread(target=run_deploy, args=(app_dir(),), daemon=True).start()
+        self._json(202, {"ok": True, "msg": "已受理，后台执行 git pull"})
+
     def handle_profile_get(self):
         # 存档文件放在 exe 旁边（开发态放在 py 脚本旁边），端口漂移也不丢档
         self.serve_file(profile_path(), "application/json; charset=utf-8")
@@ -647,8 +730,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.close_connection = True
 
     def do_POST(self):
-        # 目前唯一的 POST 用途：本机窗口模式保存玩家存档（?app=1 页面会调用）
         path = self.path.split("?")[0]
+        # GitHub webhook：/deploy?token=xxx
+        if path == "/deploy":
+            self.handle_deploy()
+            return
+        # 另一个 POST 用途：本机窗口模式保存玩家存档（?app=1 页面会调用）
         if path != "/api/profile":
             self.send_response(404)
             self.send_header("Content-Length", "0")

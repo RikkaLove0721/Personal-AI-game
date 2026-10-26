@@ -108,6 +108,44 @@ nohup 的日志照常，不需要任何守护进程。
 > 所以升级到 v4.25 的那一次，仍然必须手动 `./stop.sh && ./start.sh -d` 或跑一次
 > `./update.sh`。从那之后，push 完等两秒就自动生效。
 
+## GitHub Webhook 自动部署
+
+如果想让「push 完立刻生效」而不是等定时任务，用服务端内置的 `/deploy`。
+
+**1. 服务器上配一个令牌**（随便一串，别用弱口令）：
+
+```bash
+cd /opt/gugaolvdou
+echo "换成你自己的随机串" > deploy.token
+./stop.sh && ./start.sh -d          # 重启后 /deploy 才生效
+curl http://127.0.0.1:8123/deploy   # 应返回 {"ok":true,"deploy":"ready"}
+```
+
+令牌也可以走环境变量 `LD_DEPLOY_TOKEN`，优先级高于 `deploy.token`。
+**两个都没有时 `/deploy` 返回 404** —— 默认关闭，不会意外开出一个公网可触发的部署口。
+
+**2. GitHub → Settings → Webhooks → Add webhook**
+
+| 字段 | 填什么 |
+|---|---|
+| Payload URL | `http://你的服务器IP:8123/deploy?token=刚才那串` |
+| Content type | `application/json` |
+| Which events | Just the `push` event |
+| Active | ✅ |
+
+**3. 验证**：push 一次，在 webhook 的 Deliveries 里应该看到 `202`（不是 200 也没关系），
+响应体是 `{"ok":true,"msg":"已受理，后台执行 git pull"}`。
+服务器上 `tail -f server.log` 能看到 `⬇️ webhook 触发部署`，`deploy.log` 里有 git 输出。
+
+**为什么必须回 202 再干活**：GitHub 只等 10 秒，超时记为 delivery failed。
+所以接收端立刻返回 202，`git pull` 放到后台线程跑 —— 慢也慢不到 GitHub 头上。
+
+**拉完为什么不重启**：html / game.js / assets 都是每次请求现读磁盘，pull 完立刻生效；
+只有 `server.py` 自己变了才需要重启，而 v4.25 起它会自动重载。所以这里只管拉代码。
+
+> 不想在公网留一个能触发部署的入口？那就别用 webhook，改用上面的
+> crontab + `update.sh`（纯拉取，服务器不监听任何部署接口）。
+
 ## 更新游戏版本
 
 ```bash
