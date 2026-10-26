@@ -19,6 +19,7 @@ import base64
 import gzip
 import hashlib
 import http.server
+import io
 import json
 import os
 import random
@@ -850,6 +851,65 @@ def open_browser_app(url):
         return False
 
 
+def watch_reload(script):
+    """盯着 server.py，被换掉就原地重启自己。
+
+    线上部署是「GitHub 自动 pull」：只更新文件，没人会记得去重启进程。
+    而 HTML 是每次请求现读磁盘的，所以「换了页面不重启」看着完全像更新成功 ——
+    但路由是进程启动时定死的，新页面要 /game.js /assets/，老进程没有，
+    于是全 404、页面永远转圈（v4.24 就是这么翻的车）。
+
+    这里每 2 秒比一次 mtime + 大小，变了就用 execv 原地换掉进程：
+    PID 不变、nohup 的日志重定向不变，start.sh -d 那套不用改。
+    换之前先编译一遍新文件，语法有错就宁可继续跑旧的 ——
+    自动重启最怕把「能用的旧版」换成「起不来的新版」。
+    """
+    if not script or not os.path.isfile(script):
+        return
+    try:
+        st = os.stat(script)
+    except OSError:
+        return
+    sig = (st.st_mtime_ns, st.st_size)
+    missed = 0
+    while True:
+        time.sleep(2.0)
+        try:
+            st = os.stat(script)
+        except OSError:
+            continue
+        cur = (st.st_mtime_ns, st.st_size)
+        if cur == sig:
+            continue
+        sig = cur
+        if missed >= 3:                 # 连换三次都起不来就别再试了，省得反复重启
+            log("  ⚠️  server.py 反复变化但重启无效，已停止自动重载（请手动重启）")
+            return
+        try:
+            # 只在内存里编译一遍，不落 .pyc：
+            # py_compile 写 cfile=os.devnull 在 Windows 上会报
+            # "nul is a non-regular file"（这坑在真机上踩过）。
+            with io.open(script, encoding="utf-8") as f:
+                compile(f.read(), script, "exec")
+        except Exception as e:          # noqa: BLE001
+            missed += 1
+            log("  ⚠️  server.py 有更新但语法没通过，继续跑旧版本：%s" % e)
+            continue
+        if os.name != "posix":
+            # 只有 Linux/macOS 的 execv 是「原地换掉进程镜像」：PID 不变、端口不释放、
+            # nohup 的日志重定向继续有效。Windows 上 execv 会把当前进程弄没，
+            # 反而把能跑的旧版也搞挂 —— 所以那边只提示，不自动重启。
+            log("  ℹ️  server.py 已更新；当前系统不支持原地重启，请手动 ./stop.sh && ./start.sh -d")
+            continue
+        log("  🔄  检测到 server.py 更新，正在原地重启…")
+        try:
+            sys.stdout.flush()
+            os.execv(sys.executable, [sys.executable, script] + sys.argv[1:])
+        except Exception as e:          # noqa: BLE001
+            log("  ⚠️  自动重启失败：%s（请手动 ./stop.sh && ./start.sh -d）" % e)
+            return
+
+
 def main():
     args = sys.argv[1:]
     port = BASE_PORT
@@ -914,6 +974,14 @@ def main():
 
     httpd, port = start_server(port)
     print_banner(port)
+    # 自动 pull 的部署里没人会记得重启；这里自己盯着源文件（打包成 exe 时没有源文件，跳过）
+    if server_only and not getattr(sys, "frozen", False):
+        try:
+            threading.Thread(target=watch_reload,
+                             args=(os.path.abspath(__file__),), daemon=True).start()
+            log("  👀  已开启自动重载：server.py 被更新（git pull）后会自动重启")
+        except Exception:               # noqa: BLE001
+            pass
     url = "http://localhost:%d/?app=1" % port    # app=1: 本机窗口模式，存档走服务器文件
 
     def keepalive():
@@ -966,3 +1034,5 @@ def _run():
 
 if __name__ == "__main__":
     sys.exit(_run())
+
+#

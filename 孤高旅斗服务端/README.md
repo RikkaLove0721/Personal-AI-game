@@ -75,6 +75,39 @@ base64 素材**（BGM 7.7MB + 图片 3.5MB），代码只有 1.1MB。浏览器�
 > 因为 `file://` 下浏览器不允许读取外部图层（canvas 会判定跨域）。
 > 两份产物由同一个 `build.py` 生成，只是加不加 `--web`。
 
+## 自动更新（GitHub → 服务器）
+
+很多人是这样做的：服务器上一个定时任务 `git pull`，代码一 push 就同步过去。
+**但只 pull 是不够的** —— pull 只换文件，不会重启进程，而路由是进程启动时定下的。
+表现就是新版页面要 `game.js` / `assets/`，老进程没有这两条路由 → 全 404 →
+页面永远停在加载中。
+
+三种做法，任选一种（推荐 B）：
+
+**A. 手动**：`./stop.sh && ./start.sh -d`
+
+**B. 用 `update.sh`**（拉代码 + 重启 + 自检一次做完）
+
+```bash
+./update.sh                 # 更新并重启
+./update.sh --port 9000     # 指定端口
+./update.sh --pull-only     # 只拉代码
+```
+
+接进 crontab 就是全自动（每 5 分钟看一眼，没更新会秒退，不产生日志噪音）：
+
+```bash
+*/5 * * * * cd /opt/gugaolvdou && ./update.sh >> update.log 2>&1
+```
+
+**C. 交给 server.py 自己**：v4.25 起它会每 2 秒看一眼自己的 mtime，
+发现被 `git pull` 换掉了就 `execv` 原地重启（Linux/macOS）。PID 不变、
+nohup 的日志照常，不需要任何守护进程。
+
+> ⚠️ **自举问题**：这段逻辑写在 server.py 里，而**正在跑的旧进程里没有它**。
+> 所以升级到 v4.25 的那一次，仍然必须手动 `./stop.sh && ./start.sh -d` 或跑一次
+> `./update.sh`。从那之后，push 完等两秒就自动生效。
+
 ## 更新游戏版本
 
 ```bash
