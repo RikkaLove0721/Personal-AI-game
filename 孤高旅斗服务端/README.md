@@ -24,7 +24,7 @@
 scp -r 孤高旅斗服务端 user@你的服务器IP:/opt/gugaolvdou
 
 # 2. 给启动脚本执行权限并启动
-cd /opt/gugaolvdou && chmod +x start.sh stop.sh
+cd /opt/gugaolvdou && chmod +x *.sh
 ./start.sh                # 前台运行，先试跑；确认没问题后 Ctrl+C 换下面的方式
 
 # 3. 后台常驻（推荐）
