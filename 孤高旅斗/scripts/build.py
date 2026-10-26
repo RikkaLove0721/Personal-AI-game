@@ -37,15 +37,38 @@ AUTHOR = "RikkaLove0721"
 # --web：素材不内嵌，写成独立文件（HTML 里只留相对路径）
 WEB = False
 WEB_ASSETS = []          # [(相对路径, 源文件绝对路径)]，构建末尾统一拷到 dist/web/
+WEB_GEN = []             # [(相对路径, 字节)]，--web 现场转码出来的文件（webp）
 
 
-def asset(src_path, mime, rel, dst=None):
+def asset(src_path, mime, rel, dst=None, opt=None):
     """返回「给浏览器用的素材地址」。
 
     单文件模式：base64 data URI（自包含，file:// 也能用）
     --web 模式：相对路径 + 登记待拷贝，由浏览器按需加载并长期缓存
+
+    opt = {"maxw": 1600, "q": 86} —— 只在 --web 生效：超过 maxw 就先等比缩小，
+    再重编码成 webp。单文件 / exe 那份保持原图不动。
     """
     if WEB:
+        if opt:
+            try:
+                from PIL import Image
+                im = Image.open(src_path)
+                im = im.convert("RGBA" if im.mode in ("RGBA", "LA", "P") else "RGB")
+                if opt.get("maxw") and im.width > opt["maxw"]:
+                    h2 = max(1, round(im.height * opt["maxw"] / im.width))
+                    im = im.resize((opt["maxw"], h2), Image.LANCZOS)
+                buf = io.BytesIO()
+                im.save(buf, "WEBP", quality=opt.get("q", 86), method=6)
+                data = buf.getvalue()
+                new_rel = rel.rsplit(".", 1)[0] + ".webp"
+                WEB_GEN.append((new_rel, data))
+                print("  压缩     %-26s %6.0f KB -> %5.0f KB  (%dx%d webp)"
+                      % (os.path.basename(src_path), os.path.getsize(src_path) / 1024.0,
+                         len(data) / 1024.0, im.width, im.height))
+                return new_rel + "?v=__STAMP__"
+            except Exception as e:      # noqa: BLE001  —— 没有 PIL 就退回原图
+                print("  压缩失败 %s（%s），改用原图" % (os.path.basename(src_path), e))
         WEB_ASSETS.append((dst or rel, src_path))
         # 指纹占位：末尾统一换成这次构建的短哈希。
         # 服务器对静态资源回 immutable + 一年缓存，没有指纹的话
@@ -166,7 +189,10 @@ def main():
     bg_path = os.path.join(ROOT, "assets", "menu-bg.jpg")
     bg_uri = ""
     if os.path.exists(bg_path):
-        bg_uri = asset(bg_path, "image/jpeg", "assets/menu-bg.jpg")
+        # 这张只当 CSS 底图用（上面压着 74%~94% 的暗色渐变，全屏环境底还要再糊 26px），
+        # 720px 宽已经完全看不出差别 —— 原图 1440x808 / 211KB 纯属浪费流量。
+        bg_uri = asset(bg_path, "image/jpeg", "assets/menu-bg.jpg",
+                       opt={"maxw": 720, "q": 74})
     menu_js = ("/* 主菜单立绘由 build.py 自动内嵌，请勿手改 */\nwindow.LD_MENU_BG=%s;\n"
                % json.dumps(bg_uri))
 
@@ -197,7 +223,10 @@ def main():
                   % (name, info["px"][0], info["px"][1], len(uri) / 1024.0))
         bg_p = os.path.join(char_dir, "bg.jpg")
         if os.path.exists(bg_p):
-            uri = asset(bg_p, "image/jpeg", "assets/char/bg.jpg")
+            # 这是菜单里真正画出来的场景底（canvas 逻辑尺寸 1600x1000），
+            # 原图 2560 宽超过了画布，缩到 1600 无损可见 —— 503KB -> 约 200KB。
+            uri = asset(bg_p, "image/jpeg", "assets/char/bg.jpg",
+                        opt={"maxw": 1600, "q": 86})
             layers["bg"] = {"uv": [0, 0, 1, 1], "px": [0, 0], "src": uri}
             char_kb += len(uri) / 1024.0
             print("  人物图层 %-6s %6.1f KB" % ("bg", len(uri) / 1024.0))
@@ -251,6 +280,9 @@ def main():
             h.update(rel.encode("utf-8"))
             with open(src, "rb") as f:
                 h.update(f.read())
+        for rel, data in WEB_GEN:
+            h.update(rel.encode("utf-8"))
+            h.update(data)
         stamp = h.hexdigest()[:10]
         bundle = bundle.replace("__STAMP__", stamp)
         html = html.replace("__STAMP__", stamp)
@@ -286,6 +318,12 @@ def main():
             os.makedirs(os.path.dirname(dst), exist_ok=True)
             shutil.copyfile(src, dst)
             copied += os.path.getsize(dst)
+        for rel, data in WEB_GEN:
+            dst = os.path.join(out_dir, *rel.split("/"))
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            with open(dst, "wb") as f:
+                f.write(data)
+            copied += len(data)
         # 平衡配置跟着一起放（网页版由 /balance.js 路由取）
         shutil.copyfile(BALANCE, os.path.join(out_dir, "balance.js"))
         js_kb = os.path.getsize(os.path.join(out_dir, "game.js")) / 1024.0

@@ -503,7 +503,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.handle_profile_get()
             return
         if path == "/status":
-            body = json.dumps({"rooms": len(HUB.rooms), "ok": True}).encode("utf-8")
+            # 顺带体检：远程也能一眼看出「HTML 引用了 game.js 但文件没上传」这种状态
+            body = json.dumps({
+                "rooms": len(HUB.rooms), "ok": True, "ver": "v4.24",
+                "game_js": os.path.exists(resource_path("game.js")),
+                "assets": os.path.isdir(os.path.join(app_dir(), "assets")),
+            }, ensure_ascii=False).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))
@@ -873,6 +878,39 @@ def main():
     except Exception:      # noqa: BLE001
         _src = "未知"
     log("  🎮  游戏文件：%s（%s）" % (os.path.basename(html), _src))
+
+    # ---- 自带体检：这套文件到底能不能跑起来 ----
+    # v4.24 之前只检查「HTML 在不在」。可 HTML 拆成骨架之后还必须有 game.js 和
+    # assets/，少一样页面就是白屏 —— 而且 404 不会报错，只在浏览器里静默失败，
+    # 表现成「一直加载」。启动时把结论打到日志里，免得再去翻浏览器控制台。
+    try:
+        with open(html, "r", encoding="utf-8", errors="ignore") as f:
+            head = f.read(65536)
+    except OSError:
+        head = ""
+    needs_js = "game.js" in head
+    problems = []
+    if needs_js:
+        if not os.path.exists(resource_path("game.js")):
+            problems.append("缺少 game.js")
+        if not os.path.isdir(os.path.join(app_dir(), "assets")):
+            problems.append("缺少 assets/ 目录")
+        n_music = 0
+        for d in (music_dir_path(), os.path.join(app_dir(), "music")):
+            if os.path.isdir(d):
+                n_music = max(n_music, len([x for x in os.listdir(d) if x.lower().endswith((".m4a", ".mp3", ".ogg", ".opus"))]))
+        def has(word):
+            return any(word in p for p in problems)
+        log("  📦  网页版（拆分）  game.js %s · assets/ %s · BGM %d 首"
+            % ("✗" if has("game.js") else "✓", "✗" if has("assets") else "✓", n_music))
+    else:
+        log("  📦  单文件版（素材已内嵌，无需 assets/）")
+    if problems:
+        log("")
+        log("  ⚠️  这套文件跑不起来：%s" % "、".join(problems))
+        log("      HTML 是新版（引用了 game.js），但配套文件没一起放上来。")
+        log("      请用 dist/web/ 里的整套（孤高旅斗.html + game.js + assets/ + music/）覆盖。")
+        log("")
 
     httpd, port = start_server(port)
     print_banner(port)
