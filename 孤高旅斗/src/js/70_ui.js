@@ -38,16 +38,25 @@
    * ========================================================== */
   const OVS = ["ovMenu", "ovSolo", "ovLevels", "ovDuelSetup", "ovMulti", "ovJoin", "ovWait", "ovSkin", "ovSkill", "ovLoad", "ovHelp", "ovEnd", "ovPause", "ovPerk", "ovArmy", "ovTower", "ovAch"];
   const UI = LD.UI = { screen: "ovMenu" };
+  /* v4.15：主菜单点下去的位移反馈要留一点时间给人看见，切页延后 130ms；
+     这段时间里如果别处已经切了页面（脚本连续点击 / 快捷键），必须让路 */
+  let pendingGo = 0;
 
   UI.show = function (id) {
+    if (pendingGo) { clearTimeout(pendingGo); pendingGo = 0; }
     OVS.forEach(o => { const e = $(o); if (e) e.classList.toggle("hide", o !== id); });
     this.screen = id;
+    /* v4.14：只有主菜单需要跑动态立绘，进别的页面立刻停（省电，也不和战斗抢帧） */
+    if (LD.Live2D) LD.Live2D.setActive(id === "ovMenu");
     $("hud").classList.toggle("on", id === "game");
     UI.coins();
     if (id === "ovSkin") UI.renderSkin();
     if (id === "ovSkill") UI.renderSkill();
     if (id === "ovLevels") UI.renderLevels();
-    if (id === "ovSolo") UI.renderGauntletCard();
+    if (id === "ovSolo") { UI.renderGauntletCard(); UI.renderTutCard(); }
+    if (id === "ovMenu") UI.renderMenuEntry();
+    /* 不在战斗里就别留着教程提示条（退出 / 结算 / 回菜单都要收） */
+    if (id !== "game" && B.tutHideTip) B.tutHideTip();
     if (id === "ovLoad") UI.renderLoad();
     if (id === "ovHelp") UI.renderHelp();
     if (id === "ovSolo") UI.renderGauntletCard();
@@ -168,10 +177,12 @@
   }
 
   UI.refreshSkinPv = function () { V.heroPreview($("skinPv"), P.look(), 0); };
-  /* v2.8：贴图（data URL）是异步解码的，首帧预览可能还没图；加载完成后若商店开着就重画一遍 */
+  /* v2.8：贴图（data URL）是异步解码的，首帧预览可能还没图；加载完成后若商店开着就重画大预览。
+   * v4.13e：每张小预览现在由 heroPreview 自己登记补画（贴图到位即重画那张画布），
+   * 所以这里不再整页 renderSkin —— 一页几十张贴图会触发几十次 DOM 重建。 */
   V.onSkinImgLoad = function () {
     const ov = $("ovSkin");
-    if (ov && !ov.classList.contains("hide")) UI.renderSkin();
+    if (ov && !ov.classList.contains("hide")) UI.refreshSkinPv();
   };
 
   /* ==========================================================
@@ -197,7 +208,8 @@
 
     const wrap = $("skillShop");
     wrap.innerHTML = "";
-    LD.skillsBy(kind).forEach(s => {
+    /* v4.13f：商店只卖常规招式，躲猫猫专用的 hide_stealth / hide_catch 不在这里出现 */
+    LD.shopSkillsBy(kind).forEach(s => {
       const owned = P.ownsSkill(s.id), slot = P.findSlotOf(s.id);
       const d = document.createElement("div");
       d.className = "item" + (owned ? " own" : "") + (slot ? " eq" : "") + (!owned && P.d.coins >= s.price ? " can" : "");
@@ -282,9 +294,32 @@
         '：<b>' + (s ? s.icon + " " + s.name : "（空）") + '</b>' +
         (s ? '<span style="color:#8fa0c8;font-size:11.5px"> — ' + s.desc + '</span>' : '') + '</div>';
     }).join("");
-    const prog = LD.LEVELS.map(l =>
-      '<div style="margin:5px 0">' + l.icon + ' ' + l.name + '：普通 ' + (P.cleared(l.id, "normal") ? "✅" : "⬜") +
-      ' / 困难 ' + (P.cleared(l.id, "hard") ? "✅" : "⬜") + '</div>').join("");
+    /* v4.13d：「关卡进度」从这一页挪走，换成战绩统计（杀敌 / 胜场 / 场数 / 各模式胜场）。
+     * 关卡进度本来在「关卡」页就有完整的 ✅ 列表，这里再抄一遍纯属占地方。 */
+    const st = P.d.stats || {};
+    const wins = st.wins || 0, losses = st.losses || 0;
+    const totalPlay = wins + losses;
+    const rate = totalPlay > 0 ? Math.round(wins / totalPlay * 100) : 0;
+    const cell = (k, v, sub) =>
+      '<div style="background:#0d1728;border:1px solid rgba(120,160,255,.18);border-radius:9px;padding:8px 10px">' +
+      '<div style="font-size:11.5px;color:#8fa0c8">' + k + '</div>' +
+      '<div style="font-size:19px;font-weight:600;color:#e8eeff;line-height:1.3">' + v + '</div>' +
+      (sub ? '<div style="font-size:11px;color:#6b7fa3">' + sub + '</div>' : '') + '</div>';
+    const statGrid = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(92px,1fr));gap:8px;margin:6px 0 4px">' +
+      cell("杀敌数", st.kills || 0) +
+      cell("总胜场", wins) +
+      cell("总场数", totalPlay, losses ? "负 " + losses : "") +
+      cell("胜率", rate + "%") +
+      '</div>';
+    const mw = st.modeWins || {};
+    const modeKeys = Object.keys(mw).filter(k => mw[k] > 0).sort((a, b) => mw[b] - mw[a]);
+    const modeChips = modeKeys.map(k => {
+      const info = LD.ruleInfo(k) || {};
+      return '<span style="display:inline-block;margin:3px 6px 3px 0;padding:3px 9px;border-radius:999px;' +
+        'background:#101c30;border:1px solid rgba(120,160,255,.2);font-size:12px;color:#cfdcf5">' +
+        (info.icon || "") + " " + (info.name || k) +
+        ' <b style="color:#fcd34d">' + mw[k] + '</b></span>';
+    }).join("");
     $("loadInfo").innerHTML =
       '<div style="font-size:13px;color:#7fe6f7;letter-spacing:1px;margin-bottom:6px">名字</div>' +
       '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">' +
@@ -294,7 +329,9 @@
       '<span style="font-size:11px;color:#8fa0c8">最多 8 个字，战斗与联机中都会显示</span></div>' +
       '<div style="font-size:13px;color:#7fe6f7;letter-spacing:1px">外观</div>' + rows +
       '<div style="font-size:13px;color:#7fe6f7;letter-spacing:1px;margin-top:12px">技能</div>' + sk +
-      '<div style="font-size:13px;color:#7fe6f7;letter-spacing:1px;margin-top:12px">关卡进度</div>' + prog;
+      '<div style="font-size:13px;color:#7fe6f7;letter-spacing:1px;margin-top:12px">战绩</div>' + statGrid +
+      (modeKeys.length ? modeChips
+        : '<div style="color:#6b7fa3;font-size:12px;margin-top:2px">还没有赢过任何模式——去打一局吧</div>');
     const nameBtn = $("btnRename");
     if (nameBtn) nameBtn.onclick = () => {
       const r = P.rename($("nameInput").value);
@@ -611,6 +648,11 @@
   UI.updateModeHud = function () {
     const el = $("modeHud");
     if (!el) return;
+    /* 教程里这块位置被顶部的步骤提示条占着：模式名 + 倒计时（开局那句
+     * 「准备中…」）就贴在 top:48px，正好压在提示条的第二、三行上，
+     * 两段字叠成一团。教程本来也没有回合计时 / 专属读数可显示，直接让位。 */
+    if (B.mode === "tutorial") { el.style.display = "none"; return; }
+    el.style.display = "";
     /* v2.7 丧尸危机 / v3.2 世界末日：战斗界面上的商店按钮只在局内显示，方便手机端随时买装备 */
     const shopBtn = $("btnShopHud");
     if (shopBtn) {
@@ -873,6 +915,79 @@
   };
   UI.resetRunPerks = function () { UI.runPerks = []; };
 
+  /* ==========================================================
+   *  v4.19 新手教程
+   * ========================================================== */
+
+  /* 没通关教程时，主菜单第一行是「新手教程」；通关后换回「单人游戏」。
+   * 只改**文案**，点击行为按存档实时判断 —— 不然通关当帧按钮还指回教程。 */
+  UI.renderMenuEntry = function () {
+    const lab = $("mSoloLab");
+    if (lab) lab.textContent = P.d.tutDone ? "单人游戏" : "新手教程";
+  };
+
+  /* 单人菜单里的教程卡片：文案跟着「是否已通关」变，奖励也照实写 */
+  UI.renderTutCard = function () {
+    const d = $("tutDesc");
+    if (!d) return;
+    const T = LD.TUT || {};
+    d.textContent = P.d.tutDone
+      ? "七步走完操作提示，再次通关 " + (T.againReward || 5) + " 金币"
+      : "七步走完操作提示：移动 / 攻击 / 技能 / 交互 / 开车 / 道具箱 / 大招，首次通关 " + (T.firstReward || 50) + " 金币";
+  };
+
+  UI.startTutorial = function () {
+    const T = LD.TUT || {};
+    const w = T.world || { w: 2600, h: 900, pt: 100 };
+    const y = (w.pt || 0) + (w.h - (w.pt || 0)) * 0.5;
+    /* 开局身上只有默认的近战普攻：技能与大招留到对应的那一步现场发 */
+    const hero = B.mkHero(0, {
+      x: w.w * (T.spawnU == null ? 0.07 : T.spawnU), y: y,
+      look: P.look(), name: P.displayName(), energy: 0,
+      loadout: { basic: "slash", skill1: null, skill2: null, ult: null }
+    });
+    hero.ctrl = ctrl;
+    /* 木桩必须在 setup 之前建好：score / wScore 这些数组按人数定长，
+     * 打到一半再往 fighters 里 push 会把它们挤歪。 */
+    const dummies = (T.steps || []).filter(s2 => s2.dummy != null)
+      .map((s2, i) => LD.Tutorial.mkDummy(i + 1, s2.dummy, y));
+    /* 地图不生成任何道具：counts 全 0，只留地面与边界。
+     * 教学要的是「眼前只有这一件事」，随机冒出的补给箱会打断节奏。 */
+    const zero = { solid: 0, breakable: 0, pushable: 0, fence: 0, bush: 0, water: 0,
+                   barrel: 0, car: 0, tire: 0, supply: 0, barricade: 0, room: 0,
+                   locker: 0, mud: 0, blower: 0 };
+    const mapCfg = LD.mapCfg({ preset: "arena", seed: 20261026, ground: "grass", patches: [], counts: zero });
+
+    B.dailyRun = false;
+    B.gauntletRun = false;
+    UI.resetRunPerks();
+    $("endSub").dataset.daily = "";
+    B.setup({ mode: "tutorial", rule: "tutorial", world: w, mapCfg: mapCfg,
+      fighters: [hero].concat(dummies),
+      theme: { top: "#0d1a2b", bottom: "#050a12", grid: "rgba(125,211,252,.22)", moon: "rgba(147,197,253,.16)" } });
+    B.onEnd = null;
+    $("btnAgain").style.display = "";
+    $("btnEndRoom").style.display = "none";
+    UI.enterGame();
+  };
+
+  UI.endTutorial = function () {
+    const T = LD.TUT || {};
+    const first = !P.d.tutDone;
+    const reward = first ? (T.firstReward == null ? 50 : T.firstReward)
+                         : (T.againReward == null ? 5 : T.againReward);
+    P.d.tutDone = true;
+    P.addCoins(reward);
+    Audio2.win();
+    $("btnEndRoom").style.display = "none";
+    $("endTitle").textContent = "新手教程完成";
+    $("endSub").innerHTML = "已经走完：移动 / 攻击 / 技能 / 交互 / 开车 / 道具箱 / 大招<br>" +
+      "获得 <b style='color:#ffd98a'><i class='coin'></i> " + reward + " 金币</b>" +
+      (first ? "<br><span style='color:#7ff0c4'>首次通关，之后可以在「单人游戏」里再挑战</span>" : "") +
+      "<br><span style='color:#8fa0c8'>当前金币：" + P.d.coins + "</span>";
+    UI.show("ovEnd");
+  };
+
   UI.startDragon = function (level, diff, opts) {
     opts = opts || {};
     B.dailyRun = false;
@@ -961,6 +1076,10 @@
     const reward = win ? (DuelSetup.level === "hard" ? 12 : 6) : 0;
     /* v2.7：战绩与特殊模式计数终于记进档案（以前人机对战是不统计的） */
     P.battleEnd(win, "duel", B.rule);       // 热身 / 车轮 / 追猎等特殊模式的计数都在 battleEnd 里统一处理
+    /* v4.13d：杀敌数以前只在闯关里记，人机对战打完不统计，
+     * 「我的配装」里的杀敌数几乎是空的。这里补上。 */
+    const meKill = B.hero(B.mySide == null ? 0 : B.mySide);
+    if (meKill) P.stat("kills", meKill.kills || 0);
     /* v2.7 乱斗热身：结算显示计分板 */
     let scoreTxt = "";
     if (B.rule === "tower") {
@@ -995,6 +1114,9 @@
   UI.endNet = function (win) {
     $("btnEndRoom").style.display = "";
     P.battleEnd(win, "net", B.rule);
+    /* v4.13d：联机也记杀敌数 */
+    const meKillN = B.hero(B.mySide == null ? 0 : B.mySide);
+    if (meKillN) P.stat("kills", meKillN.kills || 0);
     const champ = B.fighters[B.matchWinner];
     const champName = champ ? (champ.name || "玩家" + (B.matchWinner + 1)) : "未知";
     if (win) { Audio2.win(); $("endTitle").textContent = "你赢了！"; }
@@ -1011,6 +1133,7 @@
       if (LD.Net.isHost) UI.netHostStart();
       else { LD.Net.toPeer({ t: "again" }); UI.toast("已请求再战，等待房主开始…"); }
     }
+    else if (B.mode === "tutorial") UI.startTutorial();
     else if (B.mode === "dragon") UI.startDragon(B.level, B.diff);
     else if (UI.room && UI.room.bots.length) UI.roomStart();
     else UI.startDuel();
@@ -1378,12 +1501,29 @@
     this.bindKeys();
     this.bindNet();
 
-    const go = (id, fn) => { const e = $(id); if (e) e.onclick = () => { Audio2.init(); Audio2.ui(); fn(); }; };
+    /* 主菜单选项是纯文字（没有方框），点下去要有「被按住」的位移反馈：
+     * 先播放 0.26 秒的向左拖拽动画，130ms 后切页 —— 肉眼就是抬手即入。
+     * 其它按钮（房间 / 商店 / 暂停…）维持原样，立刻响应。 */
+    const go = (id, fn) => {
+      const e = $(id); if (!e) return;
+      e.onclick = () => {
+        Audio2.init();
+        Audio2.ui();
+        /* 是不是主菜单那几条纯文字选项，看当下的类（别在绑定时就定死） */
+        const isMenu = !!(e.classList && e.classList.contains("mItem"));
+        if (!isMenu) { fn(); return; }
+        e.classList.remove("hit");
+        void e.offsetWidth;                       /* 强制重排，动画能连续重放 */
+        e.classList.add("hit");
+        if (pendingGo) clearTimeout(pendingGo);
+        pendingGo = setTimeout(() => { pendingGo = 0; fn(); }, 130);
+      };
+    };
     document.querySelectorAll("[data-back]").forEach(e => {
       e.onclick = () => { Audio2.ui(); UI.show(UI.backTo && UI.backTo !== e.dataset.back ? UI.backTo : e.dataset.back); UI.backTo = null; };
     });
 
-    go("mSolo", () => UI.show("ovSolo"));
+    go("mSolo", () => { if (!P.d.tutDone) { UI.startTutorial(); return; } UI.show("ovSolo"); });
     go("mMulti", () => { UI.show("ovMulti"); LD.Net.connect(); });
     go("mHelp", () => UI.show("ovHelp"));
     go("mSkin", () => UI.show("ovSkin"));
@@ -1393,6 +1533,7 @@
     go("sDrag", () => UI.show("ovLevels"));
     go("sDuel", () => { UI.show("ovDuelSetup"); UI.renderRoom(); });
     go("sGauntlet", () => UI.startGauntlet());
+    go("sTut", () => UI.startTutorial());
     go("mAch", () => { UI.renderAch(); UI.show("ovAch"); });
 
     go("btnCreate", () => { LD.Net.connect(); LD.Net.create(); });
@@ -1443,9 +1584,15 @@
       const paint = () => {
         bgmBtn.textContent = LD.BGM.label();
         bgmBtn.classList.toggle("off", !LD.BGM.isOn());
+        /* v4.13g：鼠标悬停能看到「一共几首 / 现在播的是哪首」 */
+        const now = LD.BGM.now();
+        bgmBtn.title = "背景音乐开关（" + LD.BGM.count() + " 首随机播放"
+          + (now ? "，正在播：" + now : "") + "）";
       };
       paint();
       bgmBtn.onclick = () => { LD.BGM.toggle(); paint(); };
+      /* 换歌 / 开关之后把提示刷一遍（BGM 内部会在换歌时回调这里） */
+      LD.BGM.onChange = paint;
     }
 
     $("codeInput").addEventListener("input", e => { e.target.value = e.target.value.replace(/\D/g, "").slice(0, 4); });
@@ -1455,4 +1602,56 @@
     $("hudVer").textContent = "v" + LD.VERSION;
     this.show("ovMenu");
   };
+
+  /* ---------------------------------------------------------- 统一点击反馈
+   *
+   * v4.17：UI 全部改成透明玻璃之后，按钮没有厚实的底色可以「变深」，
+   * 手指按下去几乎没有反馈感。这里用事件委托给所有可点元素挂一个 .press：
+   * 按下即下沉 1.5px + 提亮，松开 110ms 后自己弹回。
+   *
+   * 为什么用委托而不是逐个绑 onclick：房间界面的角色卡每帧都在重建，
+   * 逐个绑会不断产生新闭包；而且 .onclick 已经被业务逻辑占满了。
+   * 为什么不用 CSS :active：移动端为了支持滚动，:active 经常来不及触发就取消。
+   */
+  const PRESS_SEL = "button,.btn,.card,.pcard,.rule,.lv,.mapchip,.tchip,.setbtn,"
+    + ".back,.tab,.item,.mclose,.bgmSwitch,.tbtn,.ski,.addritem .btn";
+  let pressEl = null, pressTimer = 0;
+
+  function pressDown(ev) {
+    const t = ev && ev.target;
+    const el = (t && t.closest) ? t.closest(PRESS_SEL) : null;
+    if (!el || el.disabled || el.classList.contains("lock")) return;
+    if (pressEl && pressEl !== el) {
+      /* 上一个还没弹回就又按下别处：立刻把它的高光收掉，别留两个按下的 */
+      pressEl.classList.remove("press");
+      clearTimeout(pressTimer);
+      pressTimer = 0;
+    }
+    pressEl = el;
+    el.classList.add("press");
+  }
+
+  function pressUp() {
+    if (!pressEl) return;
+    clearTimeout(pressTimer);
+    /* 110ms 后才摘：这段时间留给下沉动画，摘早了动画会被打断、看起来像没反应 */
+    pressTimer = setTimeout(() => {
+      if (pressEl) pressEl.classList.remove("press");
+      pressEl = null;
+      pressTimer = 0;
+    }, 110);
+  }
+
+  function bindPressFeedback() {
+    if (typeof document === "undefined" || !document.addEventListener) return;
+    document.addEventListener("pointerdown", pressDown, true);
+    document.addEventListener("pointerup", pressUp, true);
+    document.addEventListener("pointercancel", pressUp, true);
+    /* 鼠标移出去也要松手，否则按着拖走会一直保持按下态 */
+    document.addEventListener("pointerleave", pressUp, true);
+  }
+
+  UI.pressDown = pressDown;
+  UI.pressUp = pressUp;
+  bindPressFeedback();
 })(window.LD = window.LD || {});

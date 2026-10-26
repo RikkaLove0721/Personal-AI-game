@@ -287,7 +287,9 @@
         if (cands.length) {
           /* v3.4：被察觉的躲藏者（柜子 / 草丛）仇恨更高 —— 等效距离打折，优先去找 */
           const hate = o => (o.hideProp || o.bushHide) ? ((LD.INTERACT && LD.INTERACT.spotAggro) || 0.55) : 1;
-          const dd = o => ((o.x - f.x) * (o.x - f.x) + (o.y - f.y) * (o.y - f.y)) * hate(o);
+          /* v4.13 渡江战役：对「快要靠岸的人」仇恨更高（等效距离打折，越近岸折得越狠） */
+          const riv = (B.rule === "river" && B.riverAggro) ? o => B.riverAggro(o) : () => 1;
+          const dd = o => ((o.x - f.x) * (o.x - f.x) + (o.y - f.y) * (o.y - f.y)) * hate(o) * riv(o);
           let near = cands[0], fat = cands[0];
           cands.forEach(o => { if (dd(o) < dd(near)) near = o; if (o.hp > fat.hp) fat = o; });
           b.foe = Math.random() < 0.5 ? near : fat;
@@ -372,6 +374,11 @@
      *  单独放在这里 return：通用「在车上」分支会因为「坐太久 / 没油 / 卡住」主动下车，
      *  本模式车就是命，下了车就只能挨撞。
      * ========================================================== */
+    /* ==========================================================
+     *  v4.13 渡江战役：还没登岸时人机只管过江（抢船 → 上岸 → 升旗）。
+     *  riverThink 返回 true 表示本帧已接管；返回 false（已解锁）就落回下面的通用战斗逻辑。
+     * ========================================================== */
+    if (B.rule === "river" && B.riverThink && B.riverThink(f, dt, ctrl)) return;
     if (B.rule === "bump" && B.bump) {
       const A = B.bumpArena ? B.bumpArena() : null;
       const cars = ((B.terrain && B.terrain.props) || []).filter(o => o.bump && !o.dead);
@@ -1029,9 +1036,10 @@
    *  配装随机 / 自定义
    * ========================================================== */
   AI.randomLoadout = function () {
-    const basics = LD.skillsBy("basic").map(s => s.id);
-    const skills = LD.skillsBy("skill").filter(s => !s.noAI).map(s => s.id);
-    const ults = LD.skillsBy("ult").filter(s => !s.noAI).map(s => s.id);
+    /* v4.13f：hideOnly（躲猫猫专用的隐匿 / 抓人）不能进人机配装 */
+    const basics = LD.skillsBy("basic").filter(s => !s.noAI && !s.hideOnly).map(s => s.id);
+    const skills = LD.skillsBy("skill").filter(s => !s.noAI && !s.hideOnly).map(s => s.id);
+    const ults = LD.skillsBy("ult").filter(s => !s.noAI && !s.hideOnly).map(s => s.id);
     const pick = arr => arr[Math.floor(Math.random() * arr.length)];
     let s1 = pick(skills), s2 = pick(skills);
     let guard = 0;
@@ -1039,7 +1047,7 @@
     return { basic: pick(basics), skill1: s1, skill2: s2, ult: pick(ults) };
   };
 
-  AI.ALL_BASIC = () => LD.skillsBy("basic").map(s => s.id);
-  AI.ALL_SKILL = () => LD.skillsBy("skill").map(s => s.id);
-  AI.ALL_ULT = () => LD.skillsBy("ult").map(s => s.id);
+  AI.ALL_BASIC = () => LD.skillsBy("basic").filter(s => !s.hideOnly).map(s => s.id);
+  AI.ALL_SKILL = () => LD.skillsBy("skill").filter(s => !s.hideOnly).map(s => s.id);
+  AI.ALL_ULT = () => LD.skillsBy("ult").filter(s => !s.hideOnly).map(s => s.id);
 })(window.LD = window.LD || {});

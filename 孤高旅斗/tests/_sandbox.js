@@ -88,7 +88,7 @@ function opts_of() { return _curOpts; }
 function makeSandbox(label, opts) {
   const o = opts || {};
   _curOpts = o;
-  const els = {}, L = {}, raf = [];
+  const els = {}, L = {}, raf = [], imgs = [];
   const on = (t, f) => { (L[t] = L[t] || []).push(f); };
   const sb = {
     console, JSON, Math, Date, isNaN, isFinite, parseInt, parseFloat,
@@ -122,14 +122,31 @@ function makeSandbox(label, opts) {
      * 有的只给 onload，有的干脆不提供），所以做成可关的：
      *   makeSandbox(label, { image: false }) —— 沙箱里不存在 Image，
      *   用于专门断言「无 Image 时静默降级」的老测试。 */
+    /* imgs：收集所有 new Image() 出来的实例，测试可以手动 im.onload() 模拟「解码完成」。
+     * 选项 imageLoads: true → 一赋 src 就同步触发 onload（模拟「贴图已缓存」）。 */
     Image: (o.image === false) ? undefined : function () {
+      const self = this;
       this.complete = false; this.naturalWidth = 0; this.naturalHeight = 0;
-      this.src = ""; this.onload = null; this.onerror = null;
+      this.onload = null; this.onerror = null;
       this.width = 0; this.height = 0; this.alt = ""; this.className = "";
+      let _src = "";
+      Object.defineProperty(this, "src", {
+        enumerable: true, configurable: true,
+        get() { return _src; },
+        set(v) {
+          _src = v;
+          if (!v) return;
+          imgs.push(self);
+          if (o.imageLoads && self.onload) { self.complete = true; self.onload(); }
+        }
+      });
+      this.src = "";
     }
   };
   sb.window = sb; sb.globalThis = sb; sb.self = sb;
   sb.__L = L;          /* 个别测试（v33）直接取 __L.keydown 触发按键 */
+  /* storage：在脚本执行（boot）之前预置 localStorage，用来模拟「带着存档重新打开游戏」 */
+  if (o.storage) Object.assign(sb.localStorage._d, o.storage);
   vm.createContext(sb);
   /* 与浏览器一致：<script src="balance.js"> 先于主脚本执行（曾因顺序漏测过崩溃） */
   if (o.balance !== false) {
@@ -143,7 +160,7 @@ function makeSandbox(label, opts) {
    *   老测试（v20/v26/v28/smoke…）的 makeSandbox 返回包装对象，写 S.sb.document / S.L / S.raf
    *   新测试（v30 之后）直接 `return sb`，写 sb.document / sb.L
    * 所以把沙箱自身的属性也平铺到返回对象上，两种写法都能取到。 */
-  const ret = { label, sb, els, L, raf, err: null, LD: sb.LD };
+  const ret = { label, sb, els, L, raf, imgs, err: null, LD: sb.LD };
   for (const k of Object.keys(sb)) if (!(k in ret)) ret[k] = sb[k];
   return ret;
 }

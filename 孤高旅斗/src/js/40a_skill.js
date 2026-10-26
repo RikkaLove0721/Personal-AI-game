@@ -465,7 +465,8 @@
       B.spawnProj({
         x: f.x + Math.cos(a) * 28, y: f.y - 26 + Math.sin(a) * 14,
         vx: Math.cos(a) * sk.proj.speed, vy: Math.sin(a) * sk.proj.speed,
-        r: sk.proj.r, dmg: sk.dmg, life: sk.proj.life, owner: f, blind: sk.blind,
+        /* v4.13 失明改成「整体屏幕变黑」（blackout），不再是粪击那种糊一块棕色 */
+        r: sk.proj.r, dmg: sk.dmg, life: sk.proj.life, owner: f, blackout: sk.blackout,
         color: "#22d3ee", core: "#ecfeff", type: "shuriken", kindTag: "skill", trail: true
       });
       FX.burst(f.x + Math.cos(a) * 30, f.y - 26 + Math.sin(a) * 14, 12, ["#67e8f9", "#fff"], { speed: 200, dir: a });

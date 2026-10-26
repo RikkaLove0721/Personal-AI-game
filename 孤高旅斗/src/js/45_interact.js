@@ -183,6 +183,11 @@
     if (f.hideProp) { this.leaveLocker(f, false); return true; }
     if (f.rideCar) { this.exitCar(f, false); return true; }
     if (f.carryMud) { this.throwMud(f); return true; }
+    /* v4.13 模式专属交互（木头人道具包 / 抢椅子落座 / 躲猫猫拾取 / 渡江战役登船）
+     * 优先于通用目标：这些模式里场景道具才是主线，别被路过的补给箱抢走按键。 */
+    if (LD.RULE_INTERACT && LD.RULE_INTERACT[this.rule]) {
+      if (LD.RULE_INTERACT[this.rule].call(this, f)) return true;
+    }
 
     const tgt = this.interactTarget(f);
     if (!tgt) return false;
@@ -218,6 +223,11 @@
     if (this.rule === "tower" && f.activeItem) {
       const it = LD.towerItem(f.activeItem);
       if (it) return it.name;
+    }
+    /* v4.13 模式专属 P 键提示（见 LD.RULE_LABEL 注册表） */
+    if (LD.RULE_LABEL && LD.RULE_LABEL[this.rule]) {
+      const lb = LD.RULE_LABEL[this.rule].call(this, f);
+      if (lb) return lb;
     }
     const t = this.interactTarget(f);
     if (!t) return "";
@@ -433,6 +443,8 @@
     if (c.kind === "crown") return !!B.crown && B.crown === c.tgt && B.crown.phase === "fallen";
     /* v4.12 补给箱：箱子还在场上且没被别人打碎 / 搜走就算活着 */
     if (c.kind === "supply") return !c.tgt.dead && !!B.terrain && B.terrain.props.indexOf(c.tgt) >= 0;
+    /* v4.13 躲猫猫的场上道具：还在场上、没被人拿走就算活着 */
+    if (c.kind === "relic") return !!B.hide && !!B.hide.relic && B.hide.relic === c.tgt && !c.tgt.taken;
     return false;
   }
   function chgPos(c) {
@@ -499,6 +511,8 @@
     else if (c.kind === "station" && this.finishStation) this.finishStation(f, c.tgt, c.t);
     /* v4.12 补给箱：蓄满 = 开箱掉物资 */
     else if (c.kind === "supply") this.finishSupply(f, c.tgt);
+    /* v4.13 躲猫猫：蓄满 = 拿走场上道具（鬼拿到锁人，人拿到定住鬼） */
+    else if (c.kind === "relic" && this.finishRelic) this.finishRelic(f, c.tgt);
     return true;
   };
 
@@ -634,12 +648,22 @@
       }
       if (hasFuel) o._drySaid = false;
 
-      /* 分轴位移 + 障碍碰撞（车体较大，撞墙就停这一轴，保留另一轴滑行） */
+      /* 分轴位移 + 障碍碰撞（车体较大，撞墙就停这一轴，保留另一轴滑行）
+       *
+       * `stuck` 是「**此刻**已经和目标重叠」的兜底：如果车身现在就被别的东西
+       * 占着，这一帧不做碰撞否决，让车能开出去。
+       *
+       * 不加这一条会死锁：blockedAt 只看「新位置是否重叠」，不看「原来就重叠」。
+       * 一旦有东西刷在（或被推到）车身里 —— 比如教程第 7 步的补给箱正好刷在
+       * 玩家停车的那个点上 —— 每一帧都判定重叠 -> 位置回滚、速度清零，
+       * 车就永远动不了，而且**越撞越死**。玩家能做的只有下车走人。
+       * 允许它开出来，代价是这一帧会穿过那个障碍，但那本来就是个不该出现的状态。 */
       const px = o.x, py = o.y;
+      const stuck = T.blockedAt(this.terrain, o, o.x, o.y);
       o.x += o.vx * dt;
-      if (T.blockedAt(this.terrain, o, o.x, o.y)) { o.x = px; o.vx = 0; }
+      if (!stuck && T.blockedAt(this.terrain, o, o.x, o.y)) { o.x = px; o.vx = 0; }
       o.y += o.vy * dt;
-      if (T.blockedAt(this.terrain, o, o.x, o.y)) { o.y = py; o.vy = 0; }
+      if (!stuck && T.blockedAt(this.terrain, o, o.x, o.y)) { o.y = py; o.vy = 0; }
       /* 场地边界 */
       const hw = o.w / 2, hh = o.h / 2;
       o.x = Math.max(hw + 4, Math.min(this.world.w - hw - 4, o.x));

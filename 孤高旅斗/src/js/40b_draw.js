@@ -122,6 +122,8 @@
       if (this.rule === "capture" && this.drawCapture) this.drawCapture(ctx);
       /* v4.8 碰碰车竞技：场外水池 + 擂台警示带 + 车辆耐久条 */
       if (this.rule === "bump" && this.drawBump) this.drawBump(ctx);
+      /* v4.13 渡江战役：左右两岸 / 水面浪花 / 水中小岛 / 右岸旗子（压在人物下层） */
+      if (this.rule === "river" && this.drawRiver) this.drawRiver(ctx);
       /* v4.11 烫手山芋：山芋本体 + 持有者高亮 + 倒计时 */
       if (this.rule === "hotpotato" && this.drawHotPotato) this.drawHotPotato(ctx);
       /* v4.12 娱乐模式批次：各自的场地元素（终点线 / 安全位 / 岩浆格 / 炮台 / 得分区） */
@@ -608,11 +610,16 @@
         const nm = (meF2 && meF2 === f) ? "你 · " + baseNm : baseNm;
         const dot = (f.team != null && f.team >= 0 && !f.isZombie) ? (LD.teamColor ? LD.teamColor(f.team) : (LD.TEAM_COLORS || [])[f.team]) : null;
         const label = ((f.overlord || f.huntRole === "hunter") ? "👑 " : "") + nm;
+        /* v4.13f 躲猫猫：当鬼时不给别人挂名字（用户明确要求「包括显示名称这些」） */
+        const hideTag = this.rule === "hide" && meF2 && meF2.hideRole === "seeker"
+          && f.hideRole === "hider";
         ctx.fillStyle = f.isZombie ? "rgba(163,230,53,.95)" : (dot || (f.side === 0 ? "rgba(159,230,247,.9)" : "rgba(255,170,180,.9)"));
-        ctx.fillText(label, f.x, f.y + 20);
-        if (dot) {
-          const w = ctx.measureText(label).width;
-          ctx.beginPath(); ctx.arc(f.x - w / 2 - 7, f.y + 16, 4, 0, TAU); ctx.fillStyle = dot; ctx.fill();
+        if (!hideTag) {
+          ctx.fillText(label, f.x, f.y + 20);
+          if (dot) {
+            const w = ctx.measureText(label).width;
+            ctx.beginPath(); ctx.arc(f.x - w / 2 - 7, f.y + 16, 4, 0, TAU); ctx.fillStyle = dot; ctx.fill();
+          }
         }
         ctx.restore();
         // 霸主金色光环
@@ -672,6 +679,9 @@
       this.fighters.forEach(f => {
         if (f === meCam || f.dead || f.kind === "minion" || f.bench || f.isClone) return;
         if (this.sameTeam(meCam, f)) return;
+        /* v4.13f 躲猫猫：当鬼时关掉视野外箭头 —— 躲起来的人会在地图边缘亮个红三角，
+         * 等于直接告诉鬼「往那边走」。 */
+        if (this.rule === "hide" && meCam && meCam.hideRole === "seeker" && f.hideRole !== "seeker") return;
         const sx = f.x - (this.cam ? this.cam.x : 0), sy = f.y - (this.cam ? this.cam.y : 0);
         if (sx > 14 && sx < W - 14 && sy > 14 && sy < H - 14) return;
         const cx = clamp(sx, 22, W - 22), cy = clamp(sy, 22, H - 22);
@@ -695,8 +705,25 @@
     /* v3.9.1 停电夜战：全屏黑幕。画在战斗内容与屏幕边缘指示箭头之上、
      * 倒计时与「被糊住了」提示之下——黑幕该盖住场上的人，但不该盖住提示文字。 */
     if (this.drawNight) this.drawNight(ctx, W, H);
+    /* v4.13 渡江战役：顶部补船倒计时 + 油量条。
+     * 必须画在屏幕坐标层——写在世界层会被摄像机滚走，地图一高就完全看不见。 */
+    if (this.rule === "river" && this.drawRiverHud) this.drawRiverHud(ctx, W, H);
     ctx.restore();
     FX.drawFlash(ctx, W, H);
+
+    /* v4.13 整体屏幕变黑（手里剑命中 / 躲猫猫开局的鬼）：
+     * 和粪击那种「糊一块棕色波浪圆」不同——这里就是停电夜战的黑幕，整屏压死。 */
+    const meB = this.hero(this.mySide == null ? 0 : this.mySide);
+    if (meB && meB.blackout > 0 && !meB.dead) {
+      ctx.save();
+      ctx.fillStyle = "rgba(2,4,10," + (0.90 + 0.06 * Math.min(1, meB.blackout)).toFixed(3) + ")";
+      ctx.fillRect(0, 0, W, H);
+      ctx.font = "700 15px system-ui,'Microsoft YaHei',sans-serif";
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillStyle = "#94a3b8";
+      ctx.fillText("眼前一黑… " + meB.blackout.toFixed(1) + "s", W / 2, H * 0.16);
+      ctx.restore();
+    }
 
     // 致盲（粪击命中）：屏幕中央出现巨大的不透明棕色波浪圆，背后完全看不见
     const meF = this.hero(this.mySide == null ? 0 : this.mySide);

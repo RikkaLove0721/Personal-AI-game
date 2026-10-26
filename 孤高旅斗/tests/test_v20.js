@@ -408,8 +408,8 @@ console.log("\n=== 10. 角色卡房间 ===");
  * 11. 三种模式人人可玩 / 界面接线
  * ============================================================ */
 console.log("\n=== 11. 模式接线 ===");
-check("规则表含 22 种模式（v4.12 加娱乐模式批次）", LD.RULES.length === 22 && ["brawl", "team", "overlord", "gifts", "ring", "auction", "doomsday", "relay", "hunt", "warmup", "escort", "capture", "tower", "blackout", "bump", "hotpotato", "statue", "chair", "hide", "lava", "barrage", "slide"].every(id => LD.ruleInfo(id).id === id));
-check("模式分两类：战斗 14 种 / 娱乐 8 种", LD.rulesBy("combat").length === 14 && LD.rulesBy("casual").length === 8,
+check("规则表含 22 种模式（v4.13 加渡江战役）", LD.RULES.length === 22 && ["brawl", "team", "overlord", "gifts", "ring", "auction", "doomsday", "relay", "hunt", "warmup", "escort", "capture", "river", "tower", "blackout", "bump", "hotpotato", "statue", "chair", "hide", "lava", "barrage"].every(id => LD.ruleInfo(id).id === id));
+check("模式分两类：战斗 15 种 / 娱乐 7 种", LD.rulesBy("combat").length === 15 && LD.rulesBy("casual").length === 7,
   LD.rulesBy("combat").length + " / " + LD.rulesBy("casual").length);
 check("碰碰车与山芋归入娱乐模式", LD.ruleInfo("bump").cat === "casual" && LD.ruleInfo("hotpotato").cat === "casual");
 check("阵营配色 4 队", LD.TEAM_COLORS.length === 4 && LD.TEAM_NAMES.length === 4, LD.TEAM_NAMES.join("/"));

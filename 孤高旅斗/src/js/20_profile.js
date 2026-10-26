@@ -24,6 +24,9 @@
       cheat: 0,
       aiLoadout: null,                     // 自定义的电脑对手配装
       bgmOn: true,                         // 背景音乐开关（主菜单右上角可切换）
+      /* v4.19：新手教程是否通关过。没通关时主菜单第一行显示「新手教程」，
+       * 通关后恢复成「单人游戏」，教程挪进单人菜单里（可重复挑战，只给 5 金币）。 */
+      tutDone: false,
       stats: { kills: 0, wins: 0, losses: 0, bossWins: 0, relayWins: 0, huntWins: 0, dailyWins: 0, coinsEarned: 0,
                warmupWins: 0, zombieKills: 0, modeWins: {} },   // v2.6 累计战绩（v2.8 增补 modeWins 各模式胜场）
       ach: {},                             // v2.6 已解锁成就 { id: true }
@@ -48,6 +51,7 @@
       const v = (o.stats && o.stats[pair[1]]) || 0;
       if (v > (mm[pair[0]] || 0)) mm[pair[0]] = v;
     });
+    d.tutDone = !!o.tutDone;
     d.ach = o.ach || {};
     d.title = o.title || "";
     d.daily = o.daily || {};

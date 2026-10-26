@@ -61,6 +61,27 @@
       : Math.min(window.innerWidth / 990, window.innerHeight / 632, 1.4);
     app.style.transform = "scale(" + s + ")";
     app.style.transformOrigin = "center center";
+    /* ---- 窗口比舞台大时，四周要渐变到白色 ---- 
+     *
+     * 舞台是固定 960x600、按比例缩放居中的。窗口一旦最大化到 1920x1080，
+     * 缩放被 1.4 的上限卡住，四周就露出 body 的深蓝渐变 —— 一条很宽的黑框，
+     * 就是用户报的「全屏后背景没有全覆盖」。
+     *
+     * 不能靠「放大到铺满」解决：那要么裁掉 HUD，要么把 960x600 的画布放大
+     * 一倍多、整个游戏糊掉。所以正解是**把四周也交给同一张立绘**（#ambient），
+     * 并且越往屏幕边缘越白 —— 像照片的白边衬纸。
+     *
+     * 判据不能用「缩放比」：1366x768 的机器实际视口只有 1344x670，
+     * 高度几乎占满、左右却各空 160px，比值算出来才 1.06，反而放不进「大窗口」。
+     * 直接量**留白多少像素**最稳：两条边里只要有一条空出 36px 以上就点亮。 */
+    const bw0 = (LD.CONF && LD.CONF.W) || 960;
+    const bh0 = (LD.CONF && LD.CONF.H) || 600;
+    const mx = (window.innerWidth - bw0 * s) / 2;
+    const my = (window.innerHeight - bh0 * s) / 2;
+    const wide = Math.max(mx, my) > 36;
+    document.body.classList.toggle("wide", wide);
+    const amb = document.getElementById("ambient");
+    if (amb) amb.classList.toggle("on", wide);
     document.body.classList.toggle("mobile", mob);
     /* 平板：画面放大得多（≈1.6 倍），不需要手机那套 HUD 反向放大，用 body.pad 抵消掉 */
     document.body.classList.toggle("pad", !!(LD.Touch && LD.Touch.on && LD.Touch.isPad && LD.Touch.isPad()));
@@ -127,8 +148,19 @@
     LD.Profile.load();
     if (LD.Profile.d.aiLoadout) UI.duel.loadout = LD.Profile.d.aiLoadout;
     LD.Profile.syncServer();               // exe 模式：与 profile.json 对账，新者胜
+    /* v4.13e：先把当前穿戴的三张贴图预热起来。解码是异步的，如果等到点开「我的配装」
+     * 才开始解码，第一帧就只能画兜底色——看着像「配装被乱配了一套」。 */
+    try {
+      const lk = LD.Profile.look();
+      LD.View.warmSkin([lk.head && lk.head.img, lk.upper && lk.upper.img, lk.lower && lk.lower.img]);
+    } catch (e) {}
 
     FX.clear();
+    /* v4.14：主菜单动态立绘先就位。UI.init 末尾会 show("ovMenu")，
+     * 那里再把它切到「播放」状态，立绘没解码完就什么都不画（CSS 立绘兜底）。 */
+    try {
+      if (LD.Live2D && LD.Live2D.init) LD.Live2D.init(document.getElementById("menuBg"), window.LD_MENU_BG);
+    } catch (e) {}
     UI.init();
     fit();
     requestAnimationFrame(loop);

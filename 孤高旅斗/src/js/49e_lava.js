@@ -1,13 +1,15 @@
 /* ============================================================
- *  49e_lava.js — v4.12 地板是岩浆
+ *  49e_lava.js — v4.13 地板是岩浆（改版）
  * ============================================================
  *  地砖周期发红：calm（平静）→ warn（预警闪烁，warnT 秒）→ hot（真正致命，
- *  hotT 秒，站上去每秒掉 dps 血）→ gap（间歇，随机消失一个安全台）。
+ *  hotT 秒，站上去每秒掉 dps 血）→ gap（间歇）。
  *
- *  安全落脚点：场上散落一批安全台（家具 / 平台），站在台子上就不算踩到岩浆。
- *  但安全台每轮随机消失一个（直到只剩 padsMin 个），场地越来越挤 ——
- *  后期「抢台子」本身就是最大的冲突来源，而本模式禁用普攻 / 技能 / 大招，
- *  抢不到台子就只能硬吃伤害。
+ *  v4.13 的变化：
+ *    - 地图缩到原尺寸的 70%
+ *    - **取消安全台**：再也不存在「站着就绝对安全」的地方，只能靠走位躲红格
+ *    - 每轮岩浆面积**大幅**增加（ratioStep 0.14，一路涨到 78% 的格子都烧起来）
+ *    - 加入冰面滑壶那套玩家互撞规则（相对速度够快才算撞），击退削弱到 70%：
+ *      后期格子越来越少，抢同一块安全格时可以把人撞出去——这是本模式唯一的「打架」手段
  * ============================================================ */
 (function (LD) {
   "use strict";
@@ -41,56 +43,103 @@
     return { x: g.x0 + (ci + 0.5) * g.tw, y: g.y0 + (ri + 0.5) * g.th, w: g.tw, h: g.th };
   };
 
-  /** 站在安全台上？（安全台是唯一在岩浆期也安全的地方） */
-  B.lavaOnPad = function (x, y) {
-    const st = this.lava;
-    if (!st || !st.pads) return false;
-    for (const p of st.pads) {
-      if (p.dead) continue;
-      if (Math.abs(x - p.x) <= p.w / 2 && Math.abs(y - p.y) <= p.h / 2) return true;
+  /** v4.13 安全台已取消：这一格此刻安全，只看它有没有被点亮 */
+  B.lavaSafeAt = function (x, y, hot) {
+    return !(hot && hot[B.lavaCell.call(this, x, y)]);
+  };
+
+  /**
+   * v4.13d 按**整个身体**判断，而不是只看脚下那一个中心点。
+   * 之前用 lavaCell(f.x, f.y) 做点判定 —— 人站在格子边缘、身体已经压到红格上，
+   * 中心点却还在隔壁安全格里，于是「明明踩在岩浆上却不掉血」。
+   * 现在把角色的包围盒覆盖到的所有格子都算一遍，压到任意一格就算烫到。
+   */
+  B.lavaBodyOn = function (f, set) {
+    if (!f || !set) return false;
+    const g = B.lavaGrid.call(this);
+    const r = f.r || 15;
+    const c0 = clamp(Math.floor((f.x - r - g.x0) / g.tw), 0, g.cols - 1);
+    const c1 = clamp(Math.floor((f.x + r - g.x0) / g.tw), 0, g.cols - 1);
+    const r0 = clamp(Math.floor((f.y - r - g.y0) / g.th), 0, g.rows - 1);
+    const r1 = clamp(Math.floor((f.y + r - g.y0) / g.th), 0, g.rows - 1);
+    for (let ri = r0; ri <= r1; ri++) {
+      for (let ci = c0; ci <= c1; ci++) {
+        if (set[ri * g.cols + ci]) return true;
+      }
     }
     return false;
   };
-  /** 这一格此刻安全吗（安全台 或 没被点亮的格子） */
-  B.lavaSafeAt = function (x, y, hot) {
-    if (B.lavaOnPad.call(this, x, y)) return true;
-    return !(hot && hot[B.lavaCell.call(this, x, y)]);
+
+  /**
+   * v4.13 玩家互撞：沿用冰面滑壶那套规则（相对接近速度够快才算「撞」），
+   * 击退力按 bumpMul（70%）削弱。岩浆模式是位移式移动，f.vx / f.vy 只在击退时才有值，
+   * 所以这里用**上一帧到这一帧的位移**反推速度。
+   */
+  B.lavaBump = function (dt) {
+    const c = C();
+    const alive = this.casualAlive();
+    if (alive.length < 2 || !(dt > 0)) return;
+    const minSpd = c.bumpMinSpd || 80;
+    const kb = (c.bumpKb || 330) * (c.bumpMul || 0.77);
+    const pairCd = c.bumpPairCd || 0.4;
+    const spdOf = (f) => ({
+      vx: (f._lvpx == null ? 0 : (f.x - f._lvpx) / dt),
+      vy: (f._lvpy == null ? 0 : (f.y - f._lvpy) / dt)
+    });
+    for (let i = 0; i < alive.length; i++) {
+      for (let j = i + 1; j < alive.length; j++) {
+        const a = alive[i], b = alive[j];
+        const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1;
+        const touch = a.r + b.r + 4;
+        if (d > touch) continue;
+        const ux = dx / d, uy = dy / d, pen = (touch - d) / 2 + 0.5;
+        if (a.knockLeft <= 0) { a.x -= ux * pen; a.y -= uy * pen; }
+        if (b.knockLeft <= 0) { b.x += ux * pen; b.y += uy * pen; }
+        /* v4.13d 同一对人 0.4 秒内只结算一次：
+         * 之前没有冷却，贴着走的时候命中判定依赖「上一帧位移」这种很脆的量，
+         * 于是同一次接触有时弹一串特效、有时一帧都没触发——手感上就是「撞人有时候没用」。 */
+        a._lavaBumpT = a._lavaBumpT || {};
+        if (a._lavaBumpT[b.side] > 0) continue;
+        const va = spdOf(a), vb = spdOf(b);
+        const close = (va.vx - vb.vx) * ux + (va.vy - vb.vy) * uy;
+        if (close < minSpd) continue;
+        a._lavaBumpT[b.side] = pairCd;
+        b._lavaBumpT = b._lavaBumpT || {};
+        b._lavaBumpT[a.side] = pairCd;
+        if (this.knockDist) {
+          this.knockDist(b, { x: a.x, y: a.y }, kb * clamp(close / 340, 0.6, 1.6), false);
+          this.knockDist(a, { x: b.x, y: b.y }, kb * 0.45 * clamp(close / 340, 0.6, 1.6), false);
+        }
+        FX.ring((a.x + b.x) / 2, (a.y + b.y) / 2 - 20, 34, "rgba(249,115,22,.9)", 4, 0.3);
+        FX.burst((a.x + b.x) / 2, (a.y + b.y) / 2 - 20, 10, [C_HOT, "#fff"], { speed: 220 });
+        FX.float((a.x + b.x) / 2, (a.y + b.y) / 2 - 46, "撞飞！", C_HOT, 14);
+        this.ev.push(["t", (a.x + b.x) / 2, (a.y + b.y) / 2 - 46, "撞飞！", C_HOT]);
+        FX.shake(5);
+      }
+    }
+    alive.forEach(f => {
+      f._lvpx = f.x; f._lvpy = f.y;
+      if (f._lavaBumpT) {
+        Object.keys(f._lavaBumpT).forEach(k => {
+          if (f._lavaBumpT[k] > 0) f._lavaBumpT[k] = Math.max(0, f._lavaBumpT[k] - dt);
+        });
+      }
+    });
   };
 
   B.initLava = function () {
     const c = C(), w = this.world;
     const alive = this.casualAlive();
-    /* 安全台：彼此不重叠，也不压在障碍上 */
-    const props = (this.terrain && this.terrain.props) || [];
-    const pads = [];
-    const PW = c.padW || 96, PH = c.padH || 82;
-    for (let i = 0; i < (c.pads || 8); i++) {
-      let ok = false, px = 0, py = 0;
-      for (let tries = 0; tries < 70 && !ok; tries++) {
-        px = rnd(110, w.w - 110); py = rnd(w.pt + 90, w.h - 90);
-        ok = true;
-        for (const p of pads) if (Math.abs(px - p.x) < PW * 1.5 && Math.abs(py - p.y) < PH * 1.5) { ok = false; break; }
-        if (!ok) continue;
-        for (const o of props) {
-          if (o.dead || !o.blockMove) continue;
-          if (Math.abs(px - o.x) < (o.w || 40) / 2 + PW / 2 && Math.abs(py - o.y) < (o.h || 40) / 2 + PH / 2) { ok = false; break; }
-        }
-      }
-      pads.push({ x: px, y: py, w: PW, h: PH, dead: false, sink: 0 });
-    }
-    /* 开局把人放在安全台附近，先给一个喘息的位置 */
-    const pts = alive.map((f, i) => {
-      const p = pads[i % pads.length];
-      return p ? { x: p.x + rnd(-30, 30), y: p.y + rnd(-24, 24) } : { x: rnd(120, w.w - 120), y: rnd(w.pt + 90, w.h - 90) };
-    });
+    /* v4.13 没有安全台了：开局直接铺开在场地各处 */
+    const pts = alive.map(() => ({ x: rnd(110, w.w - 110), y: rnd(w.pt + 90, w.h - 90) }));
     this.casualPlace(pts, alive);
-    alive.forEach(f => { f.lavaTick = 0; f.lavaAim = null; f.lavaAimT = 0; });
+    alive.forEach(f => { f.lavaTick = 0; f.lavaAim = null; f.lavaAimT = 0; f._lvpx = null; f._lvpy = null; });
 
     this.lava = {
-      phase: "calm", t: 3.2, round: 0, ratio: c.firstRatio || 0.22,
-      hot: null, warn: null, pads: pads
+      phase: "calm", t: 3.2, round: 0, ratio: c.firstRatio || 0.28,
+      hot: null, warn: null
     };
-    FX.float(w.w / 2, w.pt + 40, "地板要烧起来了——站到台子上", C_WARN, 19);
+    FX.float(w.w / 2, w.pt + 40, "地板要烧起来了——躲开红格", C_WARN, 19);
   };
 
   B.updateLava = function (dt) {
@@ -102,10 +151,14 @@
 
     st.t -= dt;
 
+    /* ---- v4.13 玩家互撞（滑壶那套，击退削弱到 70%） ---- */
+    this.lavaBump(dt);
+
     /* ---- 岩浆灼烧（按 0.5 秒结算一次，避免每帧飘字） ---- */
     if (st.phase === "hot" && st.hot) {
       for (const f of alive) {
-        if (B.lavaSafeAt.call(this, f.x, f.y, st.hot)) { f.lavaTick = 0; continue; }
+        /* v4.13d 用身体包围盒判定：贴着格子边缘站也算踩上去 */
+        if (!B.lavaBodyOn.call(this, f, st.hot)) { f.lavaTick = 0; continue; }
         f.lavaTick = (f.lavaTick || 0) + dt;
         if (f.lavaTick < 0.5) continue;
         const dmg = (c.dps || 55) * f.lavaTick;
@@ -120,13 +173,27 @@
     if (st.t > 1e-6) return;
 
     if (st.phase === "calm") {
-      /* 抽一批格子发红（比例逐轮上升） */
-      const n = Math.max(1, Math.round(total * st.ratio));
+      /* v4.13d 岩浆量不再按比例涨，而是**按人数**定：
+       * 安全格 = 存活人数 + safeExtra（默认 1），其余全烧。
+       * 人越少安全格越少，后期一定是「几个人抢最后几块落脚地」。 */
+      const nSafe = clamp(alive.length + (c.safeExtra == null ? 1 : c.safeExtra),
+        c.minSafe || 2, total);
+      const nHot = Math.max(0, total - nSafe);
+      const idx = [];
+      for (let i = 0; i < total; i++) idx.push(i);
+      if (nHot < total) {
+        for (let i = idx.length - 1; i > 0; i--) {
+          const j = (Math.random() * (i + 1)) | 0;
+          const t = idx[i]; idx[i] = idx[j]; idx[j] = t;
+        }
+      }
       const set = {};
-      for (let i = 0; i < n; i++) set[(Math.random() * total) | 0] = 1;
+      for (let i = 0; i < nHot; i++) set[idx[i]] = 1;
       st.warn = set; st.hot = null;
-      st.phase = "warn"; st.t = c.warnT || 1.6;
-      FX.float(this.world.w / 2, this.world.pt + 40, "地板开始发红了！", C_WARN, 19);
+      st.nSafe = total - nHot;
+      st.ratio = total > 0 ? nHot / total : 0;
+      st.phase = "warn"; st.t = c.warnT || 2.0;
+      FX.float(this.world.w / 2, this.world.pt + 40, "地板开始发红了！只剩 " + (total - nHot) + " 块安全地", C_WARN, 19);
       if (LD.Audio && LD.Audio.beep) LD.Audio.beep(520, 0.12, "square", 0.05);
       return;
     }
@@ -140,19 +207,10 @@
     if (st.phase === "hot") {
       st.hot = null;
       st.phase = "gap"; st.t = c.gapT || 1.1;
-      /* 间歇期随机消失一个安全台（保底 padsMin 个），场地越来越挤 */
-      const live = st.pads.filter(p => !p.dead);
-      if (live.length > (c.padsMin || 2)) {
-        const gone = live[(Math.random() * live.length) | 0];
-        gone.dead = true;
-        FX.ring(gone.x, gone.y, 60, "rgba(148,163,184,.9)", 5, 0.45);
-        FX.float(gone.x, gone.y - 40, "塌了！", "#94a3b8", 16);
-      }
       return;
     }
-    /* gap → 下一轮 */
+    /* gap → 下一轮（v4.13d 岩浆量由存活人数决定，这里只推进轮次） */
     st.round++;
-    st.ratio = Math.min(c.ratioMax || 0.5, (c.firstRatio || 0.22) + (c.ratioStep || 0.05) * st.round);
     st.phase = "calm"; st.t = rnd(2.6, 4.2);
   };
 
@@ -169,32 +227,20 @@
     const st = this.lava, c = C(), w = this.world;
     if (!st) return;
 
-    /* 安全台：抬高的石台 + 一圈冷色描边 */
-    ctx.save();
-    st.pads.forEach(p => {
-      if (p.dead) {
-        ctx.globalAlpha = 0.25;
-        ctx.strokeStyle = "#64748b"; ctx.lineWidth = 2;
-        ctx.setLineDash([6, 6]);
-        ctx.strokeRect(p.x - p.w / 2, p.y - p.h / 2, p.w, p.h);
-        ctx.setLineDash([]);
-        return;
+    /* v4.13 安全台已取消：改成把「还算安全」的格子淡淡描一圈，方便读盘 */
+    const safeSet = st.phase === "warn" ? st.warn : (st.phase === "hot" ? st.hot : null);
+    if (safeSet) {
+      ctx.save();
+      ctx.globalAlpha = 0.20;
+      ctx.strokeStyle = "#7ff0c4"; ctx.lineWidth = 2;
+      const g = B.lavaGrid.call(this);
+      for (let i = 0; i < g.cols * g.rows; i++) {
+        if (safeSet[i]) continue;
+        const cell = B.lavaCellXY.call(this, i);
+        ctx.strokeRect(cell.x - cell.w / 2 + 3, cell.y - cell.h / 2 + 3, cell.w - 6, cell.h - 6);
       }
-      ctx.globalAlpha = 0.30;
-      ctx.fillStyle = "#164e63";
-      ctx.fillRect(p.x - p.w / 2 - 5, p.y - p.h / 2 - 5, p.w + 10, p.h + 10);
-      ctx.globalAlpha = 0.85;
-      ctx.fillStyle = "#0e7490";
-      ctx.fillRect(p.x - p.w / 2, p.y - p.h / 2, p.w, p.h);
-      ctx.strokeStyle = C_PAD; ctx.lineWidth = 2;
-      ctx.strokeRect(p.x - p.w / 2, p.y - p.h / 2, p.w, p.h);
-      ctx.globalAlpha = 1;
-      ctx.fillStyle = "#a5f3fc";
-      ctx.font = "bold 11px system-ui,'Microsoft YaHei',sans-serif";
-      ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.fillText("安全", p.x, p.y);
-    });
-    ctx.restore();
+      ctx.restore();
+    }
 
     /* 发红的地砖 */
     const set = st.phase === "warn" ? st.warn : (st.phase === "hot" ? st.hot : null);
@@ -227,10 +273,17 @@
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
     ctx.font = "bold 15px system-ui,'Microsoft YaHei',sans-serif";
     const txt = st.phase === "calm" ? "地面冷却中…"
-      : st.phase === "warn" ? "要烧起来了！快找台子"
+      : st.phase === "warn" ? "要烧起来了！快挪窝"
         : st.phase === "hot" ? "岩浆！别站在红格上" : "歇一会儿";
     ctx.fillStyle = st.phase === "hot" ? C_HOT : (st.phase === "warn" ? C_WARN : "#7ff0c4");
     ctx.fillText(txt, w.w / 2, w.pt + 14);
+    if (st.phase !== "hot") {
+      ctx.font = "13px system-ui,'Microsoft YaHei',sans-serif";
+      ctx.fillStyle = "#94a3b8";
+      const nSafe = st.nSafe != null ? st.nSafe : Math.max(0, Math.round((1 - st.ratio) * 100));
+      ctx.fillText("安全格 " + nSafe + " 块（存活人数 + " + (c.safeExtra == null ? 1 : c.safeExtra)
+        + "）· 岩浆 " + Math.round(st.ratio * 100) + "%", w.w / 2, w.pt + 34);
+    }
     ctx.restore();
   };
 
@@ -242,34 +295,32 @@
     const w = B.world;
     const hot = st.phase === "hot" ? st.hot : null;
     const warnSet = st.phase === "warn" ? st.warn : null;
+    /* 危险 = 身体压到了红格（不是只看中心点），或预警里自己这块马上要烧起来 */
+    const curSafe = !B.lavaBodyOn.call(B, f, hot);
+    const soonUnsafe = !!(warnSet && B.lavaBodyOn.call(B, f, warnSet));
 
-    /* 站在安全台上就别乱跑（gap / calm 期可以到边缘活动一下） */
-    const onPad = B.lavaOnPad(f.x, f.y);
-    const curSafe = B.lavaSafeAt(f.x, f.y, hot);
-    const soonUnsafe = warnSet && !B.lavaSafeAt(f.x, f.y, warnSet) && !onPad;
+    /* v4.13 没有安全台了：唯一的落脚点就是「还没被点亮的格子」，
+     * 而且后期格子越少越要抢——所以选点时要避开别人已经占着的格子。 */
+    const bestCell = () => {
+      const g = B.lavaGrid.call(B);
+      let best = null, bs = Infinity;
+      for (let i = 0; i < g.cols * g.rows; i++) {
+        if ((hot && hot[i]) || (warnSet && warnSet[i])) continue;
+        const cell = B.lavaCellXY.call(B, i);
+        let crowd = 0;
+        for (let k = 0; k < B.fighters.length; k++) {
+          const o = B.fighters[k];
+          if (o === f || o.kind !== "hero" || o.dead || o.bench) continue;
+          if (Math.hypot(o.x - cell.x, o.y - cell.y) < Math.min(cell.w, cell.h) * 0.55) crowd++;
+        }
+        const d = Math.hypot(cell.x - f.x, cell.y - f.y) + crowd * 130;
+        if (d < bs) { bs = d; best = cell; }
+      }
+      return best;
+    };
 
     if (!curSafe || soonUnsafe) {
-      /* 找一个安全的落脚点：优先安全台（且别人少），其次没被点亮的格子中心 */
-      let best = null, bs = Infinity;
-      st.pads.forEach(p => {
-        if (p.dead) return;
-        let crowd = 0;
-        for (const o of B.fighters) {
-          if (o === f || o.kind !== "hero" || o.dead || o.bench) continue;
-          if (Math.hypot(o.x - p.x, o.y - p.y) < p.w * 0.6) crowd++;
-        }
-        const d = Math.hypot(p.x - f.x, p.y - f.y) + crowd * 150;
-        if (d < bs) { bs = d; best = { x: p.x, y: p.y }; }
-      });
-      if (!best) {
-        const g = B.lavaGrid.call(B);
-        for (let i = 0; i < g.cols * g.rows; i++) {
-          if ((hot && hot[i]) || (warnSet && warnSet[i])) continue;
-          const cell = B.lavaCellXY.call(B, i);
-          const d = Math.hypot(cell.x - f.x, cell.y - f.y);
-          if (d < bs) { bs = d; best = cell; }
-        }
-      }
+      const best = bestCell();
       if (best) {
         const dx = best.x - f.x, dy = best.y - f.y, d = Math.hypot(dx, dy) || 1;
         if (d > 8) {
@@ -278,18 +329,28 @@
         } else { ctrl.mx = 0; ctrl.my = 0; }
         return;
       }
+      /* 全烧起来了：只能往人少的方向硬闯 */
+      let ax = 0, ay = 0;
+      for (let k = 0; k < B.fighters.length; k++) {
+        const o = B.fighters[k];
+        if (o === f || o.kind !== "hero" || o.dead || o.bench) continue;
+        const dx = f.x - o.x, dy = f.y - o.y, d = Math.hypot(dx, dy) || 1;
+        ax += dx / d / d * 500; ay += dy / d / d * 500;
+      }
+      const s = LD.AI.steer(f, ax, ay, null);
+      ctrl.mx = s.x; ctrl.my = s.y;
+      return;
     }
 
-    /* 安全：在安全台附近小范围游走，别站死（也别被别人挤出去） */
+    /* 安全：在附近小范围游走，别站死（被别人撞出去就没地方站了） */
     f.lavaAimT = (f.lavaAimT || 0) - dt;
     if (!f.lavaAim || f.lavaAimT <= 0) {
-      const live = st.pads.filter(p => !p.dead);
-      f.lavaAim = live.length ? live[(Math.random() * live.length) | 0] : null;
-      f.lavaAimT = rnd(2.5, 5.5);
+      f.lavaAim = bestCell();
+      f.lavaAimT = rnd(2.0, 4.5);
     }
     if (f.lavaAim) {
       const a = B.t * 0.6 + (f.side || 0);
-      const tx = f.lavaAim.x + Math.cos(a) * 26, ty = f.lavaAim.y + Math.sin(a) * 20;
+      const tx = f.lavaAim.x + Math.cos(a) * 22, ty = f.lavaAim.y + Math.sin(a) * 16;
       const dx = tx - f.x, dy = ty - f.y, d = Math.hypot(dx, dy) || 1;
       if (d > 10) {
         const s = LD.AI.steer(f, dx / d, dy / d, null);

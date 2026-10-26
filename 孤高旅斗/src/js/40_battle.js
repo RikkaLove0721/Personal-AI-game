@@ -254,6 +254,11 @@
       const hw = LD.HOTPOTATO.world;
       this.world = { w: hw.w, h: hw.h, pt: hw.pt != null ? hw.pt : 120 };
     }
+    /* v4.13 渡江战役：竖窄（70%）横长（160%）的渡江战场 */
+    if (this.rule === "river" && LD.RIVER && LD.RIVER.world) {
+      const rw = LD.RIVER.world;
+      this.world = { w: rw.w, h: rw.h, pt: rw.pt != null ? rw.pt : 110 };
+    }
     /* v4.12 娱乐模式批次：各自的地图尺寸写在自己的配置块里（木头人是一屏小图） */
     if (LD.isCasual && LD.isCasual(this.rule)) {
       const cw = LD.casualWorld(this.rule);
@@ -315,6 +320,13 @@
     if (this.rule === "tower" && this.initTower) this.initTower();
     /* v3.9 霸主争霸：天降皇冠循环从这里起步（每回合重来） */
     if (this.rule === "overlord" && this.initCrown) this.initCrown();
+    /* v4.19 新手教程：到这里 fighter / 地形 / mods 都就位了，可以摆第一步。
+     * 必须放在 setup 里而不是 resetRound：闯关 / 教程这条线只走 setup，
+     * resetRound 只有房间对局才会调（见 75_room.js），放那儿等于永远不会触发。 */
+    if (this.mode === "tutorial") {
+      this.roundT = 0;                 /* 教程没有输赢，也就不该有倒计时 */
+      if (this.tutInit) this.tutInit();
+    }
     return this;
   };
 
@@ -401,7 +413,7 @@
       f.spdBuys = 0;
       f.hp = f.maxHp; f.dead = false; f.stun = 0; f.root = 0; f.invuln = 0;
       f.vx = 0; f.vy = 0; f.moving = false;
-      f.shield = 0; f.shieldT = 0; f.hitFlash = 0; f.blind = 0; f.slowT = 0; f.gateSlowT = 0;
+      f.shield = 0; f.shieldT = 0; f.hitFlash = 0; f.blind = 0; f.blackout = 0; f.slowT = 0; f.gateSlowT = 0;
       f.stealthT = 0; f.silenceT = 0; f.knockLeft = 0; f.knockWall = false;
       f.bushHide = false; f.inBush = false; f.bushFlash = 0; f.pushT = 0; f.speedBoostT = 0;
       f.stealthKeep = false; f._ghostNoFlash = false;
@@ -474,18 +486,24 @@
     if (this.rule === "escort" && this.initEscort) this.initEscort();
     /* v4.6 占点争夺：三座据点 + 队伍归并 + 各自半场开局 */
     if (this.rule === "capture" && this.initCapture) this.initCapture();
+    /* v4.13 渡江战役：铺水面 / 小岛 / 右岸旗子 */
+    if (this.rule === "river" && this.initRiver) this.initRiver();
     /* v4.8 碰碰车竞技：圆形擂台清场 + 发碰碰车 + 每人上车 */
     if (this.rule === "bump" && this.initBump) this.initBump();
     /* v4.11 烫手山芋：全员脱队（互不伤害）+ 抽第一个倒霉蛋 */
     if (this.rule === "hotpotato" && this.initHotPotato) this.initHotPotato();
-    /* v4.12 娱乐模式批次：木头人 / 抢椅子 / 躲猫猫 / 岩浆 / 弹幕 / 滑壶 */
+    /* v4.12 娱乐模式批次：木头人 / 抢椅子 / 躲猫猫 / 岩浆 / 弹幕 */
     if (LD.isCasual && LD.isCasual(this.rule) && this.initCasual) this.initCasual();
+    /* v4.19 新手教程：fighter / 地形 / mods 都齐了才能摆步骤，
+     * 所以放在这里（setup 的最后一段），和娱乐模式的 initCasual 同一位置。 */
+    if (this.mode === "tutorial" && this.tutInit && !this.tut) this.tutInit();
     this.dragonCorpseT = 0;
     /* v2.6 / v2.7 各规则回合限时：
      * 追猎 90 秒（时间到生存者胜）；缩圈无限时（毒圈就是时钟）；
      * 丧尸危机不限时（打到只剩一人）；车轮战单场固定 60 秒；
      * 经典乱斗 / 阵营 / 追猎 / 乱斗热身统一按房间选的「对局时间」限时。 */
-    this.roundT = (this.mode === "dragon" || this.rule === "overlord" || this.rule === "ring" || this.rule === "auction" || this.rule === "tower") ? 0
+    /* 教程没有输赢，也就不该有倒计时（0 = 不限时，下面通用倒计时会跳过它） */
+    this.roundT = (this.mode === "tutorial" || this.mode === "dragon" || this.rule === "overlord" || this.rule === "ring" || this.rule === "auction" || this.rule === "tower") ? 0
       : this.rule === "relay" ? 60
       : this.matchT;
     this.countdown = 2.0; this.state = "countdown"; this.roundWinner = -1;
@@ -506,6 +524,9 @@
       /* v2.7 镜影：它套装的是玩家的大招（cd 字段只是占位），走 CD 制必须兜住下限，
        * 否则每次出手 CD 只有 1 秒多，会疯狂开大。 */
       if (slot === "ult" && f.ultCdMin) cd = Math.max(cd, f.ultCdMin);
+      /* v4.13 躲猫猫：固定赠送的「隐匿」CD 拉到 15 秒（商店里那个是 8 秒） */
+      if (this.rule === "hide" && slot === "skill1" && f.loadout && f.loadout.skill1 === "stealth"
+        && LD.HIDE && LD.HIDE.stealthCd) cd = LD.HIDE.stealthCd;
       f.cd[slot] = cd;
       // 普攻与闪避共享 CD：普攻出手也会锁住闪避。
       // 格挡虽然归入普攻分类，但它的反制 CD 不该连带锁死闪避，故用 opt.noShare 跳过。
@@ -531,7 +552,7 @@
       type: o.type || "fireball", pierce: !!o.pierce, reflect: !!o.reflect,
       absorb: o.absorb || 0, absorbed: 0, tick: o.tick || 0, tickMax: o.tickMax || 0,
       hits: {}, data: o.data || {}, homing: o.homing || 0, scale: o.scale || 1,
-      root: o.root || 0, stun: o.stun || 0, blind: o.blind || 0, trail: !!o.trail, spin: 0, kindTag: o.kindTag || "skill",
+      root: o.root || 0, stun: o.stun || 0, blind: o.blind || 0, blackout: o.blackout || 0, trail: !!o.trail, spin: 0, kindTag: o.kindTag || "skill",
       boomerang: !!o.boomerang,
       /* v3.1：大招弹道默认穿墙；显式传 passWall:false 的（黄金弹力炮）例外 */
       passWall: o.passWall != null ? !!o.passWall : (o.kindTag === "ult")
@@ -576,6 +597,9 @@
       this.ev.push(["t", tgt.x, tgt.y - 56, "闪避", "#c4b5fd"]);
       return 0;
     }
+    /* v4.19 新手教程：把「谁打中了谁」记一笔。
+     * 放在所有守卫之后 —— 被闪避 / 无敌 / 同队挡掉的都不算打中。 */
+    if (this.mode === "tutorial" && this.tutOnHit) this.tutOnHit(src, tgt, amt, o);
     /* v2.6 词条：力量（伤害 +20%）；毒圈等无来源伤害不吃加成 */
     if (src && src.perkDmg && src.perkDmg !== 1) amt = Math.round(amt * src.perkDmg);
     /* v3.7 塔防：等级 / 力量护腕的伤害加成 */
@@ -689,6 +713,13 @@
       tgt.blind = Math.max(tgt.blind || 0, o.blind);
       FX.float(tgt.x, tgt.y - 66, "致盲 " + o.blind + "s", "#a16207", 15);
       this.ev.push(["b", tgt.x, tgt.y - 66, "致盲 " + o.blind + "s", "#a16207"]);
+    }
+    /* v4.13 整体屏幕变黑（手里剑 / 躲猫猫开局的鬼）：和停电夜战一个观感，
+     * 区别于粪击那种「糊一块棕色波浪圆」的 blind。 */
+    if (o.blackout && tgt.kind === "hero") {
+      tgt.blackout = Math.max(tgt.blackout || 0, o.blackout);
+      FX.float(tgt.x, tgt.y - 66, "眼前一黑 " + o.blackout + "s", "#1e293b", 15);
+      this.ev.push(["b", tgt.x, tgt.y - 66, "眼前一黑 " + o.blackout + "s", "#1e293b"]);
     }
     if (o.kb && !tgt.ccImmune) this.knock(tgt, o.from || src, o.kb);
     else if (o.kbDist && !tgt.ccImmune) this.knockDist(tgt, o.from || src, o.kbDist, o.wallHit);
@@ -918,7 +949,7 @@
       return;
     }
     /* v4.12 木头人：血空只是原地躺一会儿，计时复活后从**当前位置**继续跑（绝不退回起点）。
-     * 其余娱乐模式（抢椅子 / 岩浆 / 弹幕 / 滑壶）血空即出局，走下面的通用判定。 */
+     * 其余娱乐模式（抢椅子 / 岩浆 / 弹幕）血空即出局，走下面的通用判定。 */
     if (this.rule === "statue" && f.kind === "hero") {
       f.respawnT = (LD.STATUE || {}).respawn || 3.5;
       return;
@@ -1141,7 +1172,7 @@
       f.respawnT = 0;
       f.dead = false;
       f.hp = f.maxHp; f.energy = 0;
-      f.stun = 0; f.root = 0; f.silenceT = 0; f.blind = 0; f.slowT = 0; f.gateSlowT = 0; f.shield = 0; f.shieldT = 0;
+      f.stun = 0; f.root = 0; f.silenceT = 0; f.blind = 0; f.blackout = 0; f.slowT = 0; f.gateSlowT = 0; f.shield = 0; f.shieldT = 0;
       f.knockLeft = 0; f.knockWall = false; f.meditate = 0; f.hitFlash = 0;
       f.buff = { rage: 0, thousand: 0, rush: 0 };
       Object.keys(f.slot || {}).forEach(k => { f.slot[k] = { on: false, phase: "", t: 0, d: {} }; });
@@ -1334,9 +1365,25 @@
      * 它是 CASUAL 之外的独立规则，上面已经单独处理过了）。
      * 交互键 P 不受影响——场景道具（补给箱 / 柜子 / 车）照常能用。 */
     if (LD.isCasual && LD.isCasual(this.rule)) {
-      if (ctrl && ctrl.press && ctrl.press[slot] && (f._casNoSkillT == null || this.t - f._casNoSkillT > 1.2)) {
-        f._casNoSkillT = this.t;
-        FX.float(f.x, f.y - 56, "这个玩法里不能用招式", "#9fb3dd", 13);
+      /* v4.13f 躲猫猫：这模式只发两个专用招式，且都装在 **J（basic）槽**上——
+       *   人 = hide_stealth（隐匿）、鬼 = hide_catch（抓人）。
+       * 它们带 hideOnly 标记，只在这个规则下放行；其它娱乐模式仍然一招都放不出。 */
+      const earlyId = f.loadout && f.loadout[slot];
+      const earlySk = earlyId ? LD.skill(earlyId) : null;
+      const okHide = this.rule === "hide" && !!earlySk && !!earlySk.hideOnly;
+      if (!okHide) {
+        if (ctrl && ctrl.press && ctrl.press[slot] && (f._casNoSkillT == null || this.t - f._casNoSkillT > 1.2)) {
+          f._casNoSkillT = this.t;
+          FX.float(f.x, f.y - 56, "这个玩法里不能用招式", "#9fb3dd", 13);
+        }
+        return;
+      }
+    }
+    /* v4.13 渡江战役：还没登岸（没跟右岸旗子交互过）→ 只能普攻，技能与大招全锁 */
+    if (this.rule === "river" && !f.riverUnlocked && slot !== "basic") {
+      if (ctrl && ctrl.press && ctrl.press[slot] && (f._riverLockT == null || this.t - f._riverLockT > 1.4)) {
+        f._riverLockT = this.t;
+        FX.float(f.x, f.y - 56, "先渡过江、在旗子前按 P 登岸", "#7dd3fc", 13);
       }
       return;
     }
@@ -1389,6 +1436,7 @@
     /* v3.1 草丛：一出手就从草里暴露 1.4 秒 */
     if (f.bushHide) { f.bushFlash = 1.4; f.bushHide = false; FX.float(f.x, f.y - 58, "暴露！", "#fde68a", 13); }
     IMPL[id].start(f, slot, sk, ctrl);
+    if (this.mode === "tutorial" && this.tutOnCast) this.tutOnCast(f, slot, sk);
   };
 
   function flashNoSkill(f, slot) {
@@ -1492,12 +1540,15 @@
     if (this.rule === "escort" && this.updateEscort) this.updateEscort(dt);
     /* v4.6 占点争夺：占领读条 / 产分 / 限时结算 */
     if (this.rule === "capture" && this.updateCapture) this.updateCapture(dt);
+    /* v4.13 渡江战役：船刷新 / 船只与水面判定 / 登岸旗子 */
+    if (this.rule === "river" && this.updateRiver) this.updateRiver(dt);
     /* v4.8 碰碰车竞技：车对车撞击 / 出圈落水 / 复活 / 计分 */
     if (this.rule === "bump" && this.updateBump) this.updateBump(dt);
     /* v4.11 烫手山芋：山芋天降 / 传递 / 倒计时爆炸 */
     if (this.rule === "hotpotato" && this.updateHotPotato) this.updateHotPotato(dt);
-    /* v4.12 娱乐模式批次：木头人 / 抢椅子 / 躲猫猫 / 岩浆 / 弹幕 / 滑壶 */
+    /* v4.12 娱乐模式批次：木头人 / 抢椅子 / 躲猫猫 / 岩浆 / 弹幕 */
     if (LD.isCasual && LD.isCasual(this.rule) && this.updateCasual) this.updateCasual(dt);
+    if (this.mode === "tutorial" && this.updateTutorial) this.updateTutorial(dt);
     /* v3.9 能量包蓄力：进度推进与中断判定（锁移动 / 锁技能在角色循环里） */
     if (this.updateCharging) this.updateCharging(dt);
     this.updateZones(dt);
@@ -1609,10 +1660,10 @@
       if (this.roundT <= 0 && this.casualTimeUp) this.casualTimeUp();
     }
     // 决斗模式倒计时（v2.7：缩圈 / 车轮战 / 追猎 / 热身都有各自的时钟逻辑，不走通用倒计时）
-    if (this.mode !== "dragon" && this.rule !== "ring" && this.rule !== "relay"
+    if (this.mode !== "tutorial" && this.mode !== "dragon" && this.rule !== "ring" && this.rule !== "relay"
         && this.rule !== "hunt" && this.rule !== "warmup" && this.rule !== "doomsday"
         && this.rule !== "tower" && this.rule !== "escort" && this.rule !== "capture"
-        && this.rule !== "bump" && this.rule !== "hotpotato"
+        && this.rule !== "bump" && this.rule !== "hotpotato" && this.rule !== "river"
         && !(LD.isCasual && LD.isCasual(this.rule))) {
       this.roundT = (this.roundT || 75) - dt;
       if (this.roundT <= 0) {
@@ -1678,6 +1729,7 @@
       f.energy = Math.min(f.maxEnergy, f.energy + C.energy.regen * dt);
       if (f.shieldT > 0) { f.shieldT -= dt; if (f.shieldT <= 0 && f.shield > 0) { f.shield = 0; FX.float(f.x, f.y - 52, "护盾消失", "#9fb3dd", 12); } }
       if (f.blind > 0) f.blind = Math.max(0, f.blind - dt);
+      if (f.blackout > 0) f.blackout = Math.max(0, f.blackout - dt);   // v4.13 整体屏幕变黑
       if (f.slowT > 0) f.slowT = Math.max(0, f.slowT - dt);
       if (f.gateSlowT > 0) f.gateSlowT = Math.max(0, f.gateSlowT - dt);
       if (f.silenceT > 0) f.silenceT = Math.max(0, f.silenceT - dt);
@@ -1723,9 +1775,8 @@
 
     // 击退速度衰减
     f.x += f.vx * dt; f.y += f.vy * dt;
-    /* v4.12 冰面滑壶：阻尼从 -7.5 放宽到 -0.55，人滑出去基本刹不住 */
-    const iceDamp = (this.rule === "slide" && LD.SLIDE) ? (LD.SLIDE.damp || -0.55) : -7.5;
-    const damp = Math.exp((this.mod && this.mod('lowgrav') ? -4.2 : iceDamp) * dt); f.vx *= damp; f.vy *= damp;
+    /* v4.13：冰面滑壶已删除，全场统一用 -7.5 的阻尼 */
+    const damp = Math.exp((this.mod && this.mod('lowgrav') ? -4.2 : -7.5) * dt); f.vx *= damp; f.vy *= damp;
     // 赫的定向击飞（固定距离推进，撞墙由越界修正区判定）
     this.knockStep(f, dt);
 
@@ -1745,8 +1796,9 @@
     if (f.hideProp || f.rideCar || f.chg) {
       f.moving = false;
       f.atkAnim = Math.max(0, f.atkAnim - dt);
-      /* v3.4 躲藏计时：超过 spotT 秒 AI 就会察觉；这里给玩家一个「被发现了」的提示 */
-      if (f.hideProp) {
+      /* v3.4 躲藏计时：超过 spotT 秒 AI 就会察觉；这里给玩家一个「被发现了」的提示
+       * v4.13 躲猫猫取消了这条设定——藏住了就是藏住了，蹲多久都不会自己暴露。 */
+      if (f.hideProp && !(this.rule === "hide")) {
         f.hideTimer = (f.hideTimer || 0) + dt;
         if (!f.hideSpotted && f.hideTimer >= ((LD.INTERACT && LD.INTERACT.spotT) || 2)) {
           f.hideSpotted = true;
@@ -1835,25 +1887,16 @@
     // 火男开启期间自身移速略微降低（可被其他减速叠加）
     const faOn = f.slot.skill1.phase === "fire" || f.slot.skill2.phase === "fire";
     if (faOn) sp *= (LD.skill("fireAura") && LD.skill("fireAura").moveMul) || 0.85;
+    /* v4.13 规则专属移速倍率：木头人全场 70%、渡江战役水里大幅减速（注册表见 10_data.js） */
+    if (LD.RULE_SPD && LD.RULE_SPD[this.rule]) sp *= LD.RULE_SPD[this.rule].call(this, f);
+    /* v4.13 木头人道具包：开到加速包后的短暂提速 */
+    if (f.statueSpdT > 0) sp *= (LD.STATUE && LD.STATUE.packSpdMul) || 1.5;
 
     const mx = ctrl.mx || 0, my = ctrl.my || 0;
     const n = Math.hypot(mx, my);
     f.moving = false;
-    /* v4.12 冰面滑壶：方向键不再是直接位移而是「推力」——
-     * 加速度写进 f.vx / f.vy，位移交给上面的 f.x += f.vx·dt（阻尼已改成冰面的）。 */
-    if (this.rule === "slide") {
-      const ic = LD.SLIDE || {};
-      const acc = ic.accel || 640, vmax = ic.vmax || 330;
-      if (canMove && n > 0.05) { f.vx += (mx / n) * acc * dt; f.vy += (my / n) * acc * dt; }
-      const v = Math.hypot(f.vx, f.vy);
-      if (v > vmax) { f.vx = f.vx / v * vmax; f.vy = f.vy / v * vmax; }
-      if (v > 12) {
-        f.moving = true; f.walkPhase += dt * 11;
-        f.facing = { x: f.vx / v, y: f.vy / v };
-      } else if (canMove && n > 0.05) {
-        f.facing = { x: mx / n, y: my / n };
-      }
-    } else if (canMove && n > 0.05) {
+    /* v4.13：冰面滑壶删除后，方向键恢复成全场统一的直接位移 */
+    if (canMove && n > 0.05) {
       const ux = mx / n, uy = my / n;
       f.x += ux * sp * dt; f.y += uy * sp * dt;
       f.facing = { x: ux, y: uy };
@@ -1869,8 +1912,9 @@
       const bush = LD.Terrain.bushAt(this.terrain, f.x, f.y);
       f.inBush = !!bush;
       f.bushHide = !!bush && (f.bushFlash || 0) <= 0;
-      /* v3.4 草丛躲藏计时：超过 spotT 秒同样会被 AI 察觉 */
-      if (f.bushHide) {
+      /* v3.4 草丛躲藏计时：超过 spotT 秒同样会被 AI 察觉
+       * v4.13 躲猫猫同样取消这条（草丛就是拿来久蹲的） */
+      if (f.bushHide && !(this.rule === "hide")) {
         f.bushTimer = (f.bushTimer || 0) + dt;
         if (!f.bushSpotted && f.bushTimer >= ((LD.INTERACT && LD.INTERACT.spotT) || 2)) {
           f.bushSpotted = true;

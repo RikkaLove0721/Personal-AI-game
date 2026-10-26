@@ -1,7 +1,7 @@
 /* ============================================================
  *  49a_casual.js — v4.12 娱乐模式公共层
  * ============================================================
- *  本批六个娱乐模式（木头人 / 抢椅子 / 躲猫猫 / 岩浆 / 弹幕 / 滑壶）共用一套壳：
+ *  本批五个娱乐模式（木头人 / 抢椅子 / 躲猫猫 / 岩浆 / 弹幕）共用一套壳：
  *    - 全员 team = -1：没有友军伤害，AI 也不会产生阵营仇恨
  *    - 普攻 / 技能 / 大招全部禁用（判定在 B.trySlot），P 键交互保留给场景道具
  *    - 胜负与击杀脱钩：血空只是暂时离场（计时复活），只有「达成目标 / 只剩一人」才结算
@@ -19,10 +19,10 @@
   const pick = arr => arr[(Math.random() * arr.length) | 0];
 
   /* 规则 id → 模块后缀 / 配置块 */
-  const MOD = { statue: "Statue", chair: "Chair", hide: "Hide", lava: "Lava", barrage: "Barrage", slide: "Slide" };
+  const MOD = { statue: "Statue", chair: "Chair", hide: "Hide", lava: "Lava", barrage: "Barrage" };
   const CFGMAP = () => ({
     statue: LD.STATUE, chair: LD.CHAIR, hide: LD.HIDE,
-    lava: LD.LAVA, barrage: LD.BARRAGE, slide: LD.SLIDE
+    lava: LD.LAVA, barrage: LD.BARRAGE
   });
 
   B.casualCfg = function () { return CFGMAP()[this.rule] || {}; };
@@ -143,7 +143,7 @@
     if (fn) fn.call(this, ctx);
   };
 
-  /** 限时到点：各模式按自己的进度 / 分数判胜（木头人比谁跑得远，滑壶比分数，其余比血量） */
+  /** 限时到点：各模式按自己的进度 / 分数判胜（木头人比谁跑得远，其余比血量） */
   B.casualTimeUp = function () {
     const m = B.casualMod.call(this);
     if (m && this[m.charAt(0).toLowerCase() + m.slice(1) + "TimeUp"]) {

@@ -48,23 +48,49 @@
    *    绘制顺序 下身 → 上身 → 头部；3x 贴图按 1/3 缩放
    *  ========================================================== */
   const IMG_CACHE = {};
-  function skinImg(key) {
+  /* v4.13e：贴图是异步解码的（data URI 也要走一遍 load 事件），谁第一次画谁就会撞上
+   * 「图还没好」——这时 drawImgPart 只能返回 false，角色被画成部件兜底色的普通少年，
+   * 玩家看到的就是「我的配装怎么乱了」。所以除了缓存 el，还要记下等这张图的回调。 */
+  function skinEntry(key) {
     if (!key) return null;
     const hit = IMG_CACHE[key];
-    if (hit) return hit.ok ? hit.el : null;
-    const entry = { el: null, ok: false };
+    if (hit) return hit;
+    const entry = { el: null, ok: false, cbs: [] };
     IMG_CACHE[key] = entry;
     try {
       const src = (typeof window !== "undefined" && window.LD_SKIN_IMG) ? window.LD_SKIN_IMG[key] : null;
       if (src && typeof Image !== "undefined") {          // 无头测试环境没有 Image，静默降级
         const el = new Image();
-        el.onload = () => { entry.ok = true; if (V.onSkinImgLoad) V.onSkinImgLoad(); };
+        el.onload = () => {
+          entry.ok = true;
+          const cbs = entry.cbs.splice(0);
+          cbs.forEach(f => { try { f(); } catch (e) {} });
+          if (V.onSkinImgLoad) V.onSkinImgLoad();
+        };
         el.src = src;
         entry.el = el;
       }
     } catch (e) { /* 忽略：降级为程序化绘制 */ }
-    return null;
+    return entry;
   }
+  function skinImg(key) {
+    const e = skinEntry(key);
+    return (e && e.ok) ? e.el : null;
+  }
+  /* 这张贴图已经解码好了吗？（没图 / 环境没有 Image 时恒为 false，走兜底画法） */
+  V.skinImgReady = function (key) { const e = IMG_CACHE[key]; return !!(e && e.ok); };
+  /* 这张贴图是「真的在解码中」吗？没有对应 src（压根没有这张图）时恒为 false，
+   * 免得为了一张不存在的图一直等下去，把另外两张也拖着不画。 */
+  V.skinImgPending = function (key) { const e = IMG_CACHE[key]; return !!(e && !e.ok && e.el); };
+  /* 等某张贴图到位后回调一次；已经好了就立刻回调。同一张图可以登记多个等待者。 */
+  V.onSkinReady = function (key, cb) {
+    const e = skinEntry(key);
+    if (!e || typeof cb !== "function") return;
+    if (e.ok) { try { cb(); } catch (err) {} return; }
+    e.cbs.push(cb);
+  };
+  /* 预热：提前开始解码（不阻塞），让预览第一帧就用上真图 */
+  V.warmSkin = function (keys) { (keys || []).forEach(k => { if (k) skinEntry(k); }); };
   V.onSkinImgLoad = null;   // UI 可注册：贴图加载完成后刷新预览
 
   /* mode: "bottom"=画布底边中点锚在 (0,y)，"top"=顶边中点锚在 (0,y)；y 为游戏坐标。
@@ -871,14 +897,29 @@
    *  商店 / 配装 预览（小画布）
    * ========================================================== */
   V.heroPreview = function (canvas, look, angle) {
-    const ctx = canvas.getContext("2d");
-    const W = canvas.width, H = canvas.height;
-    ctx.clearRect(0, 0, W, H);
-    ctx.save();
-    ctx.translate(W / 2, H - 12);
-    const s = 1.45;
-    ctx.scale(s, s);
-    V.chibi(ctx, 0, 0, { x: 1, y: 0 }, look, { t: 0.6, moving: false, blinkAmt: 1 });
-    ctx.restore();
+    /* v4.13e：贴图异步解码 → 第一帧常常只画出兜底色（看着像「配装乱了」）。
+     * 这里把绘制包成闭包并登记一次补画：图一到位就按同一份 look 把这张小画布重画一遍，
+     * 不用等玩家点别的按钮（改名 / 随机配装）触发整页重渲染才恢复。 */
+    const draw = () => {
+      const ctx = canvas.getContext("2d");
+      const W = canvas.width, H = canvas.height;
+      ctx.clearRect(0, 0, W, H);
+      ctx.save();
+      ctx.translate(W / 2, H - 12);
+      const s = 1.45;
+      ctx.scale(s, s);
+      V.chibi(ctx, 0, 0, { x: 1, y: 0 }, look, { t: 0.6, moving: false, blinkAmt: 1 });
+      ctx.restore();
+    };
+    draw();
+    const pending = [look && look.head && look.head.img, look && look.upper && look.upper.img,
+                     look && look.lower && look.lower.img].filter(k => k && V.skinImgPending(k));
+    if (!pending.length) return;
+    let fired = false;
+    const repaint = () => {
+      if (fired || pending.some(k => V.skinImgPending(k))) return;   // 等三张都到位，只补画一次
+      fired = true; draw();
+    };
+    pending.forEach(k => V.onSkinReady(k, repaint));
   };
 })(window.LD = window.LD || {});

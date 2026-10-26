@@ -55,7 +55,7 @@ console.log("=== 1. 模式与数值配置 ===");
   const r = LD.RULES.find(x => x.id === "blackout");
   check("规则表里有停电夜战", !!r, r && r.name);
   check("显示名正确", r && r.name === "停电夜战", r && r.name);
-  check("规则共 22 种（v4.12 加娱乐模式批次：木头人 / 抢椅子 / 躲猫猫 / 岩浆 / 弹幕 / 滑壶）", LD.RULES.length === 22, LD.RULES.length);
+  check("规则共 22 种（v4.13 删除冰面滑壶、新增渡江战役）", LD.RULES.length === 22, LD.RULES.length);
   check("黑暗条上限 30（v4.10 扩充）", N.darkMax === 30, N.darkMax);
   check("摸黑每秒 +1", N.darkUp === 1, N.darkUp);
   check("受光每秒 -6（v4.10 翻倍）", N.darkDown === 6, N.darkDown);
@@ -348,22 +348,24 @@ console.log("=== 8. 手里剑 ===");
   const p = B.projs[0];
   check("弹道类型是 shuriken", p && p.type === "shuriken", p && p.type);
   check("飞镖向右飞", p && p.vx > 500 && Math.abs(p.vy) < 60, p && (p.vx.toFixed(0) + "," + p.vy.toFixed(0)));
-  check("飞镖 26 伤害 / 0.6 秒失明", p && p.dmg === 26 && p.blind === 0.6, p && (p.dmg + "/" + p.blind));
+  /* v4.13 失明改版：不再是粪击那种「糊一块棕色」，而是整体屏幕变黑 3 秒（blackout） */
+  check("飞镖 26 伤害 / 3 秒整体变黑", p && p.dmg === 26 && p.blackout === 3, p && (p.dmg + "/" + p.blackout));
   check("飞镖不穿透（命中即消失）", p && p.pierce === false, p && p.pierce);
   check("进入 7 秒 CD", (me.cd.skill2 || 0) > 6.5, (me.cd.skill2 || 0).toFixed(2));
 
   /* 让它飞到敌人身上 */
-  foe.invuln = 0; foe.hp = foe.maxHp; foe.blind = 0;
+  foe.invuln = 0; foe.hp = foe.maxHp; foe.blind = 0; foe.blackout = 0;
   const hp0 = foe.hp;
   for (let i = 0; i < 30 && B.projs.length; i++) step();
   check("命中后飞镖消失", B.projs.length === 0, B.projs.length);
   check("命中造成 26 点伤害", Math.abs((hp0 - foe.hp) - 26) < 1.5, (hp0 - foe.hp).toFixed(1));
-  /* 命中的那一帧之后 blind 已经开始按帧递减，所以给一帧的容差 */
-  check("命中标上 0.6 秒失明", foe.blind > 0.6 - 1 / 30 && foe.blind <= 0.6, foe.blind.toFixed(3));
+  /* 命中的那一帧之后 blackout 已经开始按帧递减，所以给一帧的容差 */
+  check("命中标上 3 秒整体变黑", foe.blackout > 3 - 1 / 30 && foe.blackout <= 3, foe.blackout.toFixed(3));
+  check("不再是粪击那块棕色（blind 保持 0）", foe.blind === 0, foe.blind.toFixed(3));
 
-  /* 失明会随时间自然消退 */
+  /* 整体变黑会随时间自然消退 */
   for (let i = 0; i < 40; i++) step();
-  check("失明会自然消退", foe.blind < 0.6, foe.blind.toFixed(2));
+  check("整体变黑会自然消退", foe.blackout < 3, foe.blackout.toFixed(2));
 
   /* CD 期间不能连发 */
   me.slot.skill2 = { on: false, phase: "", t: 0, d: {} };

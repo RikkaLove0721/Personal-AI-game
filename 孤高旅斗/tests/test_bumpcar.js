@@ -49,7 +49,7 @@ console.log("\n=== 1. 规则注册 ===");
 {
   const r = LD.ruleInfo("bump");
   check("规则表里有「碰碰车竞技」", r && r.id === "bump", r && r.name);
-  check("模式总数 22 种（v4.12 加娱乐模式批次：木头人 / 抢椅子 / 躲猫猫 / 岩浆 / 弹幕 / 滑壶）", LD.RULES.length === 22, LD.RULES.length);
+  check("模式总数 22 种（v4.13 删除冰面滑壶、新增渡江战役）", LD.RULES.length === 22, LD.RULES.length);
   check("成就含「碰碰车之王」", LD.ACHIEVEMENTS.some(a => a.id === "bump_win"));
   check("称号含「碰碰车之王」", LD.TITLES.some(t => t.ach === "bump_win"));
   check("碰碰车车型已注册且电力无限", !!(LD.VEHICLES && LD.VEHICLES.bumper) && LD.VEHICLES.bumper.fuel[0] >= 1e9);

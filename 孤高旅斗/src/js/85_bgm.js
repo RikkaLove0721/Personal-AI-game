@@ -1,29 +1,49 @@
 /* ============================================================
  *  85_bgm.js — 背景音乐（BGM）
- *  素材来自用户提供的音乐库，构建前由 scripts/proc_music.py 压缩成
- *  dist/music/*.ogg；运行时通过服务器 /music/list 拿歌单、/music/<名> 拉流。
- *  规则：随机乱序播放（一轮播完重新洗牌）、低音量循环、首次交互后启动
- *  （浏览器自动播放策略），多端：exe（WebView2）与浏览器都可以。
- *  开关：主菜单右上角可随时开关，状态写进存档（bgmOn），下次启动保持一致。
+ * ============================================================
+ *  v4.13g：音乐从「LAN 服务器流式播放」改成**内置进单文件**。
+ *  素材由 scripts/proc_music.py 压成 dist/music_built/*.m4a（AAC 单声道 32k），
+ *  build.py 再读成 data URI 写进 window.LD_MUSIC —— 于是双击 HTML 也有 BGM。
+ *
+ *  播放规则：
+ *    - 随机乱序，一轮播完重新洗牌
+ *    - 低音量（0.15，不抢音效）、跟随「M 静音 / 主菜单右上角开关」
+ *    - 浏览器自动播放策略：首次点击 / 按键之后再开始
+ *  兼容：没有内嵌素材时（比如旧包）退回服务器 /music/list 流式播放。
  * ============================================================ */
 (function (LD) {
   "use strict";
   const BGM = LD.BGM = {
     vol: 0.15,            // 背景音乐音量（0~1），刻意压低不抢音效
-    list: [],             // 服务器返回的歌单（文件名数组）
-    order: [],            // 洗牌后的播放顺序
+    list: [],             // 歌单：[{ n: 歌名, d: data URI }]
+    order: [],            // 洗牌后的播放顺序（存下标）
     idx: 0,
     el: null,             // 当前 <audio>
     started: false,
     failed: 0,            // 连续播放失败次数（超限后静默放弃）
-    muted: false,         // 关掉音乐（主菜单右上角开关，随存档保存）
+    muted: false,         // 关掉音乐（随存档保存）
+    source: "",           // "embed" | "server"
 
     init() {
-      if (typeof fetch === "undefined") return;      // 无头测试环境直接跳过
       this.applyProfile();                           // 先按存档恢复开关状态
+      /* 1) 内嵌素材优先：单文件分发也能听到 BGM */
+      const emb = (typeof window !== "undefined" && window.LD_MUSIC) || null;
+      if (emb && emb.length) {
+        this.list = emb.filter(o => o && o.d).map(o => ({ n: String(o.n || "未命名"), d: o.d }));
+        this.source = "embed";
+        this._hook();
+        return;
+      }
+      /* 2) 退回服务器歌单（老分发方式，没有内嵌素材时还有救） */
+      if (typeof fetch === "undefined") return;      // 无头测试环境直接跳过
       try {
+        this.source = "server";
         fetch("/music/list").then(r => (r.ok ? r.json() : { music: [] }))
-          .then(d => { this.list = (d && d.music) || []; this._hook(); })
+          .then(d => {
+            const arr = (d && d.music) || [];
+            this.list = arr.map(n => ({ n: String(n).replace(/\.[a-z0-9]+$/i, ""), d: "/music/" + encodeURIComponent(n) }));
+            this._hook();
+          })
           .catch(() => {});
       } catch (e) { /* 忽略 */ }
     },
@@ -40,6 +60,12 @@
 
     /* 是否开启音乐 */
     isOn() { return !this.muted; },
+
+    /* 歌单里有几首（UI 用） */
+    count() { return this.list.length; },
+
+    /* 当前歌名（没在播就是空串） */
+    now() { return (this.order.length && this.el) ? (this.order[this.idx] || "") : ""; },
 
     /* 按钮文案 */
     label() { return this.muted ? "🔇 音乐关" : "🎵 音乐开"; },
@@ -85,7 +111,7 @@
     start() {
       if (this.started || this.muted || !this.list.length || typeof Audio === "undefined") return;
       this.started = true;
-      this.order = this._shuffle(this.list.slice());
+      this.order = this._shuffle(this.list.map((_, i) => i));
       this.idx = 0;
       this._play();
     },
@@ -104,9 +130,10 @@
         this.order = this._shuffle(this.order);
         this.idx = 0;
       }
-      const name = this.order[this.idx];
+      const song = this.list[this.order[this.idx]];
+      if (!song) { this.idx++; this._play(); return; }
       try {
-        const el = new Audio("/music/" + encodeURIComponent(name));
+        const el = new Audio(song.d);
         el.volume = this.vol;
         el.preload = "auto";
         el.onended = () => { this.idx++; this._play(); };
@@ -116,12 +143,27 @@
           this.idx++; this._play();
         };
         this.el = el;
+        try { el.title = song.n; } catch (e) { /* 忽略 */ }
         const p = el.play();
         if (p && p.catch) p.catch(() => {             // 自动播放被拦：等下一次交互
           this.started = false;
           this._hook();
         });
+        this._announce(song.n);
       } catch (e) { this.started = false; }
+    },
+
+    /* 换歌时轻轻报一下歌名（战斗中不打扰） */
+    _announce(name) {
+      try {
+        if (typeof this.onChange === "function") this.onChange();   // 主菜单按钮的 title 跟着刷
+      } catch (e) { /* 忽略 */ }
+      try {
+        if (!name || !LD.UI || !LD.UI.toast) return;
+        const inFight = LD.Battle && LD.Battle.state === "fight";
+        if (inFight) return;
+        LD.UI.toast("🎵 " + name, false, 1400);
+      } catch (e) { /* 忽略 */ }
     }
   };
 

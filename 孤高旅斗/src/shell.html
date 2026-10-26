@@ -10,6 +10,9 @@
 <meta name="theme-color" content="#080b16">
 <meta name="format-detection" content="telephone=no">
 <title>孤高旅斗 v__VERSION__</title>
+<!-- 图标由 build.py 内嵌 assets/icon-sm.png（圆形裁切后的角色头像） -->
+<link rel="icon" type="image/png" href="__ICON__">
+<link rel="apple-touch-icon" href="__ICON__">
 <style>
 :root{
   --bg:#080b16; --bg2:#0e1426; --panel:rgba(18,24,44,.92); --line:rgba(120,160,255,.18);
@@ -23,8 +26,33 @@ body{
   color:var(--txt);font-family:"HarmonyOS Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
   display:flex;align-items:center;justify-content:center;overflow:hidden;user-select:none;
 }
-#app{position:relative;width:960px;height:600px;border-radius:16px;overflow:hidden;
+/* 环境底：窗口比舞台大的时候（全屏 / 最大化），四周不再是一条黑框。
+   用户要的是「背景图外的部分渐变到白色」——所以这里不是把立绘糊满，
+   而是**立绘在中段、向外过渡到纯白**：中间那块（也就是卡片所在的位置附近）
+   还留着同一张图，越往屏幕边缘越白，最后收成白纸一样的底。
+   仍然用 --menuBg 变量（Live2D 启动时写进去的那张立绘），产物里只内嵌一次。
+   模糊是必须的 —— 卡片按 16:10 取景、外面按窗口比例取景，两者裁切位置本来就不同，
+   不糊会看到同一张图错位；糊掉之后只会读成「景深」。 */
+#ambient{position:fixed;inset:-8%;z-index:0;pointer-events:none;
+  background-color:#fff;
+  background-image:
+    radial-gradient(ellipse 50% 50% at 50% 50%,
+      rgba(255,255,255,0) 62%, rgba(255,255,255,.26) 80%,
+      rgba(255,255,255,.54) 95%, rgba(255,255,255,.74) 100%),
+    var(--menuBg,none);
+  background-position:center,center;
+  background-size:auto,cover;
+  background-repeat:no-repeat,no-repeat;
+  filter:blur(22px) saturate(1.04);
+  opacity:0;transition:opacity .5s}
+#ambient.on{opacity:1}
+#app{position:relative;z-index:1;width:960px;height:600px;border-radius:16px;overflow:hidden;
   box-shadow:0 0 0 1px rgba(120,160,255,.16),0 24px 70px rgba(0,0,0,.75)}
+/* 大窗口下卡片不再是「悬浮窗」：白底上加重一圈柔光，让它像嵌在纸面里的取景框 */
+body.wide #app{border-radius:10px;
+  box-shadow:0 0 0 1px rgba(90,120,170,.18),
+             0 18px 46px rgba(48,66,102,.34),
+             0 2px 10px rgba(48,66,102,.22)}
 canvas{display:block;width:960px;height:600px;background:#05070f}
 
 /* ============ HUD ============ */
@@ -124,11 +152,14 @@ body.mobile .shopbtn{top:auto;bottom:calc(100% - 66px);right:300px;font-size:15p
 #armyGrid,#towerGrid{flex:0 0 auto;align-content:start;grid-auto-rows:max-content;overflow:visible}
 
 /* ============ 覆盖层 ============ */
-/* 菜单背景：构建时 __MENU_BG__ 替换为 assets/menu-bg.jpg 的 data URI，
-   上层压一层深色渐变保证标题与卡片可读 */
+/* 覆盖层公共底：--menuBg 由 86_live2d.js 在启动时写成 url(立绘)，
+   所以同一张立绘在产物里只内嵌一次（CSS 里再写一遍会让文件白白大一倍）。
+   主菜单自己会把它关掉 —— 那一层由 canvas 逐帧画。 */
 .ov{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  background:linear-gradient(180deg,rgba(6,9,18,.60) 0%,rgba(6,9,18,.78) 55%,rgba(6,9,18,.92) 100%),
-    url("__MENU_BG__") center/cover no-repeat,#080b16;
+  background-color:#080b16;
+  background-image:linear-gradient(180deg,rgba(6,9,18,.74) 0%,rgba(6,9,18,.86) 55%,rgba(6,9,18,.94) 100%),
+    var(--menuBg,none);
+  background-position:center,center;background-size:cover,cover;background-repeat:no-repeat,no-repeat;
   padding:26px 34px;overflow-y:auto;z-index:5}
 .ov.hide{display:none}
 h1{font-size:34px;letter-spacing:8px;background:linear-gradient(90deg,#22d3ee,#a78bfa,#f472b6);
@@ -321,17 +352,107 @@ canvas.pv{width:64px;height:80px;display:block}
 .mmodal .mhead{font-size:13.5px;letter-spacing:2px;color:#7fe6f7;margin-bottom:8px;text-align:center}
 .mmodal .mclose{position:absolute;top:8px;right:12px;cursor:pointer;color:var(--dim);font-size:16px;padding:2px 6px}
 .mmodal .mclose:hover{color:#fff}
-/* 主标题：旷野之息风格（纯白平面字 + 破碎感滤镜 + 大师剑立于「孤」上） */
-h1.ztitle{position:relative;display:inline-block;margin:0;padding:64px 26px 10px;line-height:1.15}
-h1.ztitle .zsword{position:absolute;top:-54px;left:16px;width:76px;height:208px;z-index:0;
-  filter:drop-shadow(0 3px 6px rgba(0,0,0,.55))}
+/* 主标题：纯白平面字 + 破碎感滤镜（剑留在插画里，这里只留字） */
+h1.ztitle{position:relative;display:inline-block;margin:0;padding:0;line-height:1.15}
 h1.ztitle .ztwrap{position:relative;z-index:2;display:inline-block;
   font-family:"Palatino Linotype","STZhongsong","KaiTi","SimSun",serif;
   font-size:56px;letter-spacing:10px;font-weight:700;line-height:1.15;
   filter:url(#chipTitle) drop-shadow(0 2px 6px rgba(0,0,0,.55))}
 h1.ztitle .zt{position:relative;z-index:1;color:#f6f8fc}
-body.mobile h1.ztitle .ztwrap{font-size:38px;letter-spacing:7px}
-body.mobile h1.ztitle .zsword{width:48px;height:132px;top:-26px;left:21px}
+
+/* ============================================================
+ *  v4.14 主菜单：全屏动态立绘 + 右侧玻璃面板
+ *  左侧留给人物（裙摆 / 发丝 / 手臂在动，见 86_live2d.js），
+ *  右侧一条玻璃面板承载标题与七个入口，不再用大卡片压住插画。
+ * ============================================================ */
+#ovMenu{display:block;padding:0;overflow:hidden;background-image:none}
+#ovMenu.hide{display:none}
+#menuBg{position:absolute;inset:0;width:100%;height:100%;z-index:0;background:#080b16}
+/* v4.19 新手教程步骤条：正上方居中，玻璃底 + 白字。
+   只做「一行标题 + 一行说明」，不做边框动画 —— 玩家的注意力应该在场上。 */
+#tutTip{position:absolute;left:50%;top:6px;transform:translateX(-50%);z-index:6;
+  min-width:290px;max-width:min(440px,86%);padding:7px 18px 8px;border-radius:11px;
+  background:rgba(8,13,24,.9);border:1px solid rgba(150,190,255,.22);
+  box-shadow:0 8px 24px rgba(0,0,0,.55);
+  text-align:center;pointer-events:none}
+/* 不用 backdrop-filter：无 GPU 的环境（部分老机器 / 远程桌面）会把它画成一块
+   半透明矩形，反而比不糊更难看。这块底本来就够实（.9），不差那点虚化。 */
+#tutTip.hide{display:none}
+#tutTip.pop{animation:tutPop .24s ease-out}
+@keyframes tutPop{from{opacity:0;transform:translateX(-50%) translateY(-6px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+#tutNo{font-size:10.5px;letter-spacing:3px;color:rgba(125,211,252,.9);margin-bottom:3px}
+#tutText{font-size:14.5px;font-weight:800;letter-spacing:.5px;color:#fff;line-height:1.35}
+#tutSub{font-size:11.5px;color:rgba(196,214,240,.82);margin-top:3px;line-height:1.5}
+/* 方向牌：整段教程一直挂着「→ 往右走」，避免玩家中途回头找路。
+   amber 色单独一档，和上面的说明文字区分开，扫一眼就能看见。
+   箭头做一点呼吸式横移，静态图里也不至于像一行死文字。 */
+#tutDir{margin-top:5px;font-size:11px;font-weight:700;letter-spacing:2.5px;
+  color:#fcd34d;opacity:.92;animation:tutArrow 1.6s ease-in-out infinite}
+@keyframes tutArrow{0%,100%{transform:translateX(-3px)}50%{transform:translateX(3px)}}
+.menuVeil{position:absolute;inset:0;z-index:1;pointer-events:none;
+  background:radial-gradient(140% 120% at 26% 45%,rgba(3,7,16,0) 46%,rgba(3,7,16,.55) 100%),
+    linear-gradient(0deg,rgba(3,7,16,.55) 0%,rgba(3,7,16,.16) 12%,rgba(3,7,16,0) 24%)}
+/* 右侧柔光：没有边框的一层压暗 —— 白字立得住，又不会在插画上切出一道边 */
+.menuScrim{position:absolute;inset:0;z-index:1;pointer-events:none;
+  background:linear-gradient(270deg,rgba(3,7,15,.90) 0%,rgba(4,8,17,.70) 16%,rgba(4,9,18,.30) 32%,rgba(4,9,18,0) 46%)}
+.menuBrand{position:absolute;left:36px;bottom:30px;z-index:2;display:flex;align-items:center;gap:12px;
+  color:rgba(226,238,255,.74);font-family:"Palatino Linotype","STZhongsong","KaiTi",serif;
+  letter-spacing:6px;font-size:12px;text-shadow:0 2px 10px rgba(0,0,0,.8)}
+.menuBrand i{display:block;width:34px;height:1px;
+  background:linear-gradient(90deg,rgba(184,214,255,.9),rgba(184,214,255,0))}
+/* 音乐开关：挪到左下角，把右上角整块留给标题（旧版贴在右上会和标题打架） */
+#ovMenu .bgmSwitch{left:36px;bottom:66px;top:auto;right:auto;
+  background:rgba(10,16,30,.42);border-color:rgba(150,185,255,.22);color:rgba(226,238,255,.86)}
+
+/* 标题 + 选项：右下角一列纯文字，无框无底，像刻在风景上 */
+.menuRight{position:absolute;right:52px;top:44px;bottom:26px;width:340px;z-index:2;
+  display:flex;flex-direction:column;align-items:flex-end;text-align:right}
+.mtCn{font-family:"Palatino Linotype","STZhongsong","KaiTi","SimSun",serif;
+  font-size:48px;font-weight:700;line-height:1.06;letter-spacing:13px;margin-right:-13px;
+  color:#f9fcff;text-shadow:0 2px 4px rgba(0,0,0,.45),0 8px 30px rgba(0,0,0,.55),0 0 26px rgba(160,205,255,.18)}
+.mtEn{margin-top:7px;margin-right:-6px;font-size:9px;letter-spacing:6px;font-weight:600;
+  color:rgba(214,230,255,.62);text-transform:uppercase}
+.mtRule{width:100%;height:1px;margin:13px 0 0;
+  background:linear-gradient(270deg,rgba(226,240,255,.62),rgba(226,240,255,.05) 62%,rgba(226,240,255,0))}
+.mtVer{margin-top:9px;font-size:10px;letter-spacing:2.4px;color:rgba(198,216,244,.55)}
+
+.menuList{margin-top:24px;width:100%;display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.mItem{position:relative;display:flex;align-items:center;justify-content:flex-end;gap:10px;
+  padding:7px 0 7px 16px;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;
+  transform:translateX(0);transition:transform .24s cubic-bezier(.22,.61,.36,1),opacity .2s}
+.mArrow{width:0;height:0;opacity:0;transform:translateX(8px);flex:0 0 auto;
+  border-left:7px solid rgba(255,255,255,.92);border-top:5px solid transparent;border-bottom:5px solid transparent;
+  filter:drop-shadow(0 0 7px rgba(184,222,255,.9));transition:opacity .22s,transform .24s}
+.mLab{font-family:"Palatino Linotype","STZhongsong","KaiTi","SimSun",serif;
+  font-size:20.5px;font-weight:600;letter-spacing:9px;margin-right:-9px;color:#eff6ff;
+  text-shadow:0 2px 10px rgba(0,0,0,.6);transition:color .2s,letter-spacing .24s,text-shadow .24s}
+.mItem::after{content:"";position:absolute;right:0;bottom:3px;height:1px;width:0;
+  background:linear-gradient(270deg,rgba(232,244,255,.9),rgba(232,244,255,0));
+  transition:width .26s ease}
+.mItem:hover{transform:translateX(-12px)}
+.mItem:hover .mArrow{opacity:1;transform:translateX(0)}
+.mItem:hover .mLab{color:#fff;letter-spacing:10.5px;margin-right:-10.5px;
+  text-shadow:0 0 18px rgba(198,226,255,.8),0 2px 10px rgba(0,0,0,.55)}
+.mItem:hover::after{width:100%}
+.mItem:active{transform:translateX(-21px) scale(.985);opacity:.82}
+/* 点击反馈：按下后整行再往左拖一下并回弹（触屏没有 hover，也看得见） */
+.mItem.hit{animation:mHit .26s cubic-bezier(.3,.7,.4,1)}
+@keyframes mHit{
+  0%{transform:translateX(-8px)}
+  38%{transform:translateX(-26px);opacity:.72}
+  100%{transform:translateX(-8px)}
+}
+.mpFoot{margin-top:auto;padding-top:16px;display:flex;flex-direction:column;align-items:flex-end;gap:2px;
+  font-size:9.5px;letter-spacing:1.8px;color:rgba(170,190,220,.5)}
+body.mobile .menuRight{right:22px;top:26px;bottom:16px;width:250px}
+body.mobile .mtCn{font-size:30px;letter-spacing:9px;margin-right:-9px}
+body.mobile .mtEn{font-size:7.5px;letter-spacing:4px;margin-right:-4px}
+body.mobile .mLab{font-size:14.5px;letter-spacing:6px;margin-right:-6px}
+body.mobile .menuList{margin-top:14px;gap:0}
+body.mobile .mItem{padding:5px 0 5px 10px}
+body.mobile #ovMenu .bgmSwitch{left:18px;bottom:52px;font-size:10px;padding:5px 10px}
+body.mobile .menuBrand{left:18px;bottom:18px;font-size:10px;letter-spacing:4px}
+
 .skgrid{display:flex;align-items:center;gap:3px 7px;flex-wrap:wrap;justify-content:center}
 .ski{display:inline-flex;align-items:center;gap:3px;white-space:nowrap}
 .tk{font-size:9.5px;color:#8fa0c8}
@@ -449,11 +570,112 @@ body.pad .bartxt{font-size:9px}
 #rotateTip .rt{font-size:17px;letter-spacing:1px}
 #rotateTip .rs{font-size:13px;color:#8fa0c8}
 
+/* ============================================================
+ * v4.17 玻璃主题（房间界面先行，之后逐界面铺开）
+ *
+ * 为什么单独一套：以前所有覆盖层都是「实心深蓝面板 + 冷蓝描边」，
+ * 是把立绘当墙纸挡在后面的做法。现在背景就是主菜单那张 4K 立绘，
+ * 面板越实、越像糊了一层布。
+ *
+ * 规则只有三条：
+ *   1. 面板不要底色，只要「一层薄雾 + 一根白线」；
+ *   2. 文字尽量纯白，靠 text-shadow 压住背景亮度，而不是靠加深底色；
+ *   3. 所有可点的东西都要有三态：常态 / 悬停（抬起）/ 按下（下沉 + 提亮）。
+ * 按下态用 .press 类（70_ui.js 里用事件委托统一挂），触屏也能触发 ——
+ * CSS 的 :active 在移动端经常因为滚动判定而闪不出来。
+ * ============================================================ */
+.ov.glass{
+  background-image:
+    radial-gradient(150% 90% at 50% 0%,rgba(6,9,18,.22) 0%,rgba(6,9,18,.52) 58%,rgba(6,9,18,.76) 100%),
+    var(--menuBg,none);
+  background-position:center,center;background-size:cover,cover;background-repeat:no-repeat,no-repeat;
+}
+.ov.glass h2,.ov.glass .roomwrap h2{color:#fff;text-shadow:0 2px 16px rgba(0,0,0,.7),0 1px 3px rgba(0,0,0,.8)}
+.ov.glass .sub,.ov.glass .hint,.ov.glass .sktext,.ov.glass .cl{
+  color:rgba(255,255,255,.76);text-shadow:0 1px 8px rgba(0,0,0,.65)}
+.ov.glass .hr{background:rgba(255,255,255,.22)}
+.ov.glass .back{
+  color:rgba(255,255,255,.88);border:1px solid rgba(255,255,255,.45);
+  background:rgba(255,255,255,.07);backdrop-filter:blur(3px);transition:.15s}
+.ov.glass .back:hover{color:#fff;border-color:#fff;background:rgba(255,255,255,.16)}
+.ov.glass .coinbar{background:rgba(251,191,36,.12);border-color:rgba(255,255,255,.42);color:#ffe4a3}
+
+/* ---- 角色卡：透明玻璃 ---- */
+.ov.glass .pcard{
+  background:rgba(6,10,20,.38);border:1px solid rgba(255,255,255,.5);border-radius:16px;
+  box-shadow:0 12px 32px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.18);
+  backdrop-filter:blur(4px);
+  transition:transform .15s,border-color .15s,box-shadow .15s,background .15s}
+.ov.glass .pcard:hover{transform:translateY(-3px);border-color:rgba(255,255,255,.92);
+  background:rgba(10,16,30,.5);
+  box-shadow:0 18px 40px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.3)}
+.ov.glass .pcard.mine{border-color:#fff;box-shadow:0 0 0 1px rgba(255,255,255,.9),0 0 26px rgba(255,255,255,.3),0 14px 34px rgba(0,0,0,.45)}
+.ov.glass .pcard .pv{background:rgba(255,255,255,.07);border-radius:10px}
+.ov.glass .pcard .pn{color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.6)}
+.ov.glass .pcard .cb{background:rgba(255,255,255,.94);color:#0a1020;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+.ov.glass .card.add{border-color:rgba(255,255,255,.55);border-style:dashed;
+  background:rgba(255,255,255,.04);color:rgba(255,255,255,.8)}
+.ov.glass .card.add:hover{background:rgba(255,255,255,.12);border-color:#fff}
+
+/* ---- 一排排小按钮（难度 / 技能 / 队伍 / 设置 / 地图）：白线胶囊 ---- */
+.ov.glass .lv,.ov.glass .setbtn,.ov.glass .mapchip,.ov.glass .tchip,.ov.glass .rule{
+  background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.42);
+  color:rgba(255,255,255,.94);transition:.15s}
+.ov.glass .lv:hover,.ov.glass .setbtn:hover,.ov.glass .mapchip:hover,.ov.glass .tchip:hover,
+.ov.glass .rule:hover{border-color:#fff;background:rgba(255,255,255,.16)}
+.ov.glass .lv.sel,.ov.glass .mapchip.sel,.ov.glass .tchip.sel,.ov.glass .rule.sel{
+  border-color:#fff;color:#fff;background:rgba(255,255,255,.2);
+  box-shadow:0 0 0 1px rgba(255,255,255,.75),0 0 18px rgba(255,255,255,.22)}
+.ov.glass .rule span{color:rgba(255,255,255,.62)}
+.ov.glass .rule b{color:#fff}
+
+/* ---- 地图弹窗 / 设置弹窗：仍然要够实，否则滑条看不清 ---- */
+.ov.glass .mapbox{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.3)}
+.ov.glass .msrow{color:rgba(255,255,255,.72)}
+.ov.glass .msrow b{color:#fff}
+.ov.glass .mmodal{background:rgba(2,6,16,.55)}
+.ov.glass .mmodal .mbox{background:rgba(10,14,26,.92);border-color:rgba(255,255,255,.32);
+  box-shadow:0 18px 60px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.14)}
+.ov.glass .mmodal .mhead{color:#fff}
+.ov.glass .mmodal .mclose{color:rgba(255,255,255,.65)}
+.ov.glass .mmodal .mclose:hover{color:#fff}
+
+/* ---- 主按钮：白底墨字（整屏只有一处高对比，视线自然落上去） ---- */
+.ov.glass .btn{
+  background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.6);
+  color:#fff;transition:.15s}
+.ov.glass .btn:hover{background:rgba(255,255,255,.2);border-color:#fff;transform:translateY(-1px)}
+.ov.glass .btn.ghost{background:transparent;border-color:rgba(255,255,255,.4);color:rgba(255,255,255,.9)}
+.ov.glass .roomfoot .btn,.ov.glass .btn.primary{
+  background:#fff;border-color:#fff;color:#0a1020;
+  box-shadow:0 10px 30px rgba(0,0,0,.45),0 0 24px rgba(255,255,255,.28)}
+.ov.glass .roomfoot .btn:hover,.ov.glass .btn.primary:hover{
+  background:#fff;box-shadow:0 14px 36px rgba(0,0,0,.55),0 0 30px rgba(255,255,255,.5)}
+
+/* ---- 联机地址框 ---- */
+.ov.glass .addrbox{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.32);color:#fff}
+
+/* ---- 统一按下反馈：下沉 1px + 提亮，110ms 后自己弹回 ----
+   用 !important 是因为 .pcard:hover 也会写 transform，特异度比 .press 高。 */
+.ov .press{
+  transform:translateY(1.5px) scale(.978)!important;
+  filter:brightness(1.25) saturate(1.05);
+  transition-duration:.04s!important}
+
 </style>
 </head>
 <body>
+<div id="ambient" aria-hidden="true"></div>
 <div id="app">
   <canvas id="cv" width="960" height="600"></canvas>
+  <!-- v4.19 新手教程：正上方的步骤提示。挂在 #app 里而不是 body：
+       它要跟着舞台一起缩放，玩家改窗口大小也不能跑偏。 -->
+  <div id="tutTip" class="hide">
+    <div id="tutNo"></div>
+    <div id="tutText"></div>
+    <div id="tutSub"></div>
+    <div id="tutDir">→ 往右走</div>
+  </div>
   <div id="hud">
     <div class="topbar">
       <span class="logo">孤高旅斗</span><span class="ver" id="hudVer">v__VERSION__</span>
@@ -479,82 +701,33 @@ body.pad .bartxt{font-size:9px}
     </filter>
   </svg>
 
-  <!-- 主菜单 -->
+  <!-- 主菜单（v4.15）：插画铺满左侧，右侧一列纯白文字（大标题 + 七个入口），
+       无框无底，选项悬停 / 点击时整行往左轻拖，像风吹过。
+       canvas 由 86_live2d.js 逐帧绘制：裙摆、发丝、手臂、远云都在极慢地动。 -->
   <div class="ov" id="ovMenu">
-    <div class="bgmSwitch" id="btnBgm" title="背景音乐开关（随机播放，低音量）">🎵 音乐开</div>
-    <h1 class="ztitle"><svg class="zsword" viewBox="0 0 60 164" aria-hidden="true">
-      <defs>
-        <linearGradient id="swBlade" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stop-color="#b4bac2"/><stop offset=".2" stop-color="#8d95a2"/>
-          <stop offset=".5" stop-color="#6d798c"/><stop offset=".8" stop-color="#8d95a2"/>
-          <stop offset="1" stop-color="#adb3bb"/>
-        </linearGradient>
-        <linearGradient id="swWing" x1="0" y1="1" x2="0" y2="0">
-          <stop offset="0" stop-color="#25396e"/><stop offset="1" stop-color="#55719f"/>
-        </linearGradient>
-        <linearGradient id="swGrip" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stop-color="#2a2436"/><stop offset="1" stop-color="#3b3448"/>
-        </linearGradient>
-      </defs>
-      <!-- 剑身：陈旧钢芯，刃口多处崩缺 -->
-      <polygon points="30,2 33.6,13 35.0,26 33.2,30 35.0,35 35.4,50 33.6,55 35.2,61 35.6,78 34.4,84 34.9,90 30,93 25.4,90 24.8,84 25.6,77 24.2,72 25.8,66 24.4,61 26.0,55 24.6,50 26.2,44 25.0,38 26.4,31 25.2,26 26.7,13"
-        fill="url(#swBlade)" stroke="#232a36" stroke-width="1.1" stroke-linejoin="round"/>
-      <!-- 残存高光（断续，旧化后失去整体光泽） -->
-      <polygon points="29.6,6 30.8,16 30.4,50 29.2,50 29.2,16" fill="rgba(255,255,255,.22)"/>
-      <polygon points="29.6,58 30.8,58 30.6,74 29.4,74" fill="rgba(255,255,255,.14)"/>
-      <!-- 血槽与裂纹 -->
-      <path d="M30 9 L30 89" stroke="rgba(22,28,40,.4)" stroke-width="1.5" fill="none"/>
-      <path d="M31.8 19 L30.5 33 L32.2 45" stroke="#2b3242" stroke-width=".9" fill="none" opacity=".9"/>
-      <path d="M32.2 45 L33.6 49" stroke="#2b3242" stroke-width=".7" fill="none" opacity=".8"/>
-      <path d="M28.3 40 L29.4 51 L27.9 59" stroke="#2b3242" stroke-width=".8" fill="none" opacity=".85"/>
-      <path d="M28.8 68 L30 76" stroke="#2b3242" stroke-width=".7" fill="none" opacity=".7"/>
-      <!-- 锈斑与暗色包浆 -->
-      <polygon points="32.6,21 34.4,23.5 33.2,26.5 31.4,24" fill="rgba(122,78,44,.34)"/>
-      <polygon points="26.2,35.5 28,38 26.6,41 25,38.5" fill="rgba(122,78,44,.30)"/>
-      <polygon points="33.6,62.5 35.2,65.5 33.6,68 32.2,65" fill="rgba(150,96,52,.28)"/>
-      <polygon points="27,71.5 28.6,74 27.2,76.5 25.8,74" fill="rgba(122,78,44,.30)"/>
-      <polygon points="31.8,43 33.2,45.5 31.6,47.5 30.6,45" fill="rgba(70,84,96,.45)"/>
-      <polygon points="28.4,80 30.2,82.5 28.6,85 27.2,82.5" fill="rgba(70,84,96,.40)"/>
-      <!-- 护手：上扬双翼，边缘缺损 + 划痕 -->
-      <path d="M28 97 C 20 97, 9 91, 4 72 C 7 77, 12 80, 16 79.5 C 13 82.5, 14 87, 18 89 C 15 92.5, 20 96, 28 97 Z"
-            fill="url(#swWing)" stroke="#1d2432" stroke-width="1.2" stroke-linejoin="round"/>
-      <path d="M32 97 C 40 97, 51 91, 56 72 C 53 77, 48 80, 44 79.5 C 47 82.5, 46 87, 42 89 C 45 92.5, 40 96, 32 97 Z"
-            fill="url(#swWing)" stroke="#1d2432" stroke-width="1.2" stroke-linejoin="round"/>
-      <path d="M8 77.5 L18 83.5" stroke="rgba(215,228,255,.30)" stroke-width=".8" fill="none"/>
-      <path d="M52 77.5 L42 83.5" stroke="rgba(215,228,255,.30)" stroke-width=".8" fill="none"/>
-      <polygon points="10,73.5 13.4,76.5 9.4,78" fill="rgba(18,24,38,.55)"/>
-      <polygon points="50,73.5 46.6,76.5 50.6,78" fill="rgba(18,24,38,.55)"/>
-      <polygon points="20.6,92.5 23,94.5 20.4,95.5" fill="rgba(18,24,38,.5)"/>
-      <polygon points="39.4,92.5 37,94.5 39.6,95.5" fill="rgba(18,24,38,.5)"/>
-      <!-- 中央块：掉漆 -->
-      <rect x="25.4" y="92" width="9.2" height="13" rx="2" fill="#33405c" stroke="#1d2432" stroke-width="1.1"/>
-      <rect x="27" y="94" width="2.6" height="4" rx="1" fill="rgba(122,78,44,.35)"/>
-      <!-- 紫宝石：失泽 + 裂纹 -->
-      <polygon points="30,98 35,105.5 30,113 25,105.5" fill="#5b3a99" stroke="#1d2432" stroke-width="1.1"/>
-      <polygon points="30,99.5 33.4,105.5 30,111.5 26.6,105.5" fill="#7d54c2" opacity=".8"/>
-      <path d="M27.4 103.4 L32.2 107.2" stroke="#241b3a" stroke-width=".9" fill="none" opacity=".9"/>
-      <!-- 剑柄：磨损缠绳，一处松脱 -->
-      <rect x="26.6" y="113" width="6.8" height="24" rx="2.4" fill="url(#swGrip)" stroke="#161220" stroke-width="1.1"/>
-      <path d="M26.6 118.5 L33.4 120.5 M26.6 124 L33.4 126 M26.6 129.5 L33.4 131.5 M26.6 135 L33.4 137"
-            stroke="#514466" stroke-width="1.4"/>
-      <rect x="26.6" y="121.5" width="6.8" height="2.2" fill="rgba(0,0,0,.38)"/>
-      <!-- 柄尾：磕碰缺口 + 失泽宝石 -->
-      <polygon points="25,137 35,137 33.4,146 26.6,146" fill="#221c33" stroke="#161220" stroke-width="1.1"/>
-      <polygon points="26.2,139.5 28.4,141 26.4,142.6" fill="rgba(0,0,0,.45)"/>
-      <circle cx="30" cy="151.5" r="4.6" fill="#5b3a99" stroke="#161220" stroke-width="1.1"/>
-      <circle cx="28.7" cy="150.3" r="1.3" fill="#9d78d9" opacity=".7"/>
-      <path d="M31 154.5 L33.2 152.6" stroke="#241b3a" stroke-width=".8" fill="none" opacity=".8"/>
-    </svg><span class="ztwrap"><span class="zt">孤高旅斗</span></span></h1>
-    <div class="sub" id="menuVer">v__VERSION__ · 听雨的声音</div>
-    <div class="hr"></div>
-    <div class="grid g3" style="max-width:760px">
-      <div class="card" id="mSolo"><div class="t">🗺️ 单人游戏</div><div class="d">关卡征伐，闯关模式与勇者格斗</div></div>
-      <div class="card" id="mMulti"><div class="t">🌐 多人游戏</div><div class="d">局域网 2-4 人，房间内自由换装与编排人机</div></div>
-      <div class="card" id="mHelp"><div class="t">📖 游戏帮助</div><div class="d">玩法、技能、联机方法全在这里</div></div>
-      <div class="card" id="mSkin"><div class="t">🎨 皮肤商店</div><div class="d">头部 / 上身 / 下身，自由搭配</div></div>
-      <div class="card" id="mSkill"><div class="t">⚔️ 技能商店</div><div class="d">购买与装配普攻、技能、大招</div></div>
-      <div class="card" id="mLoad"><div class="t">🎽 我的配装</div><div class="d">查看当前外观与技能组合</div></div>
-      <div class="card" id="mAch"><div class="t">🏆 成就称号</div><div class="d">累计战绩、成就解锁与称号佩戴</div></div>
+    <canvas id="menuBg" width="1600" height="1000" aria-hidden="true"></canvas>
+    <div class="menuVeil" aria-hidden="true"></div>
+    <div class="menuScrim" aria-hidden="true"></div>
+    <div class="menuBrand"><span>孤 高</span><i></i><span>听雨的声音</span></div>
+    <div class="bgmSwitch" id="btnBgm" title="背景音乐开关（随机播放，低音量）">&#127925; 音乐开</div>
+
+    <div class="menuRight">
+      <div class="mtCn">孤高旅斗</div>
+      <div class="mtEn">GUGAO LUDOU</div>
+      <div class="mtRule"></div>
+      <div class="mtVer" id="menuVer">v__VERSION__ · 听雨的声音</div>
+
+      <nav class="menuList">
+        <div class="mItem" id="mSolo"><i class="mArrow"></i><span class="mLab" id="mSoloLab">单人游戏</span></div>
+        <div class="mItem" id="mMulti"><i class="mArrow"></i><span class="mLab">多人游戏</span></div>
+        <div class="mItem" id="mSkin"><i class="mArrow"></i><span class="mLab">皮肤商店</span></div>
+        <div class="mItem" id="mSkill"><i class="mArrow"></i><span class="mLab">技能商店</span></div>
+        <div class="mItem" id="mLoad"><i class="mArrow"></i><span class="mLab">我的配装</span></div>
+        <div class="mItem" id="mAch"><i class="mArrow"></i><span class="mLab">成就称号</span></div>
+        <div class="mItem" id="mHelp"><i class="mArrow"></i><span class="mLab">游戏帮助</span></div>
+      </nav>
+
+      <div class="mpFoot"><span>Ver. __VERSION__</span><span>RikkaLove0721</span></div>
     </div>
   </div>
 
@@ -572,6 +745,7 @@ body.pad .bartxt{font-size:9px}
     <div class="hr"></div>
     <div class="grid g2" style="max-width:640px">
       <div class="card" id="sGauntlet"><div class="t">⚔ 死战闯关</div><div class="d" id="gauntletDesc">连打 6 关，每关之间选一个 Buff，通关 50 金币</div></div>
+      <div class="card" id="sTut"><div class="t">📖 新手教程</div><div class="d" id="tutDesc">七步走完操作提示：移动 / 攻击 / 技能 / 交互 / 开车 / 道具箱 / 大招，首次通关 50 金币</div></div>
     </div>
   </div>
 
@@ -586,7 +760,7 @@ body.pad .bartxt{font-size:9px}
   </div>
 
   <!-- 人机设置（开房间式角色卡，内容由 75_room.js 渲染） -->
-  <div class="ov hide" id="ovDuelSetup">
+  <div class="ov hide glass" id="ovDuelSetup">
     <div class="back" data-back="ovSolo">‹ 返回</div>
     <div class="coinbar"><i class="coin"></i><span class="coinNum">0</span></div>
     <div id="roomBody" class="roomwrap"></div>
@@ -623,7 +797,7 @@ body.pad .bartxt{font-size:9px}
   </div>
 
   <!-- 房间准备（角色卡，内容由 75_room.js 渲染） -->
-  <div class="ov hide" id="ovWait">
+  <div class="ov hide glass" id="ovWait">
     <div class="back" id="btnLeaveWait">‹ 离开房间</div>
     <div id="netRoomBody" class="roomwrap"></div>
   </div>

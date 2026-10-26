@@ -406,6 +406,8 @@
     if (o.kind === "fence" || o.kind === "barrier") { drawFence(ctx, o, mat, x0, y0, w, h, base, el); return; }
     if (o.kind === "barrel") { drawBarrel(ctx, o, mat, x0, top0(o, y0, el), w, h, el); return; }
     if (o.kind === "tire") { drawTire(ctx, o, mat, x0, y0, w, h, el); return; }
+    /* v4.13 渡江战役：船只用 AI 生图（没有贴图就退回程序化木船） */
+    if (o.kind === "car" && o.ship) { drawShip(ctx, o, mat, x0, y0, w, h, el, t); return; }
     /* v4.8 碰碰车竞技：橡胶保险杠 + 集电杆，按座位给司机帽上色，和地形里的普通汽车区分开 */
     if (o.kind === "car" && o.bump) { bumperCar(ctx, o, mat, x0, y0, w, h, el); return; }
     if (o.kind === "car") { drawCar(ctx, o, mat, x0, y0, w, h, el); return; }
@@ -573,6 +575,92 @@
       ctx.stroke();
     }
     ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  /* ---------------- v4.13 渡江战役：船只 ---------------- */
+  const _shipImg = {};
+  function shipImg(key) {
+    const src = (typeof window !== "undefined" && window.LD_PROP_IMG && window.LD_PROP_IMG[key]) || null;
+    if (!src) return null;
+    if (!_shipImg[key]) { const im = new Image(); im.src = src; _shipImg[key] = im; }
+    const im = _shipImg[key];
+    return (im.complete && im.naturalWidth) ? im : null;
+  }
+
+  /**
+   * 船只：优先画 AI 生图（船头朝右），贴图等比缩放到船体格子里；
+   * 没有贴图时退回程序化木船——保证任何环境（含无头测试）都不崩。
+   * 有司机时船上会冒尾迹；油量见底时船身泛红。
+   */
+  function drawShip(ctx, o, mat, x0, y0, w, h, el, t) {
+    const p = mat.pal;
+    const cx = x0 + w / 2, cy = y0 + h / 2;
+    ctx.save();
+
+    /* 水面投影（船贴着水，影子要扁） */
+    ctx.fillStyle = "rgba(3,18,30,.40)";
+    ctx.beginPath();
+    ctx.ellipse(cx + 3, cy + h * 0.22, w * 0.54, h * 0.30, 0, 0, TAU);
+    ctx.fill();
+
+    /* 行驶尾迹 */
+    const sp = Math.hypot(o.vx || 0, o.vy || 0);
+    if (sp > 40) {
+      ctx.globalAlpha = Math.min(0.55, sp / 520);
+      ctx.strokeStyle = "#e0f2fe"; ctx.lineWidth = 3;
+      const back = Math.atan2(-(o.vy || 0), -(o.vx || 0));
+      for (let i = 0; i < 3; i++) {
+        const rr = w * (0.46 + i * 0.13);
+        ctx.beginPath();
+        ctx.arc(cx, cy, rr, back - 0.5, back + 0.5);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    const im = shipImg(o.shipImg || "boat_row");
+    if (im) {
+      /* 贴图是「船头朝右」的侧俯视，等比塞进船体格（略放大，让船看起来压住水面） */
+      const scale = 1.18;
+      const boxW = w * scale, boxH = h * scale * 1.5;
+      const ratio = im.naturalWidth / im.naturalHeight;
+      let dw = boxW, dh = dw / ratio;
+      if (dh > boxH) { dh = boxH; dw = dh * ratio; }
+      const bob = Math.sin(t * 2.2 + (o.uid || 0) * 0.7) * 1.6;
+      if (o.flash > 0) ctx.globalAlpha = 0.86;
+      ctx.drawImage(im, cx - dw / 2, cy - dh / 2 + h * 0.06 + bob, dw, dh);
+      ctx.globalAlpha = 1;
+    } else {
+      /* 程序化兜底：一条两头翘的木船 */
+      const hullH = Math.min(h * 0.62, 44);
+      const g = ctx.createLinearGradient(0, cy - hullH / 2, 0, cy + hullH / 2);
+      g.addColorStop(0, p.hi); g.addColorStop(0.55, p.top); g.addColorStop(1, p.lo);
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.moveTo(x0 + 2, cy - hullH * 0.32);
+      ctx.quadraticCurveTo(cx, cy - hullH * 0.78, x0 + w - 2, cy - hullH * 0.12);
+      ctx.quadraticCurveTo(cx, cy + hullH * 0.72, x0 + 2, cy + hullH * 0.30);
+      ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = p.edge; ctx.lineWidth = 2; ctx.stroke();
+      /* 船舱 */
+      ctx.fillStyle = "rgba(15,23,42,.55)";
+      roundRect(ctx, cx - w * 0.16, cy - hullH * 0.16, w * 0.32, hullH * 0.34, 4);
+      ctx.fill();
+      /* 一点高光 */
+      ctx.strokeStyle = "rgba(255,255,255,.35)"; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.moveTo(x0 + 8, cy - hullH * 0.12); ctx.lineTo(x0 + w - 10, cy - hullH * 0.02); ctx.stroke();
+    }
+
+    /* 受击白闪 */
+    if (o.flash > 0) {
+      ctx.globalCompositeOperation = "lighter";
+      ctx.globalAlpha = Math.min(0.5, o.flash * 2);
+      ctx.fillStyle = "#fff";
+      roundRect(ctx, x0, y0, w, h, 8); ctx.fill();
+      ctx.globalCompositeOperation = "source-over";
+      ctx.globalAlpha = 1;
+    }
     ctx.restore();
   }
 

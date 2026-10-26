@@ -260,7 +260,7 @@
         }
         this.damage(p.owner, f, p.dmg, { type: p.kindTag === "ult" ? "ult" : "skill", proj: true,
           basic: !!p.basic, kb: p.pierce ? 90 : 130, from: p.owner,
-          hitDir: Math.atan2(p.vy, p.vx), root: p.root, stun: p.stun, blind: p.blind });
+          hitDir: Math.atan2(p.vy, p.vx), root: p.root, stun: p.stun, blind: p.blind, blackout: p.blackout });
         if (p.root) { f.root = Math.max(f.root, p.root); FX.float(f.x, f.y - 60, "定身 " + p.root + "s", "#6ee7b7", 14); }
         FX.burst(p.x, p.y, 10, [p.color, p.core], { speed: 170, dir: Math.atan2(-p.vy, -p.vx) });
         if (!p.pierce) { this.projs.splice(i, 1); }
