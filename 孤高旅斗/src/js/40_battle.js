@@ -1848,6 +1848,10 @@
           f.facing = { x: ux, y: uy };
           f.cd.dodge = C.dodge.cd * (f.perkDodgeM || 1);
           f.cd.basic = Math.max(f.cd.basic, C.dodge.cd);   // 普攻与闪避共享 CD：闪避会锁住普攻
+          /* v4.23 新手教程：闪避这一步只有**真的位移出去**才算数。
+           * 挂在成功分支里而不是按键处 —— 冷却中按键只弹「闪避冷却中」，
+           * 不该让教程以为玩家学会了。 */
+          if (this.mode === "tutorial" && this.tutOnDodge) this.tutOnDodge(f);
           FX.burst(f.x, f.y - 26, 10, ["#9be8ff", "#e0fbff"], { speed: 150, dir: Math.atan2(-uy, -ux), spread: 0.9 });
           FX.float(f.x, f.y - 56, "闪避", "#9be8ff", 13);
         }

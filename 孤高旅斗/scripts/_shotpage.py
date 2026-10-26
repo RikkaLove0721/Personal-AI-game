@@ -43,6 +43,10 @@ ACT = {
                 'st.textContent="#tutTip{background:#22ff22 !important;border:1px solid #22ff22 !important}";'
                 'document.head.appendChild(st);'),
     # 直接跳到索敌那一步：看提示条的文字、方向牌、以及两根木桩的相对位置
+    "tutdodge": ('LD.Profile.d.tutDone = false; LD.UI.startTutorial();'
+                 'setTimeout(function(){var B=LD.Battle, h=B.tutHero;'
+                 'h.x = 780; B.tutGo(4);'
+                 '}, 300);'),
     "tutlock": ('LD.Profile.d.tutDone = false; LD.UI.startTutorial();'
                 'setTimeout(function(){var B=LD.Battle, h=B.tutHero;'
                 'h.x = 640; B.tutGo(3);'

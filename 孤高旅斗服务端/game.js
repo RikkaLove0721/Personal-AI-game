@@ -1,13 +1,13 @@
 /* 主菜单立绘由 build.py 自动内嵌，请勿手改 */
-window.LD_MENU_BG="assets/menu-bg.jpg?v=b12e4b9311";
+window.LD_MENU_BG="assets/menu-bg.jpg?v=c7673842de";
 /* 主菜单分层素材由 build.py 自动内嵌，请勿手改 */
-window.LD_CHAR={"frame": [3840, 2156], "layers": {"body": {"uv": [0.07578125, 0.05983302411873841, 0.71640625, 1.0], "px": [1315, 1084], "src": "assets/char/body.webp?v=b12e4b9311"}, "armA": {"uv": [0.29635416666666664, 0.22541743970315398, 0.33359375, 0.4819109461966605], "px": [76, 296], "src": "assets/char/armA.webp?v=b12e4b9311"}, "armB": {"uv": [0.37421875, 0.22356215213358072, 0.40963541666666664, 0.4819109461966605], "px": [73, 298], "src": "assets/char/armB.webp?v=b12e4b9311"}, "hair": {"uv": [0.12369791666666667, 0.19387755102040816, 0.33177083333333335, 0.7407235621521335], "px": [427, 630], "src": "assets/char/hair.webp?v=b12e4b9311"}, "skirt": {"uv": [0.2265625, 0.4072356215213358, 0.44583333333333336, 0.9786641929499073], "px": [450, 659], "src": "assets/char/skirt.webp?v=b12e4b9311"}, "sword": {"uv": [0.22890625, 0.5176252319109462, 0.7119791666666667, 0.9257884972170687], "px": [992, 470], "src": "assets/char/sword.webp?v=b12e4b9311"}, "eye": {"uv": [0.34479166666666666, 0.16326530612244897, 0.3765625, 0.19341372912801486], "px": [130, 69], "src": "assets/char/eye.webp?v=b12e4b9311", "content": [0.3463541666666667, 0.1660482374768089, 0.375, 0.1906307977736549]}, "mouth": {"uv": [0.35625, 0.20269016697588127, 0.38697916666666665, 0.22634508348794063], "px": [126, 55], "src": "assets/char/mouth.webp?v=b12e4b9311"}, "lid": {"uv": [0.34479166666666666, 0.16326530612244897, 0.3765625, 0.19341372912801486], "px": [130, 69], "src": "assets/char/lid.webp?v=b12e4b9311"}, "lidFar": {"uv": [0.3768229166666667, 0.1702226345083488, 0.38958333333333334, 0.19387755102040816], "px": [52, 55], "src": "assets/char/lidFar.webp?v=b12e4b9311", "content": [0.37890625, 0.17393320964749537, 0.3875, 0.1901669758812616]}, "bg": {"uv": [0, 0, 1, 1], "px": [0, 0], "src": "assets/char/bg.jpg?v=b12e4b9311"}}, "order": ["body", "skirt", "sword", "armA", "armB", "hair", "eye", "mouth"]};
+window.LD_CHAR={"frame": [3840, 2156], "layers": {"body": {"uv": [0.07578125, 0.05983302411873841, 0.71640625, 1.0], "px": [1315, 1084], "src": "assets/char/body.webp?v=c7673842de"}, "armA": {"uv": [0.29635416666666664, 0.22541743970315398, 0.33359375, 0.4819109461966605], "px": [76, 296], "src": "assets/char/armA.webp?v=c7673842de"}, "armB": {"uv": [0.37421875, 0.22356215213358072, 0.40963541666666664, 0.4819109461966605], "px": [73, 298], "src": "assets/char/armB.webp?v=c7673842de"}, "hair": {"uv": [0.12369791666666667, 0.19387755102040816, 0.33177083333333335, 0.7407235621521335], "px": [427, 630], "src": "assets/char/hair.webp?v=c7673842de"}, "skirt": {"uv": [0.2265625, 0.4072356215213358, 0.44583333333333336, 0.9786641929499073], "px": [450, 659], "src": "assets/char/skirt.webp?v=c7673842de"}, "sword": {"uv": [0.22890625, 0.5176252319109462, 0.7119791666666667, 0.9257884972170687], "px": [992, 470], "src": "assets/char/sword.webp?v=c7673842de"}, "eye": {"uv": [0.34479166666666666, 0.16326530612244897, 0.3765625, 0.19341372912801486], "px": [130, 69], "src": "assets/char/eye.webp?v=c7673842de", "content": [0.3463541666666667, 0.1660482374768089, 0.375, 0.1906307977736549]}, "mouth": {"uv": [0.35625, 0.20269016697588127, 0.38697916666666665, 0.22634508348794063], "px": [126, 55], "src": "assets/char/mouth.webp?v=c7673842de"}, "lid": {"uv": [0.34479166666666666, 0.16326530612244897, 0.3765625, 0.19341372912801486], "px": [130, 69], "src": "assets/char/lid.webp?v=c7673842de"}, "lidFar": {"uv": [0.3768229166666667, 0.1702226345083488, 0.38958333333333334, 0.19387755102040816], "px": [52, 55], "src": "assets/char/lidFar.webp?v=c7673842de", "content": [0.37890625, 0.17393320964749537, 0.3875, 0.1901669758812616]}, "bg": {"uv": [0, 0, 1, 1], "px": [0, 0], "src": "assets/char/bg.jpg?v=c7673842de"}}, "order": ["body", "skirt", "sword", "armA", "armB", "hair", "eye", "mouth"]};
 /* 背景音乐由 build.py 自动内嵌，请勿手改 */
-window.LD_MUSIC=[{n:"Feel You",d:"music/Feel%20You.m4a?v=b12e4b9311"},{n:"Weight of the World",d:"music/Weight%20of%20the%20World.m4a?v=b12e4b9311"},{n:"\u66d6\u6627\u30ca\u5e0c\u671b\uff0f\u6c37\u96e8",d:"music/%E6%9B%96%E6%98%A7%E3%83%8A%E5%B8%8C%E6%9C%9B%EF%BC%8F%E6%B0%B7%E9%9B%A8.m4a?v=b12e4b9311"},{n:"\u904a\u5712\u65bd\u8a2d",d:"music/%E9%81%8A%E5%9C%92%E6%96%BD%E8%A8%AD.m4a?v=b12e4b9311"},{n:"\u907a\u30b5\u30ec\u30bf\u5834\u6240\uff0f\u659c\u5149",d:"music/%E9%81%BA%E3%82%B5%E3%83%AC%E3%82%BF%E5%A0%B4%E6%89%80%EF%BC%8F%E6%96%9C%E5%85%89.m4a?v=b12e4b9311"}];
+window.LD_MUSIC=[{n:"Feel You",d:"music/Feel%20You.m4a?v=c7673842de"},{n:"Weight of the World",d:"music/Weight%20of%20the%20World.m4a?v=c7673842de"},{n:"\u66d6\u6627\u30ca\u5e0c\u671b\uff0f\u6c37\u96e8",d:"music/%E6%9B%96%E6%98%A7%E3%83%8A%E5%B8%8C%E6%9C%9B%EF%BC%8F%E6%B0%B7%E9%9B%A8.m4a?v=c7673842de"},{n:"\u904a\u5712\u65bd\u8a2d",d:"music/%E9%81%8A%E5%9C%92%E6%96%BD%E8%A8%AD.m4a?v=c7673842de"},{n:"\u907a\u30b5\u30ec\u30bf\u5834\u6240\uff0f\u659c\u5149",d:"music/%E9%81%BA%E3%82%B5%E3%83%AC%E3%82%BF%E5%A0%B4%E6%89%80%EF%BC%8F%E6%96%9C%E5%85%89.m4a?v=c7673842de"}];
 /* 建筑贴图由 build.py 自动内嵌，请勿手改 */
-window.LD_PROP_IMG={};LD_PROP_IMG["boat_fish"]="assets/props/boat_fish.png?v=b12e4b9311";LD_PROP_IMG["boat_junk"]="assets/props/boat_junk.png?v=b12e4b9311";LD_PROP_IMG["boat_raft"]="assets/props/boat_raft.png?v=b12e4b9311";LD_PROP_IMG["boat_row"]="assets/props/boat_row.png?v=b12e4b9311";LD_PROP_IMG["cannon"]="assets/props/cannon.png?v=b12e4b9311";LD_PROP_IMG["charger"]="assets/props/charger.png?v=b12e4b9311";LD_PROP_IMG["cliff"]="assets/props/cliff.png?v=b12e4b9311";LD_PROP_IMG["crystal"]="assets/props/crystal.png?v=b12e4b9311";LD_PROP_IMG["grave"]="assets/props/grave.png?v=b12e4b9311";LD_PROP_IMG["tower"]="assets/props/tower.png?v=b12e4b9311";LD_PROP_IMG["turret"]="assets/props/turret.png?v=b12e4b9311";
+window.LD_PROP_IMG={};LD_PROP_IMG["boat_fish"]="assets/props/boat_fish.png?v=c7673842de";LD_PROP_IMG["boat_junk"]="assets/props/boat_junk.png?v=c7673842de";LD_PROP_IMG["boat_raft"]="assets/props/boat_raft.png?v=c7673842de";LD_PROP_IMG["boat_row"]="assets/props/boat_row.png?v=c7673842de";LD_PROP_IMG["cannon"]="assets/props/cannon.png?v=c7673842de";LD_PROP_IMG["charger"]="assets/props/charger.png?v=c7673842de";LD_PROP_IMG["cliff"]="assets/props/cliff.png?v=c7673842de";LD_PROP_IMG["crystal"]="assets/props/crystal.png?v=c7673842de";LD_PROP_IMG["grave"]="assets/props/grave.png?v=c7673842de";LD_PROP_IMG["tower"]="assets/props/tower.png?v=c7673842de";LD_PROP_IMG["turret"]="assets/props/turret.png?v=c7673842de";
 /* 皮肤贴图由 build.py 自动内嵌，请勿手改 */
-window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/daishu_head.png?v=b12e4b9311";LD_SKIN_IMG["daishu_lower"]="assets/skins/daishu/parts/daishu_lower.png?v=b12e4b9311";LD_SKIN_IMG["daishu_upper"]="assets/skins/daishu/parts/daishu_upper.png?v=b12e4b9311";LD_SKIN_IMG["doubao_head"]="assets/skins/doubao/parts/doubao_head.png?v=b12e4b9311";LD_SKIN_IMG["doubao_lower"]="assets/skins/doubao/parts/doubao_lower.png?v=b12e4b9311";LD_SKIN_IMG["doubao_upper"]="assets/skins/doubao/parts/doubao_upper.png?v=b12e4b9311";LD_SKIN_IMG["gaosongdeng_head"]="assets/skins/gaosongdeng/parts/gaosongdeng_head.png?v=b12e4b9311";LD_SKIN_IMG["gaosongdeng_lower"]="assets/skins/gaosongdeng/parts/gaosongdeng_lower.png?v=b12e4b9311";LD_SKIN_IMG["gaosongdeng_upper"]="assets/skins/gaosongdeng/parts/gaosongdeng_upper.png?v=b12e4b9311";LD_SKIN_IMG["gaoya_head"]="assets/skins/gaoya/parts/gaoya_head.png?v=b12e4b9311";LD_SKIN_IMG["gaoya_lower"]="assets/skins/gaoya/parts/gaoya_lower.png?v=b12e4b9311";LD_SKIN_IMG["gaoya_upper"]="assets/skins/gaoya/parts/gaoya_upper.png?v=b12e4b9311";LD_SKIN_IMG["gojo_head"]="assets/skins/gojo/parts/gojo_head.png?v=b12e4b9311";LD_SKIN_IMG["gojo_lower"]="assets/skins/gojo/parts/gojo_lower.png?v=b12e4b9311";LD_SKIN_IMG["gojo_upper"]="assets/skins/gojo/parts/gojo_upper.png?v=b12e4b9311";LD_SKIN_IMG["kobe_head"]="assets/skins/kobe/parts/kobe_head.png?v=b12e4b9311";LD_SKIN_IMG["kobe_lower"]="assets/skins/kobe/parts/kobe_lower.png?v=b12e4b9311";LD_SKIN_IMG["kobe_upper"]="assets/skins/kobe/parts/kobe_upper.png?v=b12e4b9311";LD_SKIN_IMG["kunkun_head"]="assets/skins/kunkun/parts/kunkun_head.png?v=b12e4b9311";LD_SKIN_IMG["kunkun_lower"]="assets/skins/kunkun/parts/kunkun_lower.png?v=b12e4b9311";LD_SKIN_IMG["kunkun_upper"]="assets/skins/kunkun/parts/kunkun_upper.png?v=b12e4b9311";LD_SKIN_IMG["naiwa_head"]="assets/skins/naiwa/parts/naiwa_head.png?v=b12e4b9311";LD_SKIN_IMG["naiwa_lower"]="assets/skins/naiwa/parts/naiwa_lower.png?v=b12e4b9311";LD_SKIN_IMG["naiwa_upper"]="assets/skins/naiwa/parts/naiwa_upper.png?v=b12e4b9311";LD_SKIN_IMG["pangmao_head"]="assets/skins/pangmao/parts/pangmao_head.png?v=b12e4b9311";LD_SKIN_IMG["pangmao_lower"]="assets/skins/pangmao/parts/pangmao_lower.png?v=b12e4b9311";LD_SKIN_IMG["pangmao_upper"]="assets/skins/pangmao/parts/pangmao_upper.png?v=b12e4b9311";
+window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/daishu_head.png?v=c7673842de";LD_SKIN_IMG["daishu_lower"]="assets/skins/daishu/parts/daishu_lower.png?v=c7673842de";LD_SKIN_IMG["daishu_upper"]="assets/skins/daishu/parts/daishu_upper.png?v=c7673842de";LD_SKIN_IMG["doubao_head"]="assets/skins/doubao/parts/doubao_head.png?v=c7673842de";LD_SKIN_IMG["doubao_lower"]="assets/skins/doubao/parts/doubao_lower.png?v=c7673842de";LD_SKIN_IMG["doubao_upper"]="assets/skins/doubao/parts/doubao_upper.png?v=c7673842de";LD_SKIN_IMG["gaosongdeng_head"]="assets/skins/gaosongdeng/parts/gaosongdeng_head.png?v=c7673842de";LD_SKIN_IMG["gaosongdeng_lower"]="assets/skins/gaosongdeng/parts/gaosongdeng_lower.png?v=c7673842de";LD_SKIN_IMG["gaosongdeng_upper"]="assets/skins/gaosongdeng/parts/gaosongdeng_upper.png?v=c7673842de";LD_SKIN_IMG["gaoya_head"]="assets/skins/gaoya/parts/gaoya_head.png?v=c7673842de";LD_SKIN_IMG["gaoya_lower"]="assets/skins/gaoya/parts/gaoya_lower.png?v=c7673842de";LD_SKIN_IMG["gaoya_upper"]="assets/skins/gaoya/parts/gaoya_upper.png?v=c7673842de";LD_SKIN_IMG["gojo_head"]="assets/skins/gojo/parts/gojo_head.png?v=c7673842de";LD_SKIN_IMG["gojo_lower"]="assets/skins/gojo/parts/gojo_lower.png?v=c7673842de";LD_SKIN_IMG["gojo_upper"]="assets/skins/gojo/parts/gojo_upper.png?v=c7673842de";LD_SKIN_IMG["kobe_head"]="assets/skins/kobe/parts/kobe_head.png?v=c7673842de";LD_SKIN_IMG["kobe_lower"]="assets/skins/kobe/parts/kobe_lower.png?v=c7673842de";LD_SKIN_IMG["kobe_upper"]="assets/skins/kobe/parts/kobe_upper.png?v=c7673842de";LD_SKIN_IMG["kunkun_head"]="assets/skins/kunkun/parts/kunkun_head.png?v=c7673842de";LD_SKIN_IMG["kunkun_lower"]="assets/skins/kunkun/parts/kunkun_lower.png?v=c7673842de";LD_SKIN_IMG["kunkun_upper"]="assets/skins/kunkun/parts/kunkun_upper.png?v=c7673842de";LD_SKIN_IMG["naiwa_head"]="assets/skins/naiwa/parts/naiwa_head.png?v=c7673842de";LD_SKIN_IMG["naiwa_lower"]="assets/skins/naiwa/parts/naiwa_lower.png?v=c7673842de";LD_SKIN_IMG["naiwa_upper"]="assets/skins/naiwa/parts/naiwa_upper.png?v=c7673842de";LD_SKIN_IMG["pangmao_head"]="assets/skins/pangmao/parts/pangmao_head.png?v=c7673842de";LD_SKIN_IMG["pangmao_lower"]="assets/skins/pangmao/parts/pangmao_lower.png?v=c7673842de";LD_SKIN_IMG["pangmao_upper"]="assets/skins/pangmao/parts/pangmao_upper.png?v=c7673842de";
 /* ===== 00_version.js ===== */
 /* 由 build.py 自动生成，请勿手改 */
 (function (LD) { LD.VERSION = "3.2"; LD.AUTHOR = "RikkaLove0721"; })(window.LD = window.LD || {});
@@ -1512,6 +1512,9 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
       { id: "skill",  tip: "按 K 激光波、按 L 神龙掌，两个都要打中木桩", sub: "K = 技能一　L = 技能二" },
       /* 索敌：右边立第二根木桩，教 V 键把锁定切过去 */
       { id: "lock",   tip: "按 V 切换索敌，把锁定切到右边那个木桩", sub: "V = 切换锁定目标（Shift+V 反向）", dummy: 860 },
+      /* 闪避：电脑双击方向键，手机点「闪」键。能穿墙、能靠位移躲开攻击，
+       * 但和普攻共用冷却（闪完 2.5 秒内没法普攻）。这一步只要求「用出来一次」。 */
+      { id: "dodge",  tip: "双击方向键闪避（手机按「闪」键）", sub: "能穿墙、能躲开攻击；闪避和普攻共用冷却，闪完要等一会儿才能砍" },
       { id: "mud",    tip: "走近泥土，按 P 捡起来", sub: "再按一次 P 朝前扔出去", mud: 1080 },
       { id: "car",    tip: "走近汽车按 P 上车，再按 P 下车", sub: "坐在车上被攻击会被震下车并眩晕 2 秒", car: 1320 },
       { id: "box",    tip: "走近补给箱，按住 P 搜刮打开", sub: "里面会掉血包 / 道具包 / 移速包", box: 1580 },
@@ -7949,6 +7952,10 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
           f.facing = { x: ux, y: uy };
           f.cd.dodge = C.dodge.cd * (f.perkDodgeM || 1);
           f.cd.basic = Math.max(f.cd.basic, C.dodge.cd);   // 普攻与闪避共享 CD：闪避会锁住普攻
+          /* v4.23 新手教程：闪避这一步只有**真的位移出去**才算数。
+           * 挂在成功分支里而不是按键处 —— 冷却中按键只弹「闪避冷却中」，
+           * 不该让教程以为玩家学会了。 */
+          if (this.mode === "tutorial" && this.tutOnDodge) this.tutOnDodge(f);
           FX.burst(f.x, f.y - 26, 10, ["#9be8ff", "#e0fbff"], { speed: 150, dir: Math.atan2(-uy, -ux), spread: 0.9 });
           FX.float(f.x, f.y - 56, "闪避", "#9be8ff", 13);
         }
@@ -19854,7 +19861,7 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
    * 简单人机 = 木桩：AI 的 conf.aggr 为 0，会在开头直接 return。
    * 血量给到 4000，教程里怎么打都打不死（不需要「赢」这一步）。
    */
-  function mkDummy(side, x, y) {
+  function mkDummy(side, x, y, stepIdx) {
     const c = CFG();
     const d = B.mkHero(side, {
       x: x, y: y, name: "木桩",
@@ -19864,6 +19871,13 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
     d.hp = d.maxHp;
     d.team = side;                       /* 和玩家不同队，技能索敌才会认它 */
     d.tutDummy = true;
+    /* 记下「这一步用哪根木桩」。
+     *
+     * 上一版是**按坐标现找**（Math.abs(f.x - 860) < 2）—— 只要玩家在第二步或
+     * 第三步把右边那根木桩打退几像素（技能带击退），坐标就对不上，
+     * st.dummy 变成 null，判定恒为 false，**这一步直接死锁**。
+     * 打标签与位置无关，怎么揍都不会丢。 */
+    d.tutForStep = stepIdx;
     LD.AI.mkBot(d, "easy");
     return d;
   }
@@ -19877,8 +19891,9 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
   B.tutMakeDummies = function () {
     const c = CFG(), w = this.world;
     const y = (w.pt || 0) + (w.h - (w.pt || 0)) * 0.5;
-    const xs = (c.steps || []).map(s => s.dummy).filter(v => v != null);
-    return xs.map((x, i) => mkDummy(i + 1, x, y));
+    return (c.steps || []).map((s, i) => (s.dummy == null ? null : { step: i, x: s.dummy }))
+      .filter(Boolean)
+      .map((o, i) => mkDummy(i + 1, o.x, y, o.step));
   };
 
   B.tutInit = function () {
@@ -19909,14 +19924,21 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
     st.picked = false;
     st.boarded = false;
     st.pend = null;
+    st.lockOk = false;      /* 索敌：曾经切到过右边那根就算过 */
+    st.dodged = false;      /* 闪避：用出来一次就算过 */
+    st.seedSide = null;
 
     const sp = list[i] || {};
     const w = this.world;
     const y = (w.pt || 0) + (w.h - (w.pt || 0)) * 0.5;
 
     if (sp.dummy != null) {
-      const d = this.fighters.find(f => f.tutDummy && Math.abs(f.x - sp.dummy) < 2);
+      /* 先按步骤标签找（稳），再退回坐标（兼容老存档 / 手工构造的场景） */
+      const d = this.fighters.find(f => f.tutDummy && f.tutForStep === i)
+             || this.fighters.find(f => f.tutDummy && Math.abs(f.x - sp.dummy) < 2);
       st.dummy = d || null;
+    } else {
+      st.dummy = null;
     }
     if (sp.mud != null) st.mud = addProp("mud", "mud_pile", sp.mud, y, 2, 1);
     if (sp.car != null) st.car = addProp("car", "car_red", sp.car, y, 2, 1);
@@ -19933,9 +19955,10 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
      * 玩家要按两次才轮到右边的，看起来像「按了没反应」。 */
     if (sp.id === "lock") {
       const h = this.tutHero;
-      if (h && !(h.lock >= 0)) {
+      if (h) {
         const other = this.fighters.find(f => f.tutDummy && f !== st.dummy);
-        if (other) h.lock = other.side;
+        if (!(h.lock >= 0) && other) h.lock = other.side;
+        st.seedSide = other ? other.side : null;   /* 起始锁的是哪一根 */
       }
     }
     /* 第 7 步：突然充满能量 + 解锁大招 */
@@ -19969,6 +19992,13 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
       st.endAt = this.t + (CFG().endDelay == null ? 5 : CFG().endDelay);
       setTip("教程完成", "「虚空爆裂斩」释放成功", "马上回主菜单，奖励已入账");
     }
+  };
+
+  /* 闪避成功时由 40_battle.js 调过来（只有真的位移出去才会调） */
+  B.tutOnDodge = function (f) {
+    const st = this.tut;
+    if (!st || st.done || f !== this.tutHero) return;
+    st.dodged = true;
   };
 
   B.tutOnHit = function (src, tgt, amt, o) {
@@ -20009,8 +20039,24 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
       ok = st.hit.skill1 && st.hit.skill2;
     } else if (cur.id === "lock") {
       /* 锁定必须落在右边那根木桩上。lock 存的是「座位号」（side），
-       * 不是对象 —— 与 B.lockTarget / cycleLock 同一套语义。 */
-      ok = !!(st.dummy && h.lock === st.dummy.side);
+       * 不是对象 —— 与 B.lockTarget / cycleLock 同一套语义。
+       *
+       * 判定刻意放得很松，三个口径任意满足其一就过：
+       *   ① 锁在目标木桩上（正解）；
+       *   ② 锁在**任何一根不是起始那根**的木桩上 —— 玩家可能多按了几次 V，
+       *      一瞬间越过了正解又转回去，逐帧判定会漏拍；
+       *   ③ 目标木桩找不到（被击退 / 意外移除）时，只要锁上了任意木桩就行。
+       * 教程这一步要教的是「V 能换目标」，不是「必须停在某一帧」。
+       * 上一版只有 ①，且 st.dummy 会因为坐标漂移变成 null —— 于是死锁。 */
+      const lockDummy = this.fighters.find(f => f.tutDummy && !f.dead && f.side === h.lock) || null;
+      if (st.dummy && h.lock === st.dummy.side) st.lockOk = true;
+      else if (lockDummy && h.lock !== st.seedSide) st.lockOk = true;
+      else if (!st.dummy && lockDummy) st.lockOk = true;
+      ok = st.lockOk;
+    } else if (cur.id === "dodge") {
+      /* 闪避由 B.tutOnDodge 打标记：那一下真的位移出去了才算，
+       * 冷却中按键（只弹「闪避冷却中」）不算。 */
+      ok = st.dodged;
     } else if (cur.id === "mud") {
       /* 先捡起来（carryMud 有值），再扔出去（carryMud 又变回 null） */
       if (h.carryMud) st.picked = true;
@@ -22492,8 +22538,9 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
     if (!d) return;
     const T = LD.TUT || {};
     d.textContent = P.d.tutDone
-      ? "七步走完操作提示，再次通关 " + (T.againReward || 5) + " 金币"
-      : "七步走完操作提示：移动 / 攻击 / 技能 / 交互 / 开车 / 道具箱 / 大招，首次通关 " + (T.firstReward || 50) + " 金币";
+      ? "九步走完操作提示，再次通关 " + (T.againReward || 5) + " 金币"
+      : "九步走完操作提示：移动 / 攻击 / 技能 / 索敌 / 闪避 / 交互 / 开车 / 道具箱 / 大招，首次通关 "
+        + (T.firstReward || 50) + " 金币";
   };
 
   UI.startTutorial = function () {
@@ -22508,9 +22555,14 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
     });
     hero.ctrl = ctrl;
     /* 木桩必须在 setup 之前建好：score / wScore 这些数组按人数定长，
-     * 打到一半再往 fighters 里 push 会把它们挤歪。 */
-    const dummies = (T.steps || []).filter(s2 => s2.dummy != null)
-      .map((s2, i) => LD.Tutorial.mkDummy(i + 1, s2.dummy, y));
+     * 打到一半再往 fighters 里 push 会把它们挤歪。
+     *
+     * 第四个参数是「这根木桩属于第几步」—— 教程靠它认木桩，不能靠坐标：
+     * 玩家在普攻 / 技能步把木桩打退几像素，按坐标就再也找不到了。 */
+    const dummies = [];
+    (T.steps || []).forEach((s2, i) => {
+      if (s2.dummy != null) dummies.push(LD.Tutorial.mkDummy(dummies.length + 1, s2.dummy, y, i));
+    });
     /* 地图不生成任何道具：counts 全 0，只留地面与边界。
      * 教学要的是「眼前只有这一件事」，随机冒出的补给箱会打断节奏。 */
     const zero = { solid: 0, breakable: 0, pushable: 0, fence: 0, bush: 0, water: 0,

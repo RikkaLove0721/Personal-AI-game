@@ -23,10 +23,20 @@ const LD = sb.LD, B = LD.Battle, UI = LD.UI, P = LD.Profile, TUT = LD.TUT;
 console.log("=== 1. 配置与素材 ===");
 {
   check("有教程配置 LD.TUT", !!TUT && Array.isArray(TUT.steps), TUT ? TUT.steps.length + " 步" : "缺失");
-  check("八步齐全", TUT.steps.length === 8, TUT.steps.map(s => s.id).join(","));
-  check("步骤顺序：移动/普攻/技能/索敌/交互/开车/道具箱/大招",
-    TUT.steps.map(s => s.id).join(",") === "move,attack,skill,lock,mud,car,box,ult",
+  check("九步齐全", TUT.steps.length === 9, TUT.steps.map(s => s.id).join(","));
+  check("步骤顺序：移动/普攻/技能/索敌/闪避/交互/开车/道具箱/大招",
+    TUT.steps.map(s => s.id).join(",") === "move,attack,skill,lock,dodge,mud,car,box,ult",
     TUT.steps.map(s => s.id).join(","));
+  check("闪避步插在索敌后面",
+    TUT.steps.findIndex(s => s.id === "dodge") === TUT.steps.findIndex(s => s.id === "lock") + 1);
+  check("闪避步的文案讲清了双击 / 手机键 / 穿墙 / 共用 CD", (() => {
+    const d = TUT.steps.find(s => s.id === "dodge");
+    const t = (d.tip || "") + (d.sub || "");
+    return /双击/.test(t) && /闪/.test(t) && /穿墙/.test(t) && /共用/.test(t);
+  })(), (() => {
+    const d = TUT.steps.find(s => s.id === "dodge");
+    return d.tip + " / " + d.sub;
+  })());
   check("索敌插在技能后面", TUT.steps.findIndex(s => s.id === "lock") === TUT.steps.findIndex(s => s.id === "skill") + 1);
   check("每一步都有正上方的提示文案", TUT.steps.every(s => (s.tip || "").length >= 4));
   check("每一步都挂「往右走」方向牌", TUT.dir === "往右走", TUT.dir);
@@ -105,6 +115,11 @@ console.log("=== 3. 八步推进 ===");
   const step = () => TUT.steps[B.tut.step] ? TUT.steps[B.tut.step].id : "done";
   const tick = () => B.updateTutorial(0.016);
   const dummyOf = () => B.tut.dummy;
+  /* 走完全程用的靶子：左（普攻 + 技能）、右（索敌）。
+   * 不取 st.dummy —— 那东西只在「这一步配了木桩」时才有值，
+   * 以前测试靠它跨步残留拿到靶子，属于巧合。 */
+  const dummyA = B.fighters.find(f => f.tutDummy && f.tutForStep === 1);
+  const dummyB = B.fighters.find(f => f.tutDummy && f.tutForStep === 3);
 
   /* ① 移动 */
   h.x += TUT.moveDist - 10;
@@ -117,7 +132,7 @@ console.log("=== 3. 八步推进 ===");
     !!dummyOf() && sb.document.getElementById("tutText").textContent === TUT.steps[1].tip);
 
   /* ② 普攻 */
-  B.tutOnHit(h, dummyOf(), 10, { type: "basic" });
+  B.tutOnHit(h, dummyA, 10, { type: "basic" });
   tick();
   check("普攻命中后进入第 3 步", step() === "skill", step());
 
@@ -126,11 +141,11 @@ console.log("=== 3. 八步推进 ===");
     h.loadout.skill1 === "laserWave" && h.loadout.skill2 === "dragonPalm",
     h.loadout.skill1 + "/" + h.loadout.skill2);
   B.tutOnCast(h, "skill1");
-  B.tutOnHit(h, dummyOf(), 20, { type: "skill" });
+  B.tutOnHit(h, dummyA, 20, { type: "skill" });
   tick();
   check("只打中 K 不推进（要两个都打中）", step() === "skill", step());
   B.tutOnCast(h, "skill2");
-  B.tutOnHit(h, dummyOf(), 20, { type: "skill" });
+  B.tutOnHit(h, dummyA, 20, { type: "skill" });
   tick();
   check("K 和 L 都打中后进入第 4 步（索敌）", step() === "lock", step());
 
@@ -138,7 +153,8 @@ console.log("=== 3. 八步推进 ===");
   const right = B.tut.dummy;
   const left = B.fighters.find(f => f.tutDummy && f !== right);
   check("第 4 步指的是右边那根木桩",
-    !!right && !!left && right.x > left.x, right && left ? Math.round(left.x) + "<" + Math.round(right.x) : "缺失");
+    !!right && right === dummyB && right.x > left.x,
+    right && left ? Math.round(left.x) + "<" + Math.round(right.x) : "缺失");
   check("进入这一步时锁定先摆在左边（按一次 V 就切过去）",
     h.lock === left.side, "lock=" + h.lock + " left=" + left.side);
   tick();
@@ -147,43 +163,73 @@ console.log("=== 3. 八步推进 ===");
   h.lock = left.side;
   tick();
   check("锁在左边木桩上不算通过", step() === "lock", step());
-  /* 按一次 V：cycleLock 切到下一根 */
+  /* 玩家把右边那根木桩打退了一段（技能击退的真实后果）：
+   * 旧实现按坐标找木桩，这里会 st.dummy = null 直接死锁。 */
+  right.x += 90;
   const got = B.cycleLock(h, 1);
   tick();
-  check("按 V 锁到右边木桩后进入第 5 步",
-    got === right && h.lock === right.side && step() === "mud",
+  check("木桩被击退位移后依然能判定（旧版在这里死锁）",
+    got === right && step() === "dodge",
     "lock=" + h.lock + " -> " + step());
 
-  /* ⑤ 泥块：捡起 + 扔出 */
-  check("第 5 步地图上出现泥土", !!(B.tut.mud && B.tut.mud.kind === "mud"));
+  /* ⑤ 闪避：走真实链路（ctrl.dodge -> B.updateHero），不是直接调钩子 */
+  check("第 5 步是闪避", step() === "dodge", step());
+  check("闪避步不再要求靶子", B.tut.dummy === null);
+  tick();
+  check("没闪避不推进", step() === "dodge", step());
+
+  const savedCtrl = h.ctrl;
+  h.ctrl = { mx: 0, my: 0, dodge: { x: 1, y: 0 },
+             hold: { basic: false, skill1: false, skill2: false, ult: false, interact: false },
+             press: { basic: false, skill1: false, skill2: false, ult: false, interact: false } };
+  /* 冷却中按键：只弹「闪避冷却中」，不做位移，不该算学会 */
+  h.cd.dodge = 2;
+  const xBefore = h.x;
+  B.updateHero(h, 1 / 60);
+  tick();
+  check("冷却中按闪避不算（没有真的位移出去）",
+    step() === "dodge" && Math.abs(h.x - xBefore) < 0.01, "x差 " + (h.x - xBefore).toFixed(2));
+  /* 冷却清掉再按：真的位移 + 推进 */
+  h.cd.dodge = 0;
+  h.ctrl.dodge = { x: 1, y: 0 };
+  B.updateHero(h, 1 / 60);
+  tick();
+  check("真的闪避出去后进入下一步", step() === "mud", step());
+  check("闪避确实位移了一段（不是只打了个标记）", Math.abs(h.x - xBefore) > 20,
+    (h.x - xBefore).toFixed(1) + "px");
+  check("闪避会锁住普攻（共用冷却）", (h.cd.basic || 0) > 0, "basic cd " + (h.cd.basic || 0).toFixed(1));
+  h.ctrl = savedCtrl;
+
+  /* ⑥ 泥块：捡起 + 扔出 */
+  check("第 6 步地图上出现泥土", !!(B.tut.mud && B.tut.mud.kind === "mud"));
   h.carryMud = B.tut.mud;
   tick();
   check("只捡起来不推进", step() === "mud", step());
   h.carryMud = null;
   tick();
-  check("捡起再扔出后进入第 6 步", step() === "car", step());
+  check("捡起再扔出后进入第 7 步", step() === "car", step());
 
-  /* ⑥ 开车：上车 + 下车 */
-  check("第 6 步地图上出现汽车", !!(B.tut.car && B.tut.car.kind === "car"));
+  /* ⑦ 开车：上车 + 下车 */
+  check("第 7 步地图上出现汽车", !!(B.tut.car && B.tut.car.kind === "car"));
   h.rideCar = B.tut.car;
   tick();
   check("只上车不推进", step() === "car", step());
   h.rideCar = null;
   tick();
-  check("上车再下车后进入第 7 步", step() === "box", step());
+  check("上车再下车后进入第 8 步", step() === "box", step());
 
-  /* ⑦ 道具箱 */
-  check("第 7 步地图上出现补给箱", !!(B.tut.box && B.tut.box.kind === "supply"));
+  /* ⑧ 道具箱 */
+  check("第 8 步地图上出现补给箱", !!(B.tut.box && B.tut.box.kind === "supply"));
   check("补给箱不会刷在车上（否则车被 blockMove 卡死）",
     !(B.tut.car && Math.abs(B.tut.box.x - B.tut.car.x) < (B.tut.box.w + B.tut.car.w) / 2 - 2 &&
       Math.abs(B.tut.box.y - B.tut.car.y) < (B.tut.box.h + B.tut.car.h) / 2 - 2),
     B.tut.car ? "车 " + Math.round(B.tut.car.x) + " / 箱 " + Math.round(B.tut.box.x) : "无车");
   B.tut.box.dead = true;
   tick();
-  check("打开补给箱后进入第 8 步", step() === "ult", step());
+  check("打开补给箱后进入第 9 步", step() === "ult", step());
 
-  /* ⑧ 大招 */
-  check("第 8 步解锁大招并充满能量",
+  /* ⑨ 大招 */
+  check("第 9 步解锁大招并充满能量",
     h.loadout.ult === "voidSlash" && h.energy >= h.maxEnergy,
     h.loadout.ult + " / " + h.energy);
   const t0 = B.t;
@@ -218,16 +264,18 @@ console.log("=== 4. 奖励与入口切换 ===");
     return /5 金币/.test(t) && !/50 金币/.test(t);
   })(), sb.document.getElementById("tutDesc").textContent);
 
-  /* 再打一遍：只给 5（走完八步，含 5 秒缓冲） */
+  /* 再打一遍：只给 5（走完九步，含 5 秒缓冲） */
   const before = P.d.coins;
   UI.startTutorial();
   const h2 = B.tutHero;
   const tick = () => B.updateTutorial(0.016);
+  const dA = B.fighters.find(f => f.tutDummy && f.tutForStep === 1);
   h2.x += 200; tick();
-  B.tutOnHit(h2, B.tut.dummy, 10, { type: "basic" }); tick();
-  B.tutOnCast(h2, "skill1"); B.tutOnHit(h2, B.tut.dummy, 10, { type: "skill" });
-  B.tutOnCast(h2, "skill2"); B.tutOnHit(h2, B.tut.dummy, 10, { type: "skill" }); tick();
+  B.tutOnHit(h2, dA, 10, { type: "basic" }); tick();
+  B.tutOnCast(h2, "skill1"); B.tutOnHit(h2, dA, 10, { type: "skill" });
+  B.tutOnCast(h2, "skill2"); B.tutOnHit(h2, dA, 10, { type: "skill" }); tick();
   B.cycleLock(h2, 1); tick();
+  B.tutOnDodge(h2); tick();
   h2.carryMud = B.tut.mud; tick(); h2.carryMud = null; tick();
   h2.rideCar = B.tut.car; tick(); h2.rideCar = null; tick();
   B.tut.box.dead = true; tick();

@@ -110,7 +110,7 @@
    * 简单人机 = 木桩：AI 的 conf.aggr 为 0，会在开头直接 return。
    * 血量给到 4000，教程里怎么打都打不死（不需要「赢」这一步）。
    */
-  function mkDummy(side, x, y) {
+  function mkDummy(side, x, y, stepIdx) {
     const c = CFG();
     const d = B.mkHero(side, {
       x: x, y: y, name: "木桩",
@@ -120,6 +120,13 @@
     d.hp = d.maxHp;
     d.team = side;                       /* 和玩家不同队，技能索敌才会认它 */
     d.tutDummy = true;
+    /* 记下「这一步用哪根木桩」。
+     *
+     * 上一版是**按坐标现找**（Math.abs(f.x - 860) < 2）—— 只要玩家在第二步或
+     * 第三步把右边那根木桩打退几像素（技能带击退），坐标就对不上，
+     * st.dummy 变成 null，判定恒为 false，**这一步直接死锁**。
+     * 打标签与位置无关，怎么揍都不会丢。 */
+    d.tutForStep = stepIdx;
     LD.AI.mkBot(d, "easy");
     return d;
   }
@@ -133,8 +140,9 @@
   B.tutMakeDummies = function () {
     const c = CFG(), w = this.world;
     const y = (w.pt || 0) + (w.h - (w.pt || 0)) * 0.5;
-    const xs = (c.steps || []).map(s => s.dummy).filter(v => v != null);
-    return xs.map((x, i) => mkDummy(i + 1, x, y));
+    return (c.steps || []).map((s, i) => (s.dummy == null ? null : { step: i, x: s.dummy }))
+      .filter(Boolean)
+      .map((o, i) => mkDummy(i + 1, o.x, y, o.step));
   };
 
   B.tutInit = function () {
@@ -165,14 +173,21 @@
     st.picked = false;
     st.boarded = false;
     st.pend = null;
+    st.lockOk = false;      /* 索敌：曾经切到过右边那根就算过 */
+    st.dodged = false;      /* 闪避：用出来一次就算过 */
+    st.seedSide = null;
 
     const sp = list[i] || {};
     const w = this.world;
     const y = (w.pt || 0) + (w.h - (w.pt || 0)) * 0.5;
 
     if (sp.dummy != null) {
-      const d = this.fighters.find(f => f.tutDummy && Math.abs(f.x - sp.dummy) < 2);
+      /* 先按步骤标签找（稳），再退回坐标（兼容老存档 / 手工构造的场景） */
+      const d = this.fighters.find(f => f.tutDummy && f.tutForStep === i)
+             || this.fighters.find(f => f.tutDummy && Math.abs(f.x - sp.dummy) < 2);
       st.dummy = d || null;
+    } else {
+      st.dummy = null;
     }
     if (sp.mud != null) st.mud = addProp("mud", "mud_pile", sp.mud, y, 2, 1);
     if (sp.car != null) st.car = addProp("car", "car_red", sp.car, y, 2, 1);
@@ -189,9 +204,10 @@
      * 玩家要按两次才轮到右边的，看起来像「按了没反应」。 */
     if (sp.id === "lock") {
       const h = this.tutHero;
-      if (h && !(h.lock >= 0)) {
+      if (h) {
         const other = this.fighters.find(f => f.tutDummy && f !== st.dummy);
-        if (other) h.lock = other.side;
+        if (!(h.lock >= 0) && other) h.lock = other.side;
+        st.seedSide = other ? other.side : null;   /* 起始锁的是哪一根 */
       }
     }
     /* 第 7 步：突然充满能量 + 解锁大招 */
@@ -225,6 +241,13 @@
       st.endAt = this.t + (CFG().endDelay == null ? 5 : CFG().endDelay);
       setTip("教程完成", "「虚空爆裂斩」释放成功", "马上回主菜单，奖励已入账");
     }
+  };
+
+  /* 闪避成功时由 40_battle.js 调过来（只有真的位移出去才会调） */
+  B.tutOnDodge = function (f) {
+    const st = this.tut;
+    if (!st || st.done || f !== this.tutHero) return;
+    st.dodged = true;
   };
 
   B.tutOnHit = function (src, tgt, amt, o) {
@@ -265,8 +288,24 @@
       ok = st.hit.skill1 && st.hit.skill2;
     } else if (cur.id === "lock") {
       /* 锁定必须落在右边那根木桩上。lock 存的是「座位号」（side），
-       * 不是对象 —— 与 B.lockTarget / cycleLock 同一套语义。 */
-      ok = !!(st.dummy && h.lock === st.dummy.side);
+       * 不是对象 —— 与 B.lockTarget / cycleLock 同一套语义。
+       *
+       * 判定刻意放得很松，三个口径任意满足其一就过：
+       *   ① 锁在目标木桩上（正解）；
+       *   ② 锁在**任何一根不是起始那根**的木桩上 —— 玩家可能多按了几次 V，
+       *      一瞬间越过了正解又转回去，逐帧判定会漏拍；
+       *   ③ 目标木桩找不到（被击退 / 意外移除）时，只要锁上了任意木桩就行。
+       * 教程这一步要教的是「V 能换目标」，不是「必须停在某一帧」。
+       * 上一版只有 ①，且 st.dummy 会因为坐标漂移变成 null —— 于是死锁。 */
+      const lockDummy = this.fighters.find(f => f.tutDummy && !f.dead && f.side === h.lock) || null;
+      if (st.dummy && h.lock === st.dummy.side) st.lockOk = true;
+      else if (lockDummy && h.lock !== st.seedSide) st.lockOk = true;
+      else if (!st.dummy && lockDummy) st.lockOk = true;
+      ok = st.lockOk;
+    } else if (cur.id === "dodge") {
+      /* 闪避由 B.tutOnDodge 打标记：那一下真的位移出去了才算，
+       * 冷却中按键（只弹「闪避冷却中」）不算。 */
+      ok = st.dodged;
     } else if (cur.id === "mud") {
       /* 先捡起来（carryMud 有值），再扔出去（carryMud 又变回 null） */
       if (h.carryMud) st.picked = true;

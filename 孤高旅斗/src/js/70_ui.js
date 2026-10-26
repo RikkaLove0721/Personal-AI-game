@@ -932,8 +932,9 @@
     if (!d) return;
     const T = LD.TUT || {};
     d.textContent = P.d.tutDone
-      ? "七步走完操作提示，再次通关 " + (T.againReward || 5) + " 金币"
-      : "七步走完操作提示：移动 / 攻击 / 技能 / 交互 / 开车 / 道具箱 / 大招，首次通关 " + (T.firstReward || 50) + " 金币";
+      ? "九步走完操作提示，再次通关 " + (T.againReward || 5) + " 金币"
+      : "九步走完操作提示：移动 / 攻击 / 技能 / 索敌 / 闪避 / 交互 / 开车 / 道具箱 / 大招，首次通关 "
+        + (T.firstReward || 50) + " 金币";
   };
 
   UI.startTutorial = function () {
@@ -948,9 +949,14 @@
     });
     hero.ctrl = ctrl;
     /* 木桩必须在 setup 之前建好：score / wScore 这些数组按人数定长，
-     * 打到一半再往 fighters 里 push 会把它们挤歪。 */
-    const dummies = (T.steps || []).filter(s2 => s2.dummy != null)
-      .map((s2, i) => LD.Tutorial.mkDummy(i + 1, s2.dummy, y));
+     * 打到一半再往 fighters 里 push 会把它们挤歪。
+     *
+     * 第四个参数是「这根木桩属于第几步」—— 教程靠它认木桩，不能靠坐标：
+     * 玩家在普攻 / 技能步把木桩打退几像素，按坐标就再也找不到了。 */
+    const dummies = [];
+    (T.steps || []).forEach((s2, i) => {
+      if (s2.dummy != null) dummies.push(LD.Tutorial.mkDummy(dummies.length + 1, s2.dummy, y, i));
+    });
     /* 地图不生成任何道具：counts 全 0，只留地面与边界。
      * 教学要的是「眼前只有这一件事」，随机冒出的补给箱会打断节奏。 */
     const zero = { solid: 0, breakable: 0, pushable: 0, fence: 0, bush: 0, water: 0,
