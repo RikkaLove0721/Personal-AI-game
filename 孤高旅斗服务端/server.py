@@ -16,6 +16,7 @@
   孤高旅斗.exe --port 9000  指定端口
 """
 import base64
+import gzip
 import hashlib
 import http.server
 import json
@@ -33,6 +34,52 @@ import webbrowser
 APP_NAME = "孤高旅斗"
 WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 BASE_PORT = 8123
+
+# ---------------------------------------------------------------- 静态资源
+# v4.22 服务器版：HTML 只留骨架，图片 / BGM / 脚本走独立文件。
+# 这样首屏只要下几十 KB 的 HTML + 一份可缓存的 game.js，
+# 而不是每次都拖一个 12.9MB（其中 91% 是 base64 素材）的单文件。
+MIME = {
+    ".html": "text/html; charset=utf-8",
+    ".js": "application/javascript; charset=utf-8",
+    ".css": "text/css; charset=utf-8",
+    ".json": "application/json; charset=utf-8",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
+    ".gif": "image/gif",
+    ".ico": "image/x-icon",
+    ".svg": "image/svg+xml",
+    ".m4a": "audio/mp4",
+    ".mp3": "audio/mpeg",
+    ".ogg": "audio/ogg",
+    ".opus": "audio/ogg",
+    ".txt": "text/plain; charset=utf-8",
+}
+GZIP_EXT = (".html", ".js", ".css", ".json", ".svg", ".txt")
+GZIP_MIN = 1024                 # 太小的没必要压，反而多花头
+_GZ_CACHE = {}
+
+
+def mime_of(name):
+    return MIME.get(os.path.splitext(name)[1].lower(), "application/octet-stream")
+
+
+def gzip_body(path, mtime, raw):
+    """按 (路径, mtime, 大小) 缓存压缩结果。
+
+    同一份 game.js 每次请求都重新压一遍是纯浪费 —— 1.3MB 压一次约 30ms，
+    并发几个玩家就能把单线程服务器的响应时间拉长。
+    """
+    key = (path, mtime, len(raw))
+    hit = _GZ_CACHE.get(key)
+    if hit is None:
+        hit = gzip.compress(raw, 6)
+        if len(_GZ_CACHE) > 32:
+            _GZ_CACHE.clear()           # 换了几个版本之后清一次，别一直涨
+        _GZ_CACHE[key] = hit
+    return hit
 MAX_ROOM_AGE = 6 * 60 * 60      # 6 小时后回收空房间
 GAME_FILE = "孤高旅斗.html"
 
@@ -437,14 +484,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path == "/balance.js":
             self.serve_file(resource_path("balance.js"), "application/javascript; charset=utf-8")
             return
+        # v4.22 服务器版：脚本与素材拆成独立文件
+        if path == "/game.js":
+            self.serve_file(resource_path("game.js"), MIME[".js"], immutable=True)
+            return
+        if path.startswith("/assets/"):
+            self.serve_asset(path[len("/assets/"):])
+            return
         if path == "/music/list":
             self.handle_music_list()
             return
         if path.startswith("/music/"):
             from urllib.parse import unquote
             name = os.path.basename(unquote(path[len("/music/"):]))   # 解 URL 编码 + 只取文件名防目录穿越
-            ctype = "audio/ogg" if name.lower().endswith(".ogg") else "audio/mpeg"
-            self.serve_file(resource_path(os.path.join("music", name)), ctype)
+            self.serve_file(resource_path(os.path.join("music", name)), mime_of(name), immutable=True)
             return
         if path == "/api/profile":
             self.handle_profile_get()
@@ -480,8 +533,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def serve_file(self, filename, ctype):
+    def serve_file(self, filename, ctype, immutable=False):
+        """发一个文件。
+
+        immutable=True 用于「内容变了文件名/位置就会换」的静态资源（图片 / 音频）：
+        让浏览器直接存一年，二次进入同一张图不再发请求。
+        HTML 与 balance.js 保持 no-cache + ETag：改完玩法刷新就能拿到新的，
+        但没改时只回一个 304，不用重下。
+
+        文本类（html / js）在客户端支持时走 gzip —— 1.3MB 的 game.js 压完约 260KB，
+        这才是「服务器上打不开」的正解：不是代码多，是没压缩 + 每次都重下。
+        """
         try:
+            st = os.stat(filename)
             with open(filename, "rb") as f:
                 data = f.read()
         except OSError:
@@ -489,12 +553,45 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_header("Content-Length", "0")
             self.end_headers()
             return
+
+        ext = os.path.splitext(filename)[1].lower()
+        accept = (self.headers.get("Accept-Encoding") or "").lower()
+        use_gz = ext in GZIP_EXT and len(data) >= GZIP_MIN and "gzip" in accept
+        body = gzip_body(filename, st.st_mtime_ns, data) if use_gz else data
+
+        etag = '"%x-%x%s"' % (st.st_mtime_ns, st.st_size, "-gz" if use_gz else "")
+        cc = "public, max-age=31536000, immutable" if immutable else "no-cache"
+        if self.headers.get("If-None-Match") == etag:
+            self.send_response(304)
+            self.send_header("ETag", etag)
+            self.send_header("Cache-Control", cc)
+            self.end_headers()
+            return
+
         self.send_response(200)
         self.send_header("Content-Type", ctype)
-        self.send_header("Cache-Control", "no-cache")
-        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", cc)
+        self.send_header("ETag", etag)
+        if use_gz:
+            self.send_header("Content-Encoding", "gzip")
+            self.send_header("Vary", "Accept-Encoding")
+        self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        self.wfile.write(data)
+        if getattr(self, "command", "GET") != "HEAD":
+            self.wfile.write(body)
+
+    def serve_asset(self, rel):
+        """ /assets/<相对路径> —— 只允许取 app_dir/assets 底下的文件。"""
+        from urllib.parse import unquote
+        rel = unquote(rel).replace("\\", "/")
+        parts = [p for p in rel.split("/") if p not in ("", ".")]
+        if not parts or ".." in parts:
+            self.send_response(404)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        fp = os.path.join(app_dir(), "assets", *parts)
+        self.serve_file(fp, mime_of(fp), immutable=True)
 
     def handle_profile_get(self):
         # 存档文件放在 exe 旁边（开发态放在 py 脚本旁边），端口漂移也不丢档

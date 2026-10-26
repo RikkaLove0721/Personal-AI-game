@@ -9,13 +9,23 @@
     python build.py            # 正常构建（版本号自动提升）
     python build.py --keep     # 调试构建（版本号不变）
     python build.py --version 1.5   # 指定版本号
+    python build.py --keep --web    # 服务器版：素材拆成独立文件，输出到 dist/web/
+
+两种产物的区别（v4.22）：
+    · 默认（单文件）：一切素材 base64 内嵌，双击即玩、exe 桌面壳用它。
+    · --web（服务器版）：HTML 只剩代码（~1.1MB），图片 / BGM 是独立文件，
+      靠浏览器缓存 + 服务端 gzip。12.9MB -> 首屏约 40KB + 按需加载。
+      必须放在 HTTP 服务下（file:// 打开会因同源策略拿不到图层）。
 """
 import base64
 import io
 import json
 import os
+import hashlib
 import re
+import shutil
 import sys
+from urllib.parse import quote
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # 仓库根目录
 SRC = os.path.join(ROOT, "src")
@@ -23,6 +33,26 @@ JS_DIR = os.path.join(SRC, "js")
 DIST = os.path.join(ROOT, "dist")
 OUT = os.path.join(DIST, "孤高旅斗.html")
 AUTHOR = "RikkaLove0721"
+
+# --web：素材不内嵌，写成独立文件（HTML 里只留相对路径）
+WEB = False
+WEB_ASSETS = []          # [(相对路径, 源文件绝对路径)]，构建末尾统一拷到 dist/web/
+
+
+def asset(src_path, mime, rel, dst=None):
+    """返回「给浏览器用的素材地址」。
+
+    单文件模式：base64 data URI（自包含，file:// 也能用）
+    --web 模式：相对路径 + 登记待拷贝，由浏览器按需加载并长期缓存
+    """
+    if WEB:
+        WEB_ASSETS.append((dst or rel, src_path))
+        # 指纹占位：末尾统一换成这次构建的短哈希。
+        # 服务器对静态资源回 immutable + 一年缓存，没有指纹的话
+        # 「换了一张立绘 / 改了玩法」玩家会一直看到旧的。
+        return rel + "?v=__STAMP__"
+    with open(src_path, "rb") as f:
+        return "data:%s;base64,%s" % (mime, base64.b64encode(f.read()).decode("ascii"))
 BALANCE = os.path.join(SRC, "config", "balance.js")
 
 
@@ -34,6 +64,8 @@ def bump(v):
 def main():
     args = sys.argv[1:]
     keep = "--keep" in args
+    global WEB
+    WEB = "--web" in args
     forced = None
     if "--version" in args:
         forced = args[args.index("--version") + 1]
@@ -78,8 +110,8 @@ def main():
             for fn in sorted(os.listdir(pdir)):
                 if not fn.lower().endswith(".png"):
                     continue
-                with open(os.path.join(pdir, fn), "rb") as f:
-                    uri = "data:image/png;base64," + base64.b64encode(f.read()).decode("ascii")
+                uri = asset(os.path.join(pdir, fn), "image/png",
+                            "assets/skins/%s/parts/%s" % (suit, fn))
                 img_lines.append('LD_SKIN_IMG[%s]=%s;' % (json.dumps(fn[:-4]), json.dumps(uri)))
                 print("  皮肤贴图 %-24s %6.1f KB" % (fn, len(uri) / 1024.0))
     skin_js = "/* 皮肤贴图由 build.py 自动内嵌，请勿手改 */\nwindow.LD_SKIN_IMG={};" + "".join(img_lines)
@@ -92,8 +124,7 @@ def main():
         for fn in sorted(os.listdir(prop_dir)):
             if not fn.lower().endswith(".png"):
                 continue
-            with open(os.path.join(prop_dir, fn), "rb") as f:
-                uri = "data:image/png;base64," + base64.b64encode(f.read()).decode("ascii")
+            uri = asset(os.path.join(prop_dir, fn), "image/png", "assets/props/" + fn)
             prop_lines.append('LD_PROP_IMG[%s]=%s;' % (json.dumps(fn[:-4]), json.dumps(uri)))
             print("  建筑贴图 %-24s %6.1f KB" % (fn, len(uri) / 1024.0))
     prop_js = "/* 建筑贴图由 build.py 自动内嵌，请勿手改 */\nwindow.LD_PROP_IMG={};" + "".join(prop_lines)
@@ -115,10 +146,14 @@ def main():
                 mime = "audio/ogg"
             else:
                 continue
-            with open(os.path.join(music_dir, fn), "rb") as f:
-                raw = f.read()
-            uri = "data:%s;base64,%s" % (mime, base64.b64encode(raw).decode("ascii"))
-            music_bytes += len(uri)
+            # 文件名里有空格和中文（"Feel You.m4a" / "遊園施設.m4a"）：
+            # 写进 JS 前先做 URL 编码，否则 src 里带裸空格，个别浏览器解析会截断。
+            # URL 里的名字要编码（空格 / 中文），磁盘上的文件名保持原样 ——
+            # 两者混用会让 dist/web/music 里出现「Feel%20You.m4a」这种奇怪文件，
+            # 服务器 unquote 之后反而找不到真正的文件。
+            uri = asset(os.path.join(music_dir, fn), mime,
+                        "music/" + quote(fn), "music/" + fn)
+            music_bytes += (os.path.getsize(os.path.join(music_dir, fn)) if WEB else len(uri))
             music_items.append("{n:%s,d:%s}" % (json.dumps(fn.rsplit(".", 1)[0]), json.dumps(uri)))
             print("  背景音乐 %-26s %6.1f KB" % (fn, len(uri) / 1024.0))
     music_js = ("/* 背景音乐由 build.py 自动内嵌，请勿手改 */\nwindow.LD_MUSIC=[%s];"
@@ -131,8 +166,7 @@ def main():
     bg_path = os.path.join(ROOT, "assets", "menu-bg.jpg")
     bg_uri = ""
     if os.path.exists(bg_path):
-        with open(bg_path, "rb") as f:
-            bg_uri = "data:image/jpeg;base64," + base64.b64encode(f.read()).decode("ascii")
+        bg_uri = asset(bg_path, "image/jpeg", "assets/menu-bg.jpg")
     menu_js = ("/* 主菜单立绘由 build.py 自动内嵌，请勿手改 */\nwindow.LD_MENU_BG=%s;\n"
                % json.dumps(bg_uri))
 
@@ -152,8 +186,7 @@ def main():
                 continue
             ext = info["file"].rsplit(".", 1)[-1].lower()
             mime = "image/webp" if ext == "webp" else "image/png"
-            with open(p, "rb") as f:
-                uri = "data:%s;base64,%s" % (mime, base64.b64encode(f.read()).decode("ascii"))
+            uri = asset(p, mime, "assets/char/" + info["file"])
             char_kb += len(uri) / 1024.0
             layers[name] = {"uv": info["uv"], "px": info["px"], "src": uri}
             # 真实内容框（不含切层时留的 padding）：眨眼下缘几何要用它，
@@ -164,8 +197,7 @@ def main():
                   % (name, info["px"][0], info["px"][1], len(uri) / 1024.0))
         bg_p = os.path.join(char_dir, "bg.jpg")
         if os.path.exists(bg_p):
-            with open(bg_p, "rb") as f:
-                uri = "data:image/jpeg;base64," + base64.b64encode(f.read()).decode("ascii")
+            uri = asset(bg_p, "image/jpeg", "assets/char/bg.jpg")
             layers["bg"] = {"uv": [0, 0, 1, 1], "px": [0, 0], "src": uri}
             char_kb += len(uri) / 1024.0
             print("  人物图层 %-6s %6.1f KB" % ("bg", len(uri) / 1024.0))
@@ -175,15 +207,28 @@ def main():
                    % json.dumps(pack, ensure_ascii=False))
         print("  人物合计 %.1f KB" % char_kb)
 
-    html = shell.replace("__SCRIPTS__", menu_js + char_js + "\n".join(blocks)).replace("__VERSION__", ver)
+    # 所有脚本按「素材 -> 模块」的顺序拼成一块
+    bundle = menu_js + char_js + "\n".join(blocks)
+
+    if WEB:
+        # 服务器版：脚本单独成文件，HTML 只剩骨架。
+        # 好处有三个：① HTML 从 12.9MB 掉到几十 KB，首字节立刻到；
+        # ② game.js 能被浏览器单独缓存，改玩法之外的东西不用重下；
+        # ③ gzip 只压一份 JS，比压一整块 HTML（含 base64）压得动得多。
+        html = shell.replace("<script>\n__SCRIPTS__\n</script>",
+                             '<script src="game.js?v=__STAMP__"></script>')
+        if "__SCRIPTS__" in html:
+            raise SystemExit("!! shell.html 里的 __SCRIPTS__ 包裹形式变了，--web 无法拆分")
+    else:
+        html = shell.replace("__SCRIPTS__", bundle)
+    html = html.replace("__VERSION__", ver)
     html = html.replace("__MENU_BG__", bg_uri)      # 兼容旧占位符
 
     # 图标：assets/icon-sm.png -> __ICON__（网页 favicon + 主菜单徽章）
     icon_path = os.path.join(ROOT, "assets", "icon-sm.png")
     icon_uri = ""
     if os.path.exists(icon_path):
-        with open(icon_path, "rb") as f:
-            icon_uri = "data:image/png;base64," + base64.b64encode(f.read()).decode("ascii")
+        icon_uri = asset(icon_path, "image/png", "assets/icon-sm.png")
     html = html.replace("__ICON__", icon_uri)
     if icon_uri:
         print("  图标   icon-sm.png 内嵌 %.0f KB" % (len(icon_uri) / 1024.0))
@@ -196,6 +241,63 @@ def main():
             raise SystemExit("!! 产出缺少标记：%s" % token)
 
     os.makedirs(DIST, exist_ok=True)
+
+    if WEB:
+        # 构建指纹：脚本内容 + 每个素材的字节。任何一处变了，URL 就变了，
+        # 浏览器才会去拿新的（否则 immutable 缓存会让更新永远到不了玩家）。
+        h = hashlib.md5()
+        h.update(bundle.encode("utf-8"))
+        for rel, src in WEB_ASSETS:
+            h.update(rel.encode("utf-8"))
+            with open(src, "rb") as f:
+                h.update(f.read())
+        stamp = h.hexdigest()[:10]
+        bundle = bundle.replace("__STAMP__", stamp)
+        html = html.replace("__STAMP__", stamp)
+        if "__STAMP__" in html or "__STAMP__" in bundle:
+            raise SystemExit("!! 指纹占位没换干净")
+
+        out_dir = os.path.join(DIST, "web")
+        if os.path.isdir(out_dir):
+            # 整目录重建，免得旧素材残留。
+            # 不用 shutil.rmtree：某些环境把它接管成「移入回收站」，
+            # 对刚生成过的目录会直接报错，构建就断在这儿。
+            for root, dirs, fs in os.walk(out_dir, topdown=False):
+                for fn in fs:
+                    try:
+                        os.remove(os.path.join(root, fn))
+                    except OSError:
+                        pass
+                for dn in dirs:
+                    try:
+                        os.rmdir(os.path.join(root, dn))
+                    except OSError:
+                        pass
+            try:
+                os.rmdir(out_dir)
+            except OSError:
+                pass
+        os.makedirs(out_dir, exist_ok=True)
+        io.open(os.path.join(out_dir, "game.js"), "w", encoding="utf-8").write(bundle)
+        io.open(os.path.join(out_dir, "孤高旅斗.html"), "w", encoding="utf-8").write(html)
+        copied = 0
+        for rel, src in WEB_ASSETS:
+            dst = os.path.join(out_dir, *rel.split("/"))
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            shutil.copyfile(src, dst)
+            copied += os.path.getsize(dst)
+        # 平衡配置跟着一起放（网页版由 /balance.js 路由取）
+        shutil.copyfile(BALANCE, os.path.join(out_dir, "balance.js"))
+        js_kb = os.path.getsize(os.path.join(out_dir, "game.js")) / 1024.0
+        html_kb = os.path.getsize(os.path.join(out_dir, "孤高旅斗.html")) / 1024.0
+        print("\n  JS 合计 %d chars / %d 个模块" % (total, len(files)))
+        print("  拆分   游戏脚本 %.0f KB  ->  web/game.js" % js_kb)
+        print("         HTML 骨架 %.1f KB  ->  web/孤高旅斗.html" % html_kb)
+        print("         独立素材 %d 个 / %.1f MB" % (len(WEB_ASSETS), copied / 1024.0 / 1024.0))
+        print("  版本  ->  v%s" % ver)
+        print("\n  服务器版输出 -> %s" % out_dir)
+        return
+
     io.open(OUT, "w", encoding="utf-8").write(html)
 
     # 平衡配置：dist 里没有才复制（不覆盖用户已经调过的那份）
