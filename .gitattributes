@@ -1,0 +1,7 @@
+# 跨平台换行：shell 脚本必须是 LF
+#
+# 仓库在 Windows 上开发（core.autocrlf=true 会把工作区写成 CRLF），
+# 但服务器是 Linux —— CRLF 的 .sh 会报 /usr/bin/env: bash\r: No such file or directory。
+# 把行尾钉死，谁 checkout 都一样。
+*.sh text eol=lf
+*.py text eol=lf
