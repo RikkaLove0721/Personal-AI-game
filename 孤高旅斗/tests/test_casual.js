@@ -424,6 +424,17 @@ console.log("\n=== 5. 躲猫猫（v4.13 改版） ===");
   const hider0 = hiders[0];
   check("人的 J 槽 = 隐匿（hide_stealth）", hiders.every(f => f.loadout.basic === "hide_stealth"));
   check("鬼的 J 槽 = 抓人（hide_catch）", seekers.every(f => f.loadout.basic === "hide_catch"));
+  /* v4.28：HUD 的 .ic 里只放得下一个字符，字体里缺字形就是一个豆腐块。
+   * 🫥（U+1FAE5）是 Emoji 14 才有的码位，Windows 10 的 Segoe UI Emoji 没有它，
+   * 躲猫猫里人的 J 槽就是这么显示错的 —— 换回 👻（和商店里那枚隐匿同一个）。 */
+  {
+    const ico = LD.skill("hide_stealth").icon;
+    check("隐匿图标 HUD 上能正常显示（单字符 / 不用 Emoji 14 的 🫥）",
+      !!ico && Array.from(ico).length === 1 && ico.codePointAt(0) < 0x1FA70,
+      ico + " U+" + (ico || "").codePointAt(0).toString(16).toUpperCase());
+    check("躲猫猫的隐匿与商店里的隐匿用同一个图标（同一个效果，别给玩家两种记号）",
+      ico === LD.skill("stealth").icon, ico + " vs " + LD.skill("stealth").icon);
+  }
   check("K / L / O 三个槽位全部清空（显示「无」）",
     list.every(f => [f.loadout.skill1, f.loadout.skill2, f.loadout.ult].every(v => !v)),
     JSON.stringify(list[0].loadout));

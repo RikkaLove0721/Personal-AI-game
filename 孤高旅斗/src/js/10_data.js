@@ -381,7 +381,10 @@
    * 这两个不是商店货：hideOnly = true 的条目会被商店与 AI 随机配装过滤掉，
    * 只在躲猫猫开局时按身份塞进 J 槽（人 = 隐匿，鬼 = 抓人）。
    * 做成「技能」而不是写死在 P 键上的好处：CD / 状态机 / HUD 的 J 槽 / 冷却读秒全部复用现成那套。 */
-  add({ id: "hide_stealth", kind: "basic", name: "隐匿", icon: "🫥", price: 0, cd: 15, dmg: 0,
+  /* v4.28：图标不能用 🫥（U+1FAE5 点线脸）—— 那是 Emoji 14 才加的码位，
+   * Windows 10 的 Segoe UI Emoji 里根本没有，HUD 的 J 槽会直接显示成豆腐块 / 空白。
+   * 换回 👻（和商店里那枚「隐匿」同一个，Emoji 1.0 起就有，哪台机器都能显示）。 */
+  add({ id: "hide_stealth", kind: "basic", name: "隐匿", icon: "👻", price: 0, cd: 15, dmg: 0,
         tags: ["躲猫猫"], dur: 4.0, flashAt: 2.0, flashDur: 0.4, shield: 14, shieldT: 2.0,
         noAI: true, hideOnly: true,
         desc: "躲猫猫专属：4 秒内完全隐身，鬼看不见你（第 2 秒会短暂闪现一下轮廓）。冷却 15 秒。" });

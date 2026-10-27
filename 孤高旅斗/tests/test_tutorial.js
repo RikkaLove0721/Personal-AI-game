@@ -264,6 +264,20 @@ console.log("=== 4. 奖励与入口切换 ===");
     return /5 金币/.test(t) && !/50 金币/.test(t);
   })(), sb.document.getElementById("tutDesc").textContent);
 
+  /* v4.28：exe 换端口 → localStorage 换了 origin → 开机时本地是空档
+   * （tutDone=false，主菜单第一行画成「新手教程」）；几百毫秒后服务器档案
+   * 整档盖回来（已通关）。只刷 HUD 的话标题会一直停在旧值上 —— 点进去分明
+   * 是单人菜单。refreshUI 就是那次「整档替换之后的重画」。 */
+  check("整档被替换后能一处重画所有读数（refreshUI）", typeof P.refreshUI === "function");
+  check("空档时第一行是「新手教程」", (() => {
+    P.d.tutDone = false; P.refreshUI();
+    return sb.document.getElementById("mSoloLab").textContent === "新手教程";
+  })(), sb.document.getElementById("mSoloLab").textContent);
+  check("换成已通关的档案 + refreshUI → 第一行立刻变「单人游戏」", (() => {
+    P.d.tutDone = true; P.refreshUI();
+    return sb.document.getElementById("mSoloLab").textContent === "单人游戏";
+  })(), sb.document.getElementById("mSoloLab").textContent);
+
   /* 再打一遍：只给 5（走完九步，含 5 秒缓冲） */
   const before = P.d.coins;
   UI.startTutorial();

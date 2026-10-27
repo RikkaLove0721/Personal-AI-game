@@ -103,7 +103,12 @@
             self.d.ownedParts = self.d.ownedParts.filter(id => LD.part(id));
             self.d.ownedSkills = self.d.ownedSkills.filter(id => LD.skill(id));
             try { localStorage.setItem(KEY, JSON.stringify(self.d)); } catch (e) {}
-            if (LD.UI && LD.UI.updateHud) LD.UI.updateHud();
+            /* v4.28：整档被换掉之后，屏幕上按「旧档 / 空档」画好的东西必须重刷。
+             * 最典型的就是主菜单第一行：exe 换了端口 → localStorage 换了 origin →
+             * 本地是空档（tutDone=false，标题画成「新手教程」），几百毫秒后服务器档案
+             * 盖回来（已通关），标题却还停在旧值 —— 点进去分明是单人菜单。
+             * 金币数、教程卡片也是同一个毛病，一起刷。 */
+            self.refreshUI();
           } else if (o == null || (o.rev || 0) < (self.d.rev || 0)) {
             self.push();                       // 本地更新 → 回写到文件
           }
@@ -128,6 +133,19 @@
         const self = this;
         pushTimer = setTimeout(() => self.push(), 350);
       }
+    },
+
+    /* 存档被**整档替换**之后用：把「进界面时只画一次」的读数全部重刷一遍。
+     * 目前只有 syncServer 会整档替换（本地空档 → 服务器档案），
+     * 但任何一个字段都可能已经变了，所以金币 / 主菜单入口 / 教程卡片一起刷。
+     * 各渲染函数对空元素都有保护，界面上没那块也不会炸。 */
+    refreshUI() {
+      const UI = LD.UI;
+      if (!UI) return;
+      try { if (UI.updateHud) UI.updateHud(); } catch (e) {}
+      try { if (UI.coins) UI.coins(); } catch (e) {}
+      try { if (UI.renderMenuEntry) UI.renderMenuEntry(); } catch (e) {}
+      try { if (UI.renderTutCard) UI.renderTutCard(); } catch (e) {}
     },
     get coins() { return this.d.coins; },
     displayName() {
