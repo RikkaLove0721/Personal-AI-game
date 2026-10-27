@@ -46,10 +46,8 @@
     if (pendingGo) { clearTimeout(pendingGo); pendingGo = 0; }
     OVS.forEach(o => { const e = $(o); if (e) e.classList.toggle("hide", o !== id); });
     this.screen = id;
-    /* v4.14：只有主菜单需要跑动态立绘，进别的页面立刻停（省电，也不和战斗抢帧）
-     * v4.29：视频底同样只在主菜单播（离开就 pause，别在后台白解码） */
+    /* v4.14：只有主菜单需要跑动态立绘，进别的页面立刻停（省电，也不和战斗抢帧） */
     if (LD.Live2D) LD.Live2D.setActive(id === "ovMenu");
-    if (LD.MenuVid) LD.MenuVid.setActive(id === "ovMenu");
     $("hud").classList.toggle("on", id === "game");
     UI.coins();
     if (id === "ovSkin") UI.renderSkin();

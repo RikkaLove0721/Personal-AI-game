@@ -560,7 +560,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path == "/status":
             # 顺带体检：远程也能一眼看出「HTML 引用了 game.js 但文件没上传」这种状态
             body = json.dumps({
-                "rooms": len(HUB.rooms), "ok": True, "ver": "v4.29",
+                "rooms": len(HUB.rooms), "ok": True, "ver": "v4.30",
                 "game_js": os.path.exists(resource_path("game.js")),
                 "assets": os.path.isdir(os.path.join(app_dir(), "assets")),
             }, ensure_ascii=False).encode("utf-8")

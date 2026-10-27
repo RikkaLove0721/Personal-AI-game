@@ -157,20 +157,9 @@
 
     FX.clear();
     /* v4.14：主菜单动态立绘先就位。UI.init 末尾会 show("ovMenu")，
-     * 那里再把它切到「播放」状态，立绘没解码完就什么都不画（CSS 立绘兜底）。
-     * v4.29：先问视频底要一份。视频能用就不加载分层立绘（省约 1MB 素材 ——
-     * 朋友那台服务器实测只有 140KB/s）；视频走不通时 87_menuvid.js 会当场
-     * 把立绘 init 回来，所以这里只是「先挑一条路」，不是二选一。 */
+     * 那里再把它切到「播放」状态，立绘没解码完就什么都不画（CSS 立绘兜底）。 */
     try {
-      if (LD.MenuVid && LD.MenuVid.init) LD.MenuVid.init(document.getElementById("ovMenu"));
-    } catch (e) {}
-    try {
-      if (LD.MenuVid && LD.MenuVid.mode === "video") {
-        /* 只走视频：其它覆盖层（帮助 / 商店 / 关卡…）仍要一张合成图做 CSS 底 */
-        if (LD.Live2D && LD.Live2D.setCssBg) LD.Live2D.setCssBg(window.LD_MENU_BG);
-      } else if (LD.Live2D && LD.Live2D.init) {
-        LD.Live2D.init(document.getElementById("menuBg"), window.LD_MENU_BG);
-      }
+      if (LD.Live2D && LD.Live2D.init) LD.Live2D.init(document.getElementById("menuBg"), window.LD_MENU_BG);
     } catch (e) {}
     UI.init();
     fit();

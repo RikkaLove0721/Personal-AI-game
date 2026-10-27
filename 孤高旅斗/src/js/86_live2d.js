@@ -821,20 +821,13 @@
     return L.active;
   };
 
-  /* 只写 --menuBg（其它覆盖层的 CSS 合成底），不碰任何一张图。
-   * v4.29 起主菜单可能走视频底，那时不需要解码分层立绘，但帮助 / 商店这些
-   * 页面仍然靠这个变量拿背景图。 */
-  L.setCssBg = function (legacySrc) {
-    try {
-      if (legacySrc) document.documentElement.style.setProperty("--menuBg", 'url("' + legacySrc + '")');
-    } catch (e) { /* 无样式环境：忽略 */ }
-  };
-
   /* ---------------- 启动 ---------------- */
   L.init = function (canvas, legacySrc) {
     cv = canvas;
     /* 其它覆盖层（帮助 / 商店 / 关卡…）仍用合成图做 CSS 背景 */
-    L.setCssBg(legacySrc);
+    try {
+      if (legacySrc) document.documentElement.style.setProperty("--menuBg", 'url("' + legacySrc + '")');
+    } catch (e) { /* 无样式环境：忽略 */ }
     if (!cv || typeof cv.getContext !== "function") return L;
     ctx = cv.getContext("2d");
     if (!ctx || CFG.on === false) return L;
