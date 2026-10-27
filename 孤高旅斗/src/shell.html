@@ -368,6 +368,15 @@ h1.ztitle .zt{position:relative;z-index:1;color:#f6f8fc}
 #ovMenu{display:block;padding:0;overflow:hidden;background-image:none}
 #ovMenu.hide{display:none}
 #menuBg{position:absolute;inset:0;width:100%;height:100%;z-index:0;background:#080b16}
+/* v4.29 主菜单视频底：一段 16 秒「正放+倒放」无缝循环（scripts/make_menu_loop.py）。
+   cover 铺满任意比例屏幕；object-position 偏上偏左 —— 竖着裁的时候先裁山脚，
+   别把人物的头裁掉。透明过渡挂在 .on 上，等第一帧真的能播了再淡入。 */
+#menuVid{position:absolute;inset:0;width:100%;height:100%;z-index:0;
+  object-fit:cover;object-position:34% 30%;background:#080b16;
+  opacity:0;transition:opacity .9s ease;pointer-events:none}
+#menuVid.on{opacity:1}
+/* 视频模式下把立绘画布收起来：视频里的人物本来就是动的，再叠一层就是两个人 */
+#ovMenu.vidOn #menuBg{display:none}
 /* v4.19 新手教程步骤条：正上方居中，玻璃底 + 白字。
    只做「一行标题 + 一行说明」，不做边框动画 —— 玩家的注意力应该在场上。 */
 #tutTip{position:absolute;left:50%;top:6px;transform:translateX(-50%);z-index:6;
@@ -705,6 +714,9 @@ body.pad .bartxt{font-size:9px}
        无框无底，选项悬停 / 点击时整行往左轻拖，像风吹过。
        canvas 由 86_live2d.js 逐帧绘制：裙摆、发丝、手臂、远云都在极慢地动。 -->
   <div class="ov" id="ovMenu">
+    <!-- v4.29：视频底（src / poster 由 build.py 注入，见 87_menuvid.js）。
+         放在 canvas 之前，两者同为 z-index:0；视频模式下 CSS 会把 canvas 藏掉。 -->
+    <video id="menuVid" class="menuVid" muted loop playsinline preload="auto" aria-hidden="true"></video>
     <canvas id="menuBg" width="1600" height="1000" aria-hidden="true"></canvas>
     <div class="menuVeil" aria-hidden="true"></div>
     <div class="menuScrim" aria-hidden="true"></div>

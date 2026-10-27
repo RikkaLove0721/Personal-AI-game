@@ -58,10 +58,16 @@ MIME = {
     ".mp3": "audio/mpeg",
     ".ogg": "audio/ogg",
     ".opus": "audio/ogg",
+    ".mp4": "video/mp4",
+    ".m4v": "video/mp4",
+    ".webm": "video/webm",
     ".txt": "text/plain; charset=utf-8",
 }
 GZIP_EXT = (".html", ".js", ".css", ".json", ".svg", ".txt")
 GZIP_MIN = 1024                 # 太小的没必要压，反而多花头
+# 媒体文件必须支持 Range：<video> 会先取一小段试试，不支持分段的话
+# Chrome 只能整包下完再播，循环回到开头时还可能整段重下。
+RANGE_EXT = (".mp4", ".m4v", ".webm", ".m4a", ".mp3", ".ogg", ".opus")
 _GZ_CACHE = {}
 
 
@@ -554,7 +560,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path == "/status":
             # 顺带体检：远程也能一眼看出「HTML 引用了 game.js 但文件没上传」这种状态
             body = json.dumps({
-                "rooms": len(HUB.rooms), "ok": True, "ver": "v4.28",
+                "rooms": len(HUB.rooms), "ok": True, "ver": "v4.29",
                 "game_js": os.path.exists(resource_path("game.js")),
                 "assets": os.path.isdir(os.path.join(app_dir(), "assets")),
             }, ensure_ascii=False).encode("utf-8")
@@ -586,6 +592,32 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    @staticmethod
+    def _parse_range(hdr, total):
+        """解析 `Range: bytes=a-b`，返回 (start, end) 闭区间；不合法就返回 None。
+
+        只处理最常见的单区间形式（播放器都这么发）。`bytes=-N` 表示「最后 N 字节」，
+        `bytes=N-` 表示「从 N 到结尾」—— 循环播放回到开头时用的就是后者。
+        """
+        if not hdr or not hdr.startswith("bytes=") or "," in hdr or total <= 0:
+            return None
+        spec = hdr[6:].strip()
+        a, _, b = spec.partition("-")
+        try:
+            if a == "":                      # bytes=-N
+                n = int(b)
+                if n <= 0:
+                    return None
+                n = min(n, total)
+                return total - n, total - 1
+            start = int(a)
+            end = total - 1 if b == "" else min(int(b), total - 1)
+        except ValueError:
+            return None
+        if start > end or start >= total:
+            return None
+        return start, end
 
     def serve_file(self, filename, ctype, immutable=False):
         """发一个文件。
@@ -622,10 +654,31 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             return
 
+        # 媒体分段请求：206 + Content-Range。主菜单那段循环视频靠这个
+        # 「先用几 KB 起播，剩下的边播边下」；不支持的话只能整包下完才出画面。
+        if ext in RANGE_EXT:
+            rng = self._parse_range(self.headers.get("Range"), len(data))
+            if rng:
+                s, e = rng
+                chunk = data[s:e + 1]
+                self.send_response(206)
+                self.send_header("Content-Type", ctype)
+                self.send_header("Cache-Control", cc)
+                self.send_header("ETag", etag)
+                self.send_header("Accept-Ranges", "bytes")
+                self.send_header("Content-Range", "bytes %d-%d/%d" % (s, e, len(data)))
+                self.send_header("Content-Length", str(len(chunk)))
+                self.end_headers()
+                if getattr(self, "command", "GET") != "HEAD":
+                    self.wfile.write(chunk)
+                return
+
         self.send_response(200)
         self.send_header("Content-Type", ctype)
         self.send_header("Cache-Control", cc)
         self.send_header("ETag", etag)
+        if ext in RANGE_EXT:
+            self.send_header("Accept-Ranges", "bytes")
         if use_gz:
             self.send_header("Content-Encoding", "gzip")
             self.send_header("Vary", "Accept-Encoding")

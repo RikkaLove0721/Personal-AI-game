@@ -5,3 +5,10 @@
 # 把行尾钉死，谁 checkout 都一样。
 *.sh text eol=lf
 *.py text eol=lf
+
+# 二进制素材：别再让 Git 猜，也别做换行转换
+*.mp4 binary
+*.webp binary
+*.m4a binary
+*.png binary
+*.jpg binary

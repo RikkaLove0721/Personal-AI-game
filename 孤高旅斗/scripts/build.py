@@ -236,8 +236,26 @@ def main():
                    % json.dumps(pack, ensure_ascii=False))
         print("  人物合计 %.1f KB" % char_kb)
 
+    # 主菜单循环视频（v4.29）：assets/menu-loop.mp4（正放+倒放，见 scripts/make_menu_loop.py）
+    # 体积是抠过的：960x540 @15fps、8 秒正放 + 8 秒倒放 = 16 秒无缝循环，约 490KB。
+    # --web 走独立文件（服务器支持 Range，可以边下边播 + 长期缓存）；
+    # 单文件 / exe 内嵌成 data URI，离线也能放。
+    vid_js = "/* 主菜单视频由 build.py 自动内嵌，请勿手改 */\nwindow.LD_MENU_LOOP=null;\nwindow.LD_MENU_POSTER=null;\n"
+    loop_p = os.path.join(ROOT, "assets", "menu-loop.mp4")
+    poster_p = os.path.join(ROOT, "assets", "menu-poster.webp")
+    if os.path.exists(loop_p):
+        loop_uri = asset(loop_p, "video/mp4", "assets/menu-loop.mp4")
+        poster_uri = asset(poster_p, "image/webp", "assets/menu-poster.webp") \
+            if os.path.exists(poster_p) else ""
+        vid_js = ("/* 主菜单视频由 build.py 自动内嵌，请勿手改 */\n"
+                  "window.LD_MENU_LOOP=%s;\nwindow.LD_MENU_POSTER=%s;\n"
+                  % (json.dumps(loop_uri), json.dumps(poster_uri)))
+        print("  视频   menu-loop.mp4  %.0f KB  (poster %.0f KB)"
+              % (os.path.getsize(loop_p) / 1024.0,
+                 os.path.getsize(poster_p) / 1024.0 if os.path.exists(poster_p) else 0))
+
     # 所有脚本按「素材 -> 模块」的顺序拼成一块
-    bundle = menu_js + char_js + "\n".join(blocks)
+    bundle = menu_js + char_js + vid_js + "\n".join(blocks)
 
     if WEB:
         # 服务器版：脚本单独成文件，HTML 只剩骨架。

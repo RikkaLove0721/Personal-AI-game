@@ -1,16 +1,19 @@
 /* 主菜单立绘由 build.py 自动内嵌，请勿手改 */
-window.LD_MENU_BG="assets/menu-bg.webp?v=260cc53137";
+window.LD_MENU_BG="assets/menu-bg.webp?v=ce0b28e831";
 /* 主菜单分层素材由 build.py 自动内嵌，请勿手改 */
-window.LD_CHAR={"frame": [3840, 2156], "layers": {"body": {"uv": [0.07578125, 0.05983302411873841, 0.71640625, 1.0], "px": [1315, 1084], "src": "assets/char/body.webp?v=260cc53137"}, "armA": {"uv": [0.29635416666666664, 0.22541743970315398, 0.33359375, 0.4819109461966605], "px": [76, 296], "src": "assets/char/armA.webp?v=260cc53137"}, "armB": {"uv": [0.37421875, 0.22356215213358072, 0.40963541666666664, 0.4819109461966605], "px": [73, 298], "src": "assets/char/armB.webp?v=260cc53137"}, "hair": {"uv": [0.12369791666666667, 0.19387755102040816, 0.33177083333333335, 0.7407235621521335], "px": [427, 630], "src": "assets/char/hair.webp?v=260cc53137"}, "skirt": {"uv": [0.2265625, 0.4072356215213358, 0.44583333333333336, 0.9786641929499073], "px": [450, 659], "src": "assets/char/skirt.webp?v=260cc53137"}, "sword": {"uv": [0.22890625, 0.5176252319109462, 0.7119791666666667, 0.9257884972170687], "px": [992, 470], "src": "assets/char/sword.webp?v=260cc53137"}, "eye": {"uv": [0.34479166666666666, 0.16326530612244897, 0.3765625, 0.19341372912801486], "px": [130, 69], "src": "assets/char/eye.webp?v=260cc53137", "content": [0.3463541666666667, 0.1660482374768089, 0.375, 0.1906307977736549]}, "mouth": {"uv": [0.35625, 0.20269016697588127, 0.38697916666666665, 0.22634508348794063], "px": [126, 55], "src": "assets/char/mouth.webp?v=260cc53137"}, "lid": {"uv": [0.34479166666666666, 0.16326530612244897, 0.3765625, 0.19341372912801486], "px": [130, 69], "src": "assets/char/lid.webp?v=260cc53137"}, "lidFar": {"uv": [0.3768229166666667, 0.1702226345083488, 0.38958333333333334, 0.19387755102040816], "px": [52, 55], "src": "assets/char/lidFar.webp?v=260cc53137", "content": [0.37890625, 0.17393320964749537, 0.3875, 0.1901669758812616]}, "bg": {"uv": [0, 0, 1, 1], "px": [0, 0], "src": "assets/char/bg.webp?v=260cc53137"}}, "order": ["body", "skirt", "sword", "armA", "armB", "hair", "eye", "mouth"]};
+window.LD_CHAR={"frame": [3840, 2156], "layers": {"body": {"uv": [0.07578125, 0.05983302411873841, 0.71640625, 1.0], "px": [1315, 1084], "src": "assets/char/body.webp?v=ce0b28e831"}, "armA": {"uv": [0.29635416666666664, 0.22541743970315398, 0.33359375, 0.4819109461966605], "px": [76, 296], "src": "assets/char/armA.webp?v=ce0b28e831"}, "armB": {"uv": [0.37421875, 0.22356215213358072, 0.40963541666666664, 0.4819109461966605], "px": [73, 298], "src": "assets/char/armB.webp?v=ce0b28e831"}, "hair": {"uv": [0.12369791666666667, 0.19387755102040816, 0.33177083333333335, 0.7407235621521335], "px": [427, 630], "src": "assets/char/hair.webp?v=ce0b28e831"}, "skirt": {"uv": [0.2265625, 0.4072356215213358, 0.44583333333333336, 0.9786641929499073], "px": [450, 659], "src": "assets/char/skirt.webp?v=ce0b28e831"}, "sword": {"uv": [0.22890625, 0.5176252319109462, 0.7119791666666667, 0.9257884972170687], "px": [992, 470], "src": "assets/char/sword.webp?v=ce0b28e831"}, "eye": {"uv": [0.34479166666666666, 0.16326530612244897, 0.3765625, 0.19341372912801486], "px": [130, 69], "src": "assets/char/eye.webp?v=ce0b28e831", "content": [0.3463541666666667, 0.1660482374768089, 0.375, 0.1906307977736549]}, "mouth": {"uv": [0.35625, 0.20269016697588127, 0.38697916666666665, 0.22634508348794063], "px": [126, 55], "src": "assets/char/mouth.webp?v=ce0b28e831"}, "lid": {"uv": [0.34479166666666666, 0.16326530612244897, 0.3765625, 0.19341372912801486], "px": [130, 69], "src": "assets/char/lid.webp?v=ce0b28e831"}, "lidFar": {"uv": [0.3768229166666667, 0.1702226345083488, 0.38958333333333334, 0.19387755102040816], "px": [52, 55], "src": "assets/char/lidFar.webp?v=ce0b28e831", "content": [0.37890625, 0.17393320964749537, 0.3875, 0.1901669758812616]}, "bg": {"uv": [0, 0, 1, 1], "px": [0, 0], "src": "assets/char/bg.webp?v=ce0b28e831"}}, "order": ["body", "skirt", "sword", "armA", "armB", "hair", "eye", "mouth"]};
+/* 主菜单视频由 build.py 自动内嵌，请勿手改 */
+window.LD_MENU_LOOP="assets/menu-loop.mp4?v=ce0b28e831";
+window.LD_MENU_POSTER="assets/menu-poster.webp?v=ce0b28e831";
 /* 背景音乐由 build.py 自动内嵌，请勿手改 */
-window.LD_MUSIC=[{n:"Feel You",d:"music/Feel%20You.m4a?v=260cc53137"},{n:"Weight of the World",d:"music/Weight%20of%20the%20World.m4a?v=260cc53137"},{n:"\u66d6\u6627\u30ca\u5e0c\u671b\uff0f\u6c37\u96e8",d:"music/%E6%9B%96%E6%98%A7%E3%83%8A%E5%B8%8C%E6%9C%9B%EF%BC%8F%E6%B0%B7%E9%9B%A8.m4a?v=260cc53137"},{n:"\u904a\u5712\u65bd\u8a2d",d:"music/%E9%81%8A%E5%9C%92%E6%96%BD%E8%A8%AD.m4a?v=260cc53137"},{n:"\u907a\u30b5\u30ec\u30bf\u5834\u6240\uff0f\u659c\u5149",d:"music/%E9%81%BA%E3%82%B5%E3%83%AC%E3%82%BF%E5%A0%B4%E6%89%80%EF%BC%8F%E6%96%9C%E5%85%89.m4a?v=260cc53137"}];
+window.LD_MUSIC=[{n:"Feel You",d:"music/Feel%20You.m4a?v=ce0b28e831"},{n:"Weight of the World",d:"music/Weight%20of%20the%20World.m4a?v=ce0b28e831"},{n:"\u66d6\u6627\u30ca\u5e0c\u671b\uff0f\u6c37\u96e8",d:"music/%E6%9B%96%E6%98%A7%E3%83%8A%E5%B8%8C%E6%9C%9B%EF%BC%8F%E6%B0%B7%E9%9B%A8.m4a?v=ce0b28e831"},{n:"\u904a\u5712\u65bd\u8a2d",d:"music/%E9%81%8A%E5%9C%92%E6%96%BD%E8%A8%AD.m4a?v=ce0b28e831"},{n:"\u907a\u30b5\u30ec\u30bf\u5834\u6240\uff0f\u659c\u5149",d:"music/%E9%81%BA%E3%82%B5%E3%83%AC%E3%82%BF%E5%A0%B4%E6%89%80%EF%BC%8F%E6%96%9C%E5%85%89.m4a?v=ce0b28e831"}];
 /* 建筑贴图由 build.py 自动内嵌，请勿手改 */
-window.LD_PROP_IMG={};LD_PROP_IMG["boat_fish"]="assets/props/boat_fish.png?v=260cc53137";LD_PROP_IMG["boat_junk"]="assets/props/boat_junk.png?v=260cc53137";LD_PROP_IMG["boat_raft"]="assets/props/boat_raft.png?v=260cc53137";LD_PROP_IMG["boat_row"]="assets/props/boat_row.png?v=260cc53137";LD_PROP_IMG["cannon"]="assets/props/cannon.png?v=260cc53137";LD_PROP_IMG["charger"]="assets/props/charger.png?v=260cc53137";LD_PROP_IMG["cliff"]="assets/props/cliff.png?v=260cc53137";LD_PROP_IMG["crystal"]="assets/props/crystal.png?v=260cc53137";LD_PROP_IMG["grave"]="assets/props/grave.png?v=260cc53137";LD_PROP_IMG["tower"]="assets/props/tower.png?v=260cc53137";LD_PROP_IMG["turret"]="assets/props/turret.png?v=260cc53137";
+window.LD_PROP_IMG={};LD_PROP_IMG["boat_fish"]="assets/props/boat_fish.png?v=ce0b28e831";LD_PROP_IMG["boat_junk"]="assets/props/boat_junk.png?v=ce0b28e831";LD_PROP_IMG["boat_raft"]="assets/props/boat_raft.png?v=ce0b28e831";LD_PROP_IMG["boat_row"]="assets/props/boat_row.png?v=ce0b28e831";LD_PROP_IMG["cannon"]="assets/props/cannon.png?v=ce0b28e831";LD_PROP_IMG["charger"]="assets/props/charger.png?v=ce0b28e831";LD_PROP_IMG["cliff"]="assets/props/cliff.png?v=ce0b28e831";LD_PROP_IMG["crystal"]="assets/props/crystal.png?v=ce0b28e831";LD_PROP_IMG["grave"]="assets/props/grave.png?v=ce0b28e831";LD_PROP_IMG["tower"]="assets/props/tower.png?v=ce0b28e831";LD_PROP_IMG["turret"]="assets/props/turret.png?v=ce0b28e831";
 /* 皮肤贴图由 build.py 自动内嵌，请勿手改 */
-window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/daishu_head.png?v=260cc53137";LD_SKIN_IMG["daishu_lower"]="assets/skins/daishu/parts/daishu_lower.png?v=260cc53137";LD_SKIN_IMG["daishu_upper"]="assets/skins/daishu/parts/daishu_upper.png?v=260cc53137";LD_SKIN_IMG["doubao_head"]="assets/skins/doubao/parts/doubao_head.png?v=260cc53137";LD_SKIN_IMG["doubao_lower"]="assets/skins/doubao/parts/doubao_lower.png?v=260cc53137";LD_SKIN_IMG["doubao_upper"]="assets/skins/doubao/parts/doubao_upper.png?v=260cc53137";LD_SKIN_IMG["gaosongdeng_head"]="assets/skins/gaosongdeng/parts/gaosongdeng_head.png?v=260cc53137";LD_SKIN_IMG["gaosongdeng_lower"]="assets/skins/gaosongdeng/parts/gaosongdeng_lower.png?v=260cc53137";LD_SKIN_IMG["gaosongdeng_upper"]="assets/skins/gaosongdeng/parts/gaosongdeng_upper.png?v=260cc53137";LD_SKIN_IMG["gaoya_head"]="assets/skins/gaoya/parts/gaoya_head.png?v=260cc53137";LD_SKIN_IMG["gaoya_lower"]="assets/skins/gaoya/parts/gaoya_lower.png?v=260cc53137";LD_SKIN_IMG["gaoya_upper"]="assets/skins/gaoya/parts/gaoya_upper.png?v=260cc53137";LD_SKIN_IMG["gojo_head"]="assets/skins/gojo/parts/gojo_head.png?v=260cc53137";LD_SKIN_IMG["gojo_lower"]="assets/skins/gojo/parts/gojo_lower.png?v=260cc53137";LD_SKIN_IMG["gojo_upper"]="assets/skins/gojo/parts/gojo_upper.png?v=260cc53137";LD_SKIN_IMG["kobe_head"]="assets/skins/kobe/parts/kobe_head.png?v=260cc53137";LD_SKIN_IMG["kobe_lower"]="assets/skins/kobe/parts/kobe_lower.png?v=260cc53137";LD_SKIN_IMG["kobe_upper"]="assets/skins/kobe/parts/kobe_upper.png?v=260cc53137";LD_SKIN_IMG["kunkun_head"]="assets/skins/kunkun/parts/kunkun_head.png?v=260cc53137";LD_SKIN_IMG["kunkun_lower"]="assets/skins/kunkun/parts/kunkun_lower.png?v=260cc53137";LD_SKIN_IMG["kunkun_upper"]="assets/skins/kunkun/parts/kunkun_upper.png?v=260cc53137";LD_SKIN_IMG["naiwa_head"]="assets/skins/naiwa/parts/naiwa_head.png?v=260cc53137";LD_SKIN_IMG["naiwa_lower"]="assets/skins/naiwa/parts/naiwa_lower.png?v=260cc53137";LD_SKIN_IMG["naiwa_upper"]="assets/skins/naiwa/parts/naiwa_upper.png?v=260cc53137";LD_SKIN_IMG["pangmao_head"]="assets/skins/pangmao/parts/pangmao_head.png?v=260cc53137";LD_SKIN_IMG["pangmao_lower"]="assets/skins/pangmao/parts/pangmao_lower.png?v=260cc53137";LD_SKIN_IMG["pangmao_upper"]="assets/skins/pangmao/parts/pangmao_upper.png?v=260cc53137";
+window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/daishu_head.png?v=ce0b28e831";LD_SKIN_IMG["daishu_lower"]="assets/skins/daishu/parts/daishu_lower.png?v=ce0b28e831";LD_SKIN_IMG["daishu_upper"]="assets/skins/daishu/parts/daishu_upper.png?v=ce0b28e831";LD_SKIN_IMG["doubao_head"]="assets/skins/doubao/parts/doubao_head.png?v=ce0b28e831";LD_SKIN_IMG["doubao_lower"]="assets/skins/doubao/parts/doubao_lower.png?v=ce0b28e831";LD_SKIN_IMG["doubao_upper"]="assets/skins/doubao/parts/doubao_upper.png?v=ce0b28e831";LD_SKIN_IMG["gaosongdeng_head"]="assets/skins/gaosongdeng/parts/gaosongdeng_head.png?v=ce0b28e831";LD_SKIN_IMG["gaosongdeng_lower"]="assets/skins/gaosongdeng/parts/gaosongdeng_lower.png?v=ce0b28e831";LD_SKIN_IMG["gaosongdeng_upper"]="assets/skins/gaosongdeng/parts/gaosongdeng_upper.png?v=ce0b28e831";LD_SKIN_IMG["gaoya_head"]="assets/skins/gaoya/parts/gaoya_head.png?v=ce0b28e831";LD_SKIN_IMG["gaoya_lower"]="assets/skins/gaoya/parts/gaoya_lower.png?v=ce0b28e831";LD_SKIN_IMG["gaoya_upper"]="assets/skins/gaoya/parts/gaoya_upper.png?v=ce0b28e831";LD_SKIN_IMG["gojo_head"]="assets/skins/gojo/parts/gojo_head.png?v=ce0b28e831";LD_SKIN_IMG["gojo_lower"]="assets/skins/gojo/parts/gojo_lower.png?v=ce0b28e831";LD_SKIN_IMG["gojo_upper"]="assets/skins/gojo/parts/gojo_upper.png?v=ce0b28e831";LD_SKIN_IMG["kobe_head"]="assets/skins/kobe/parts/kobe_head.png?v=ce0b28e831";LD_SKIN_IMG["kobe_lower"]="assets/skins/kobe/parts/kobe_lower.png?v=ce0b28e831";LD_SKIN_IMG["kobe_upper"]="assets/skins/kobe/parts/kobe_upper.png?v=ce0b28e831";LD_SKIN_IMG["kunkun_head"]="assets/skins/kunkun/parts/kunkun_head.png?v=ce0b28e831";LD_SKIN_IMG["kunkun_lower"]="assets/skins/kunkun/parts/kunkun_lower.png?v=ce0b28e831";LD_SKIN_IMG["kunkun_upper"]="assets/skins/kunkun/parts/kunkun_upper.png?v=ce0b28e831";LD_SKIN_IMG["naiwa_head"]="assets/skins/naiwa/parts/naiwa_head.png?v=ce0b28e831";LD_SKIN_IMG["naiwa_lower"]="assets/skins/naiwa/parts/naiwa_lower.png?v=ce0b28e831";LD_SKIN_IMG["naiwa_upper"]="assets/skins/naiwa/parts/naiwa_upper.png?v=ce0b28e831";LD_SKIN_IMG["pangmao_head"]="assets/skins/pangmao/parts/pangmao_head.png?v=ce0b28e831";LD_SKIN_IMG["pangmao_lower"]="assets/skins/pangmao/parts/pangmao_lower.png?v=ce0b28e831";LD_SKIN_IMG["pangmao_upper"]="assets/skins/pangmao/parts/pangmao_upper.png?v=ce0b28e831";
 /* ===== 00_version.js ===== */
 /* 由 build.py 自动生成，请勿手改 */
-(function (LD) { LD.VERSION = "3.2"; LD.AUTHOR = "RikkaLove0721"; })(window.LD = window.LD || {});
+(function (LD) { LD.VERSION = "4.29"; LD.AUTHOR = "RikkaLove0721"; })(window.LD = window.LD || {});
 
 /* ===== 10_data.js ===== */
 /* ============================================================
@@ -21673,8 +21676,10 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
     if (pendingGo) { clearTimeout(pendingGo); pendingGo = 0; }
     OVS.forEach(o => { const e = $(o); if (e) e.classList.toggle("hide", o !== id); });
     this.screen = id;
-    /* v4.14：只有主菜单需要跑动态立绘，进别的页面立刻停（省电，也不和战斗抢帧） */
+    /* v4.14：只有主菜单需要跑动态立绘，进别的页面立刻停（省电，也不和战斗抢帧）
+     * v4.29：视频底同样只在主菜单播（离开就 pause，别在后台白解码） */
     if (LD.Live2D) LD.Live2D.setActive(id === "ovMenu");
+    if (LD.MenuVid) LD.MenuVid.setActive(id === "ovMenu");
     $("hud").classList.toggle("on", id === "game");
     UI.coins();
     if (id === "ovSkin") UI.renderSkin();
@@ -25022,13 +25027,20 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
     return L.active;
   };
 
+  /* 只写 --menuBg（其它覆盖层的 CSS 合成底），不碰任何一张图。
+   * v4.29 起主菜单可能走视频底，那时不需要解码分层立绘，但帮助 / 商店这些
+   * 页面仍然靠这个变量拿背景图。 */
+  L.setCssBg = function (legacySrc) {
+    try {
+      if (legacySrc) document.documentElement.style.setProperty("--menuBg", 'url("' + legacySrc + '")');
+    } catch (e) { /* 无样式环境：忽略 */ }
+  };
+
   /* ---------------- 启动 ---------------- */
   L.init = function (canvas, legacySrc) {
     cv = canvas;
     /* 其它覆盖层（帮助 / 商店 / 关卡…）仍用合成图做 CSS 背景 */
-    try {
-      if (legacySrc) document.documentElement.style.setProperty("--menuBg", 'url("' + legacySrc + '")');
-    } catch (e) { /* 无样式环境：忽略 */ }
+    L.setCssBg(legacySrc);
     if (!cv || typeof cv.getContext !== "function") return L;
     ctx = cv.getContext("2d");
     if (!ctx || CFG.on === false) return L;
@@ -25169,6 +25181,160 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
   L.bodyCanvas = function () { return L._bodyCv; };
 })(window.LD = window.LD || {});
 
+
+/* ===== 87_menuvid.js ===== */
+/* ============================================================
+ *  主菜单动态背景（v4.29）：一段「正放 + 倒放」的循环视频
+ *
+ *  为什么是一整段视频而不是两个 <video> 轮播 / playbackRate=-1：
+ *  接缝在编码阶段就被抹平了（scripts/make_menu_loop.py：倒放段剪掉首帧，
+ *  于是「末帧 == 下一轮首帧」），浏览器只要普通的 loop 播放。
+ *  Chrome 不支持负速率，靠 JS 控制反向一定会卡一帧。
+ *
+ *  想退回 v4.28 的分层立绘（live2d）：把下面的 USE_VIDEO 改成 false 重新构建；
+ *  只是想临时对比两种效果，在地址后面加 ?bg=live2d / ?bg=video 就行，不用构建。
+ *
+ *  降级链：视频能播 -> 视频；视频 404 / 解码失败 -> 当场初始化 live2d 分层立绘；
+ *  自动播放被拦 -> 先停在封面帧，等第一次点击 / 按键再播（不白屏、不阻塞）。
+ * ============================================================ */
+(function (LD) {
+  const USE_VIDEO = true;
+
+  const L = LD.MenuVid = { mode: "live2d", active: false, vid: null, ready: false };
+
+  /* 是否启用视频底：构建开关 + 地址栏覆盖（对比用） */
+  function wanted() {
+    if (!USE_VIDEO) return false;
+    let q = "";
+    try { q = (location.search || "").toLowerCase(); } catch (e) { }
+    if (q.indexOf("bg=live2d") >= 0) return false;
+    return true;
+  }
+
+  function ovMenu() {
+    return (typeof document !== "undefined") ? document.getElementById("ovMenu") : null;
+  }
+
+  /* 视频这条路彻底走不通时，把 live2d 分层立绘请回来。
+   * boot 在视频模式下压根没初始化立绘（省 1MB 素材），所以这里要完整 init 一次。 */
+  function fallback(reason) {
+    if (L.mode === "live2d") return;
+    L.mode = "live2d";
+    L.active = false;
+    const host = ovMenu();
+    if (host) host.classList.remove("vidOn");
+    if (L.vid) {
+      try { L.vid.pause(); } catch (e) { }
+      L.vid.style.display = "none";
+    }
+    if (LD.Live2D && LD.Live2D.init) {
+      LD.Live2D.init(document.getElementById("menuBg"), window.LD_MENU_BG);
+      LD.Live2D.setActive(LD.UI && LD.UI.screen === "ovMenu");
+    }
+    if (typeof console !== "undefined") console.warn("[menu] 视频底不可用，已回退到分层立绘：" + reason);
+  }
+
+  L.init = function (host) {
+    L.mode = "live2d";
+    if (!wanted()) return L;
+    const src = window.LD_MENU_LOOP;
+    if (!src || !host) return L;
+    /* 没有 <video> 的环境（老内核 / 测试沙箱）直接留在 live2d 这条路。
+     * 只判断 createElement 能不能拿到真的 HTMLVideoElement —— 假元素一律不算数，
+     * 否则「装配看起来成功、其实一帧也放不出来」会白白把立绘关掉。 */
+    try {
+      if (typeof HTMLVideoElement === "undefined") return L;
+      if (!(document.createElement("video") instanceof HTMLVideoElement)) return L;
+    } catch (e) { return L; }
+
+    let v = document.getElementById("menuVid");
+    try {
+      if (!v) {
+        v = document.createElement("video");
+        v.id = "menuVid";
+        host.insertBefore(v, host.firstChild);
+      }
+      v.className = "menuVid";
+      /* 逐个 setAttribute：某些老内核只认属性、不认 JS 属性 */
+      v.setAttribute("muted", "");
+      v.setAttribute("loop", "");
+      v.setAttribute("autoplay", "");
+      v.setAttribute("playsinline", "");
+      v.setAttribute("webkit-playsinline", "");
+      v.setAttribute("preload", "auto");
+      v.setAttribute("aria-hidden", "true");
+      v.muted = true;               // 必须走 JS 属性，否则 Chrome 会当成有声自动播放而拦掉
+      v.loop = true;
+      v.playsInline = true;
+      if (window.LD_MENU_POSTER) v.poster = window.LD_MENU_POSTER;
+      v.src = src;
+
+      /* 能出画面了再淡入，避免先黑一下再跳出来 */
+      const reveal = function () {
+        if (L.ready) return;
+        L.ready = true;
+        v.classList.add("on");
+      };
+      v.addEventListener("canplay", reveal);
+      v.addEventListener("playing", reveal);
+      v.addEventListener("error", function () { fallback("加载失败"); });
+      /* 解码层面也可能失败（编码参数不被支持时 error 事件不一定来） */
+      v.addEventListener("stalled", function () {
+        setTimeout(function () { if (!L.ready && v.readyState < 2) fallback("卡住不动"); }, 8000);
+      });
+    } catch (e) {
+      /* 装配不起来（老内核 / 非浏览器环境）：当作没有视频这条路，
+       * mode 留在 live2d，boot 会照常初始化分层立绘。 */
+      L.vid = null;
+      L.mode = "live2d";
+      try {
+        host.classList.remove("vidOn");
+        if (v && v.parentNode) v.parentNode.removeChild(v);
+      } catch (e2) { }
+      return L;
+    }
+
+    L.vid = v;
+    L.ready = false;
+    L.mode = "video";
+    /* 视频里的人物本来就是动的，再叠一层立绘就是两个人：把 canvas 藏掉 */
+    host.classList.add("vidOn");
+
+    if (L.active) L.kick();
+    return L;
+  };
+
+  /* 播一次；被自动播放策略拦下就等第一次交互。
+   * 不因为「被拦」就回退 —— 封面帧本来就是这张画，停在上面并不难看。 */
+  L.kick = function () {
+    if (L.mode !== "video" || !L.vid) return;
+    const v = L.vid;
+    v.muted = true;
+    let p;
+    try { p = v.play(); } catch (e) { p = null; }
+    if (!p || !p.catch) return;
+    p.catch(function () {
+      const retry = function () {
+        document.removeEventListener("pointerdown", retry, true);
+        document.removeEventListener("keydown", retry, true);
+        if (L.active) L.kick();
+      };
+      document.addEventListener("pointerdown", retry, true);
+      document.addEventListener("keydown", retry, true);
+    });
+  };
+
+  /* 只有停在主菜单时才解码；进游戏 / 打开商店都是同一个覆盖层体系，
+   * 离开菜单就 pause —— 后台空转解码很费电。 */
+  L.setActive = function (on) {
+    on = !!on;
+    L.active = on;
+    if (L.mode !== "video" || !L.vid) return false;
+    if (on) L.kick();
+    else { try { L.vid.pause(); } catch (e) { } }
+    return on;
+  };
+})(window.LD = window.LD || {});
 
 /* ===== 90_boot.js ===== */
 /* ============================================================
@@ -25330,9 +25496,20 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
 
     FX.clear();
     /* v4.14：主菜单动态立绘先就位。UI.init 末尾会 show("ovMenu")，
-     * 那里再把它切到「播放」状态，立绘没解码完就什么都不画（CSS 立绘兜底）。 */
+     * 那里再把它切到「播放」状态，立绘没解码完就什么都不画（CSS 立绘兜底）。
+     * v4.29：先问视频底要一份。视频能用就不加载分层立绘（省约 1MB 素材 ——
+     * 朋友那台服务器实测只有 140KB/s）；视频走不通时 87_menuvid.js 会当场
+     * 把立绘 init 回来，所以这里只是「先挑一条路」，不是二选一。 */
     try {
-      if (LD.Live2D && LD.Live2D.init) LD.Live2D.init(document.getElementById("menuBg"), window.LD_MENU_BG);
+      if (LD.MenuVid && LD.MenuVid.init) LD.MenuVid.init(document.getElementById("ovMenu"));
+    } catch (e) {}
+    try {
+      if (LD.MenuVid && LD.MenuVid.mode === "video") {
+        /* 只走视频：其它覆盖层（帮助 / 商店 / 关卡…）仍要一张合成图做 CSS 底 */
+        if (LD.Live2D && LD.Live2D.setCssBg) LD.Live2D.setCssBg(window.LD_MENU_BG);
+      } else if (LD.Live2D && LD.Live2D.init) {
+        LD.Live2D.init(document.getElementById("menuBg"), window.LD_MENU_BG);
+      }
     } catch (e) {}
     UI.init();
     fit();
