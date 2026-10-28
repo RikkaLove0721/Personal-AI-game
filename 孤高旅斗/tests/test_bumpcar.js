@@ -225,8 +225,11 @@ console.log("\n=== 8. AI ===");
 
   /* 没车 → 奔最近的空车 */
   B.exitCar(ai, false);
-  const free = B.terrain.props.find(o => o.bump && !o.dead && !o.driver);
-  free.x = A.x + d0; free.y = A.y;
+  /* 场上不止一辆空车：人机挑的是「最近的那辆」，跟 find 捞出来的不一定是同一辆。
+   * 全挪到同一处，挑哪辆都同向 —— 否则这条断言测的其实是车的位置，偶尔会反向。 */
+  const freeCars = B.terrain.props.filter(o => o.bump && !o.dead && !o.driver);
+  freeCars.forEach(o => { o.x = A.x + d0; o.y = A.y; });
+  const free = freeCars[0];
   ai.x = A.x; ai.y = A.y + d0;    // 站在环带里（站进内圈会被判落水）
   ai.bot.think = 0;
   LD.AI.tickHero(ai, 1 / 60);

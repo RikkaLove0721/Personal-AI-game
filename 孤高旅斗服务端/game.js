@@ -1,16 +1,16 @@
 /* 主菜单立绘由 build.py 自动内嵌，请勿手改 */
-window.LD_MENU_BG="assets/menu-bg.webp?v=da494ba255";
+window.LD_MENU_BG="assets/menu-bg.webp?v=f7e042ce55";
 /* 主菜单分层素材由 build.py 自动内嵌，请勿手改 */
-window.LD_CHAR={"frame": [3840, 2156], "layers": {"body": {"uv": [0.07578125, 0.05983302411873841, 0.71640625, 1.0], "px": [1315, 1084], "src": "assets/char/body.webp?v=da494ba255"}, "armA": {"uv": [0.29635416666666664, 0.22541743970315398, 0.33359375, 0.4819109461966605], "px": [76, 296], "src": "assets/char/armA.webp?v=da494ba255"}, "armB": {"uv": [0.37421875, 0.22356215213358072, 0.40963541666666664, 0.4819109461966605], "px": [73, 298], "src": "assets/char/armB.webp?v=da494ba255"}, "hair": {"uv": [0.12369791666666667, 0.19387755102040816, 0.33177083333333335, 0.7407235621521335], "px": [427, 630], "src": "assets/char/hair.webp?v=da494ba255"}, "skirt": {"uv": [0.2265625, 0.4072356215213358, 0.44583333333333336, 0.9786641929499073], "px": [450, 659], "src": "assets/char/skirt.webp?v=da494ba255"}, "sword": {"uv": [0.22890625, 0.5176252319109462, 0.7119791666666667, 0.9257884972170687], "px": [992, 470], "src": "assets/char/sword.webp?v=da494ba255"}, "eye": {"uv": [0.34479166666666666, 0.16326530612244897, 0.3765625, 0.19341372912801486], "px": [130, 69], "src": "assets/char/eye.webp?v=da494ba255", "content": [0.3463541666666667, 0.1660482374768089, 0.375, 0.1906307977736549]}, "mouth": {"uv": [0.35625, 0.20269016697588127, 0.38697916666666665, 0.22634508348794063], "px": [126, 55], "src": "assets/char/mouth.webp?v=da494ba255"}, "lid": {"uv": [0.34479166666666666, 0.16326530612244897, 0.3765625, 0.19341372912801486], "px": [130, 69], "src": "assets/char/lid.webp?v=da494ba255"}, "lidFar": {"uv": [0.3768229166666667, 0.1702226345083488, 0.38958333333333334, 0.19387755102040816], "px": [52, 55], "src": "assets/char/lidFar.webp?v=da494ba255", "content": [0.37890625, 0.17393320964749537, 0.3875, 0.1901669758812616]}, "bg": {"uv": [0, 0, 1, 1], "px": [0, 0], "src": "assets/char/bg.webp?v=da494ba255"}}, "order": ["body", "skirt", "sword", "armA", "armB", "hair", "eye", "mouth"]};
+window.LD_CHAR={"frame": [3840, 2156], "layers": {"body": {"uv": [0.07578125, 0.05983302411873841, 0.71640625, 1.0], "px": [1315, 1084], "src": "assets/char/body.webp?v=f7e042ce55"}, "armA": {"uv": [0.29635416666666664, 0.22541743970315398, 0.33359375, 0.4819109461966605], "px": [76, 296], "src": "assets/char/armA.webp?v=f7e042ce55"}, "armB": {"uv": [0.37421875, 0.22356215213358072, 0.40963541666666664, 0.4819109461966605], "px": [73, 298], "src": "assets/char/armB.webp?v=f7e042ce55"}, "hair": {"uv": [0.12369791666666667, 0.19387755102040816, 0.33177083333333335, 0.7407235621521335], "px": [427, 630], "src": "assets/char/hair.webp?v=f7e042ce55"}, "skirt": {"uv": [0.2265625, 0.4072356215213358, 0.44583333333333336, 0.9786641929499073], "px": [450, 659], "src": "assets/char/skirt.webp?v=f7e042ce55"}, "sword": {"uv": [0.22890625, 0.5176252319109462, 0.7119791666666667, 0.9257884972170687], "px": [992, 470], "src": "assets/char/sword.webp?v=f7e042ce55"}, "eye": {"uv": [0.34479166666666666, 0.16326530612244897, 0.3765625, 0.19341372912801486], "px": [130, 69], "src": "assets/char/eye.webp?v=f7e042ce55", "content": [0.3463541666666667, 0.1660482374768089, 0.375, 0.1906307977736549]}, "mouth": {"uv": [0.35625, 0.20269016697588127, 0.38697916666666665, 0.22634508348794063], "px": [126, 55], "src": "assets/char/mouth.webp?v=f7e042ce55"}, "lid": {"uv": [0.34479166666666666, 0.16326530612244897, 0.3765625, 0.19341372912801486], "px": [130, 69], "src": "assets/char/lid.webp?v=f7e042ce55"}, "lidFar": {"uv": [0.3768229166666667, 0.1702226345083488, 0.38958333333333334, 0.19387755102040816], "px": [52, 55], "src": "assets/char/lidFar.webp?v=f7e042ce55", "content": [0.37890625, 0.17393320964749537, 0.3875, 0.1901669758812616]}, "bg": {"uv": [0, 0, 1, 1], "px": [0, 0], "src": "assets/char/bg.webp?v=f7e042ce55"}}, "order": ["body", "skirt", "sword", "armA", "armB", "hair", "eye", "mouth"]};
 /* 背景音乐由 build.py 自动内嵌，请勿手改 */
-window.LD_MUSIC=[{n:"Feel You",d:"music/Feel%20You.m4a?v=da494ba255"},{n:"Weight of the World",d:"music/Weight%20of%20the%20World.m4a?v=da494ba255"},{n:"\u66d6\u6627\u30ca\u5e0c\u671b\uff0f\u6c37\u96e8",d:"music/%E6%9B%96%E6%98%A7%E3%83%8A%E5%B8%8C%E6%9C%9B%EF%BC%8F%E6%B0%B7%E9%9B%A8.m4a?v=da494ba255"},{n:"\u904a\u5712\u65bd\u8a2d",d:"music/%E9%81%8A%E5%9C%92%E6%96%BD%E8%A8%AD.m4a?v=da494ba255"},{n:"\u907a\u30b5\u30ec\u30bf\u5834\u6240\uff0f\u659c\u5149",d:"music/%E9%81%BA%E3%82%B5%E3%83%AC%E3%82%BF%E5%A0%B4%E6%89%80%EF%BC%8F%E6%96%9C%E5%85%89.m4a?v=da494ba255"}];
+window.LD_MUSIC=[{n:"Feel You",d:"music/Feel%20You.m4a?v=f7e042ce55"},{n:"Weight of the World",d:"music/Weight%20of%20the%20World.m4a?v=f7e042ce55"},{n:"\u66d6\u6627\u30ca\u5e0c\u671b\uff0f\u6c37\u96e8",d:"music/%E6%9B%96%E6%98%A7%E3%83%8A%E5%B8%8C%E6%9C%9B%EF%BC%8F%E6%B0%B7%E9%9B%A8.m4a?v=f7e042ce55"},{n:"\u904a\u5712\u65bd\u8a2d",d:"music/%E9%81%8A%E5%9C%92%E6%96%BD%E8%A8%AD.m4a?v=f7e042ce55"},{n:"\u907a\u30b5\u30ec\u30bf\u5834\u6240\uff0f\u659c\u5149",d:"music/%E9%81%BA%E3%82%B5%E3%83%AC%E3%82%BF%E5%A0%B4%E6%89%80%EF%BC%8F%E6%96%9C%E5%85%89.m4a?v=f7e042ce55"}];
 /* 建筑贴图由 build.py 自动内嵌，请勿手改 */
-window.LD_PROP_IMG={};LD_PROP_IMG["boat_fish"]="assets/props/boat_fish.png?v=da494ba255";LD_PROP_IMG["boat_junk"]="assets/props/boat_junk.png?v=da494ba255";LD_PROP_IMG["boat_raft"]="assets/props/boat_raft.png?v=da494ba255";LD_PROP_IMG["boat_row"]="assets/props/boat_row.png?v=da494ba255";LD_PROP_IMG["cannon"]="assets/props/cannon.png?v=da494ba255";LD_PROP_IMG["charger"]="assets/props/charger.png?v=da494ba255";LD_PROP_IMG["cliff"]="assets/props/cliff.png?v=da494ba255";LD_PROP_IMG["crystal"]="assets/props/crystal.png?v=da494ba255";LD_PROP_IMG["grave"]="assets/props/grave.png?v=da494ba255";LD_PROP_IMG["tower"]="assets/props/tower.png?v=da494ba255";LD_PROP_IMG["turret"]="assets/props/turret.png?v=da494ba255";
+window.LD_PROP_IMG={};LD_PROP_IMG["boat_fish"]="assets/props/boat_fish.png?v=f7e042ce55";LD_PROP_IMG["boat_junk"]="assets/props/boat_junk.png?v=f7e042ce55";LD_PROP_IMG["boat_raft"]="assets/props/boat_raft.png?v=f7e042ce55";LD_PROP_IMG["boat_row"]="assets/props/boat_row.png?v=f7e042ce55";LD_PROP_IMG["cannon"]="assets/props/cannon.png?v=f7e042ce55";LD_PROP_IMG["charger"]="assets/props/charger.png?v=f7e042ce55";LD_PROP_IMG["cliff"]="assets/props/cliff.png?v=f7e042ce55";LD_PROP_IMG["crystal"]="assets/props/crystal.png?v=f7e042ce55";LD_PROP_IMG["grave"]="assets/props/grave.png?v=f7e042ce55";LD_PROP_IMG["tower"]="assets/props/tower.png?v=f7e042ce55";LD_PROP_IMG["turret"]="assets/props/turret.png?v=f7e042ce55";
 /* 皮肤贴图由 build.py 自动内嵌，请勿手改 */
-window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/daishu_head.png?v=da494ba255";LD_SKIN_IMG["daishu_lower"]="assets/skins/daishu/parts/daishu_lower.png?v=da494ba255";LD_SKIN_IMG["daishu_upper"]="assets/skins/daishu/parts/daishu_upper.png?v=da494ba255";LD_SKIN_IMG["doubao_head"]="assets/skins/doubao/parts/doubao_head.png?v=da494ba255";LD_SKIN_IMG["doubao_lower"]="assets/skins/doubao/parts/doubao_lower.png?v=da494ba255";LD_SKIN_IMG["doubao_upper"]="assets/skins/doubao/parts/doubao_upper.png?v=da494ba255";LD_SKIN_IMG["gaosongdeng_head"]="assets/skins/gaosongdeng/parts/gaosongdeng_head.png?v=da494ba255";LD_SKIN_IMG["gaosongdeng_lower"]="assets/skins/gaosongdeng/parts/gaosongdeng_lower.png?v=da494ba255";LD_SKIN_IMG["gaosongdeng_upper"]="assets/skins/gaosongdeng/parts/gaosongdeng_upper.png?v=da494ba255";LD_SKIN_IMG["gaoya_head"]="assets/skins/gaoya/parts/gaoya_head.png?v=da494ba255";LD_SKIN_IMG["gaoya_lower"]="assets/skins/gaoya/parts/gaoya_lower.png?v=da494ba255";LD_SKIN_IMG["gaoya_upper"]="assets/skins/gaoya/parts/gaoya_upper.png?v=da494ba255";LD_SKIN_IMG["gojo_head"]="assets/skins/gojo/parts/gojo_head.png?v=da494ba255";LD_SKIN_IMG["gojo_lower"]="assets/skins/gojo/parts/gojo_lower.png?v=da494ba255";LD_SKIN_IMG["gojo_upper"]="assets/skins/gojo/parts/gojo_upper.png?v=da494ba255";LD_SKIN_IMG["kobe_head"]="assets/skins/kobe/parts/kobe_head.png?v=da494ba255";LD_SKIN_IMG["kobe_lower"]="assets/skins/kobe/parts/kobe_lower.png?v=da494ba255";LD_SKIN_IMG["kobe_upper"]="assets/skins/kobe/parts/kobe_upper.png?v=da494ba255";LD_SKIN_IMG["kunkun_head"]="assets/skins/kunkun/parts/kunkun_head.png?v=da494ba255";LD_SKIN_IMG["kunkun_lower"]="assets/skins/kunkun/parts/kunkun_lower.png?v=da494ba255";LD_SKIN_IMG["kunkun_upper"]="assets/skins/kunkun/parts/kunkun_upper.png?v=da494ba255";LD_SKIN_IMG["naiwa_head"]="assets/skins/naiwa/parts/naiwa_head.png?v=da494ba255";LD_SKIN_IMG["naiwa_lower"]="assets/skins/naiwa/parts/naiwa_lower.png?v=da494ba255";LD_SKIN_IMG["naiwa_upper"]="assets/skins/naiwa/parts/naiwa_upper.png?v=da494ba255";LD_SKIN_IMG["pangmao_head"]="assets/skins/pangmao/parts/pangmao_head.png?v=da494ba255";LD_SKIN_IMG["pangmao_lower"]="assets/skins/pangmao/parts/pangmao_lower.png?v=da494ba255";LD_SKIN_IMG["pangmao_upper"]="assets/skins/pangmao/parts/pangmao_upper.png?v=da494ba255";
+window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/daishu_head.png?v=f7e042ce55";LD_SKIN_IMG["daishu_lower"]="assets/skins/daishu/parts/daishu_lower.png?v=f7e042ce55";LD_SKIN_IMG["daishu_upper"]="assets/skins/daishu/parts/daishu_upper.png?v=f7e042ce55";LD_SKIN_IMG["doubao_head"]="assets/skins/doubao/parts/doubao_head.png?v=f7e042ce55";LD_SKIN_IMG["doubao_lower"]="assets/skins/doubao/parts/doubao_lower.png?v=f7e042ce55";LD_SKIN_IMG["doubao_upper"]="assets/skins/doubao/parts/doubao_upper.png?v=f7e042ce55";LD_SKIN_IMG["gaosongdeng_head"]="assets/skins/gaosongdeng/parts/gaosongdeng_head.png?v=f7e042ce55";LD_SKIN_IMG["gaosongdeng_lower"]="assets/skins/gaosongdeng/parts/gaosongdeng_lower.png?v=f7e042ce55";LD_SKIN_IMG["gaosongdeng_upper"]="assets/skins/gaosongdeng/parts/gaosongdeng_upper.png?v=f7e042ce55";LD_SKIN_IMG["gaoya_head"]="assets/skins/gaoya/parts/gaoya_head.png?v=f7e042ce55";LD_SKIN_IMG["gaoya_lower"]="assets/skins/gaoya/parts/gaoya_lower.png?v=f7e042ce55";LD_SKIN_IMG["gaoya_upper"]="assets/skins/gaoya/parts/gaoya_upper.png?v=f7e042ce55";LD_SKIN_IMG["gojo_head"]="assets/skins/gojo/parts/gojo_head.png?v=f7e042ce55";LD_SKIN_IMG["gojo_lower"]="assets/skins/gojo/parts/gojo_lower.png?v=f7e042ce55";LD_SKIN_IMG["gojo_upper"]="assets/skins/gojo/parts/gojo_upper.png?v=f7e042ce55";LD_SKIN_IMG["kobe_head"]="assets/skins/kobe/parts/kobe_head.png?v=f7e042ce55";LD_SKIN_IMG["kobe_lower"]="assets/skins/kobe/parts/kobe_lower.png?v=f7e042ce55";LD_SKIN_IMG["kobe_upper"]="assets/skins/kobe/parts/kobe_upper.png?v=f7e042ce55";LD_SKIN_IMG["kunkun_head"]="assets/skins/kunkun/parts/kunkun_head.png?v=f7e042ce55";LD_SKIN_IMG["kunkun_lower"]="assets/skins/kunkun/parts/kunkun_lower.png?v=f7e042ce55";LD_SKIN_IMG["kunkun_upper"]="assets/skins/kunkun/parts/kunkun_upper.png?v=f7e042ce55";LD_SKIN_IMG["naiwa_head"]="assets/skins/naiwa/parts/naiwa_head.png?v=f7e042ce55";LD_SKIN_IMG["naiwa_lower"]="assets/skins/naiwa/parts/naiwa_lower.png?v=f7e042ce55";LD_SKIN_IMG["naiwa_upper"]="assets/skins/naiwa/parts/naiwa_upper.png?v=f7e042ce55";LD_SKIN_IMG["pangmao_head"]="assets/skins/pangmao/parts/pangmao_head.png?v=f7e042ce55";LD_SKIN_IMG["pangmao_lower"]="assets/skins/pangmao/parts/pangmao_lower.png?v=f7e042ce55";LD_SKIN_IMG["pangmao_upper"]="assets/skins/pangmao/parts/pangmao_upper.png?v=f7e042ce55";
 /* ===== 00_version.js ===== */
 /* 由 build.py 自动生成，请勿手改 */
-(function (LD) { LD.VERSION = "4.32"; LD.AUTHOR = "RikkaLove0721"; })(window.LD = window.LD || {});
+(function (LD) { LD.VERSION = "4.33"; LD.AUTHOR = "RikkaLove0721"; })(window.LD = window.LD || {});
 
 /* ===== 10_data.js ===== */
 /* ============================================================
@@ -20323,6 +20323,31 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
   };
 
   /* ------------------------------------------------------------
+   *  v4.33 补给箱：人机什么时候敢去开箱
+   * ------------------------------------------------------------ */
+
+  /* 这些模式里「站在原地 1.5 秒」是不可接受的：塔防要推塔、护送要推箱、
+   * 渡江要抢船，开箱只会把人机钉在原地浪费整局。其余模式都允许顺手开箱。 */
+  const SUPPLY_OFF = { tower: 1, escort: 1, river: 1 };
+
+  /** 全场离 f 最近的活敌人有多远（分身不算；没有敌人返回 Infinity）。
+   *  人机锁定的只是一个人，另一个绕后到身后时锁定目标可能在几百像素外 ——
+   *  「附近没人」必须按全场算，不能按锁定目标算。 */
+  AI.nearestFoeDist = function (f) {
+    let d = Infinity;
+    const fs = B.fighters || [];
+    for (let i = 0; i < fs.length; i++) {
+      const o = fs[i];
+      if (o === f || o.dead || o.bench || o.isClone) continue;
+      if (o.kind !== "hero") continue;
+      if (B.sameTeam(f, o)) continue;
+      const dd = Math.hypot(o.x - f.x, o.y - f.y);
+      if (dd < d) d = dd;
+    }
+    return d;
+  };
+
+  /* ------------------------------------------------------------
    *  v3.9 塔防：别一个人顶着塔硬冲
    *  塔的仇恨有「小兵优先」（距离 ×0.72），有兵线时它打兵，英雄能安全输出；
    *  没兵线时塔只盯着英雄，开局就冲进去等于白送 —— 这就是为什么人机开局爱往塔里钻。
@@ -20408,6 +20433,9 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
   AI.tickHero = function (f, dt) {
     if (!f.bot || f.dead || LD.Cine.active) { if (f.ctrl) { f.ctrl.mx = f.ctrl.my = 0; f.ctrl.press = {}; } return; }
     const b = f.bot, cf = b.conf, ctrl = f.ctrl;
+    /* v4.33 开箱冷却：打完 / 放弃之后的一小段冷静期，免得在「跑去开箱」和
+     * 「回头打架」之间每帧横跳（敌人刚好在判定边界上时最明显）。 */
+    b.supCd = Math.max(0, (b.supCd || 0) - dt);
     /* 索敌：霸主争霸里非霸主人机的仇恨会转向霸主；否则动态选目标 ——
      * 每隔 1~1.8 秒在「距离最近」和「血量最多」之间重新挑选，不再固定锁一个人 */
     let foe = null;
@@ -20608,6 +20636,24 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
       }
       return;
     }
+    /* ==========================================================
+     *  v4.33 搜刮补给箱（读条中）
+     *  人机开箱和玩家用同一条链路：P 起手 → 站桩读条 1.5 秒 → 掉物资。
+     *  读条期间它既不还手也不走位，所以在这一段只做两件事：
+     *  站住别乱给方向，以及有人摸到能打到它的距离就放弃。
+     *  放在所有 early return 之后：碰碰车 / 山芋 / 娱乐模式各有自己的逻辑，
+     *  别让开箱把它们的节奏打断。
+     * ========================================================== */
+    if (f.chg && f.chg.kind === "supply") {
+      ctrl.mx = ctrl.my = 0;
+      /* 260 ≈ 已经进入多数招式的出手距离。静默取消（不传 why）：
+       * 这是 AI 自己的判断，不必在它头顶上刷一行字给玩家看。 */
+      if (AI.nearestFoeDist(f) < 260) {
+        if (B.cancelCharge) B.cancelCharge(f, null);
+        b.supCd = 5;
+      }
+      return;
+    }
     /* 金币优先级：150px 内有币就先捡，别为了远处的车 / 柜子绕路
      * （否则丧尸危机里 AI 会跑去开车，永远攒不到钱买东西） */
     /* v3.2 局内金币：AI 要主动去捡，否则永远攒不到钱、也就用不上局内商店。
@@ -20667,8 +20713,26 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
           });
           if (best) f.useTarget = { type: "mud", prop: best };
         }
-        /* 已经在交互范围内 → 直接按 P */
-        if (f.useTarget) {
+        /* 4) v4.33 附近没人 → 去搜刮最近的补给箱
+         * 排在三件「有用」的事之后：柜子能保命、车能换命、泥土能打人，
+         * 而补给箱只是额外的消耗品 —— 有空才去。
+         * 「没人」用全场最近的活敌人算（不是锁定的那个，理由见 nearestFoeDist），
+         * 340 是「已经算不上近身」的距离；460 是愿意为它绕的最远距离。
+         * 想开箱却正被追着打时，这条判定自然不成立，人机会继续打。 */
+        if (!f.useTarget && B.terrain && (b.supCd || 0) <= 0 && !SUPPLY_OFF[B.rule] &&
+            AI.nearestFoeDist(f) > 340) {
+          let best = null, bd = 460;
+          B.terrain.props.forEach(o => {
+            if (o.kind !== "supply" || o.dead || o.cargo) return;
+            const dd = Math.hypot(o.x - f.x, o.y - f.y);
+            if (dd < bd) { bd = dd; best = o; }
+          });
+          if (best) f.useTarget = { type: "supply", prop: best };
+        }
+        /* 已经在交互范围内 → 直接按 P
+         * v4.33：蓄力中不按第二次 —— doInteract 遇到「已在蓄力」会把第二次按下
+         * 当成提前开启 / 取消，AI 每帧都按的话，箱盖刚掀开就被自己按没了。 */
+        if (f.useTarget && !f.chg) {
           const it = B.interactTarget(f);
           if (it && it.prop === f.useTarget.prop) ctrl.press.interact = true;
         }
@@ -20834,10 +20898,13 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
       }
       /* v3.3：走到掉落物旁按 P 拾取（两格满了自动替换最早获得的那个） */
       if (g.landed && (g.noPick || 0) <= 0 && Math.hypot(g.x - f.x, g.y - f.y) < f.r + 44) ctrl.press.interact = true;
-    } else if (f.useTarget) {                           // v3.3 交互目标（柜子 / 车 / 泥土）
+    } else if (f.useTarget) {                           // v3.3 交互目标（柜子 / 车 / 泥土 / 补给箱）
       const tp = f.useTarget.prop;
       const tx = tp.x - f.x, ty = tp.y - f.y, td = Math.hypot(tx, ty) || 1;
-      if (td > (tp.kind === "car" ? 56 : 30)) { mx += tx / td * 1.6; my += ty / td * 1.6; }
+      /* v4.33 补给箱 40×40：停在 54 而不是 30 —— 30 是「贴着物件边」的距离，
+       * 而箱子是实心的，人机会一直顶着箱子推、永远进不了 26px 的交互净距。 */
+      const stop = tp.kind === "car" ? 56 : (tp.kind === "supply" ? 54 : 30);
+      if (td > stop) { mx += tx / td * 1.6; my += ty / td * 1.6; }
     } else if (f.healTarget) {                          // v2.7 残血先补：冲去血包
       const hx = f.healTarget.x - f.x, hy = f.healTarget.y - f.y, hd = Math.hypot(hx, hy) || 1;
       mx += hx / hd * 1.7; my += hy / hd * 1.7;

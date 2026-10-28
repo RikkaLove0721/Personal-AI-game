@@ -176,6 +176,31 @@
   };
 
   /* ------------------------------------------------------------
+   *  v4.33 补给箱：人机什么时候敢去开箱
+   * ------------------------------------------------------------ */
+
+  /* 这些模式里「站在原地 1.5 秒」是不可接受的：塔防要推塔、护送要推箱、
+   * 渡江要抢船，开箱只会把人机钉在原地浪费整局。其余模式都允许顺手开箱。 */
+  const SUPPLY_OFF = { tower: 1, escort: 1, river: 1 };
+
+  /** 全场离 f 最近的活敌人有多远（分身不算；没有敌人返回 Infinity）。
+   *  人机锁定的只是一个人，另一个绕后到身后时锁定目标可能在几百像素外 ——
+   *  「附近没人」必须按全场算，不能按锁定目标算。 */
+  AI.nearestFoeDist = function (f) {
+    let d = Infinity;
+    const fs = B.fighters || [];
+    for (let i = 0; i < fs.length; i++) {
+      const o = fs[i];
+      if (o === f || o.dead || o.bench || o.isClone) continue;
+      if (o.kind !== "hero") continue;
+      if (B.sameTeam(f, o)) continue;
+      const dd = Math.hypot(o.x - f.x, o.y - f.y);
+      if (dd < d) d = dd;
+    }
+    return d;
+  };
+
+  /* ------------------------------------------------------------
    *  v3.9 塔防：别一个人顶着塔硬冲
    *  塔的仇恨有「小兵优先」（距离 ×0.72），有兵线时它打兵，英雄能安全输出；
    *  没兵线时塔只盯着英雄，开局就冲进去等于白送 —— 这就是为什么人机开局爱往塔里钻。
@@ -261,6 +286,9 @@
   AI.tickHero = function (f, dt) {
     if (!f.bot || f.dead || LD.Cine.active) { if (f.ctrl) { f.ctrl.mx = f.ctrl.my = 0; f.ctrl.press = {}; } return; }
     const b = f.bot, cf = b.conf, ctrl = f.ctrl;
+    /* v4.33 开箱冷却：打完 / 放弃之后的一小段冷静期，免得在「跑去开箱」和
+     * 「回头打架」之间每帧横跳（敌人刚好在判定边界上时最明显）。 */
+    b.supCd = Math.max(0, (b.supCd || 0) - dt);
     /* 索敌：霸主争霸里非霸主人机的仇恨会转向霸主；否则动态选目标 ——
      * 每隔 1~1.8 秒在「距离最近」和「血量最多」之间重新挑选，不再固定锁一个人 */
     let foe = null;
@@ -461,6 +489,24 @@
       }
       return;
     }
+    /* ==========================================================
+     *  v4.33 搜刮补给箱（读条中）
+     *  人机开箱和玩家用同一条链路：P 起手 → 站桩读条 1.5 秒 → 掉物资。
+     *  读条期间它既不还手也不走位，所以在这一段只做两件事：
+     *  站住别乱给方向，以及有人摸到能打到它的距离就放弃。
+     *  放在所有 early return 之后：碰碰车 / 山芋 / 娱乐模式各有自己的逻辑，
+     *  别让开箱把它们的节奏打断。
+     * ========================================================== */
+    if (f.chg && f.chg.kind === "supply") {
+      ctrl.mx = ctrl.my = 0;
+      /* 260 ≈ 已经进入多数招式的出手距离。静默取消（不传 why）：
+       * 这是 AI 自己的判断，不必在它头顶上刷一行字给玩家看。 */
+      if (AI.nearestFoeDist(f) < 260) {
+        if (B.cancelCharge) B.cancelCharge(f, null);
+        b.supCd = 5;
+      }
+      return;
+    }
     /* 金币优先级：150px 内有币就先捡，别为了远处的车 / 柜子绕路
      * （否则丧尸危机里 AI 会跑去开车，永远攒不到钱买东西） */
     /* v3.2 局内金币：AI 要主动去捡，否则永远攒不到钱、也就用不上局内商店。
@@ -520,8 +566,26 @@
           });
           if (best) f.useTarget = { type: "mud", prop: best };
         }
-        /* 已经在交互范围内 → 直接按 P */
-        if (f.useTarget) {
+        /* 4) v4.33 附近没人 → 去搜刮最近的补给箱
+         * 排在三件「有用」的事之后：柜子能保命、车能换命、泥土能打人，
+         * 而补给箱只是额外的消耗品 —— 有空才去。
+         * 「没人」用全场最近的活敌人算（不是锁定的那个，理由见 nearestFoeDist），
+         * 340 是「已经算不上近身」的距离；460 是愿意为它绕的最远距离。
+         * 想开箱却正被追着打时，这条判定自然不成立，人机会继续打。 */
+        if (!f.useTarget && B.terrain && (b.supCd || 0) <= 0 && !SUPPLY_OFF[B.rule] &&
+            AI.nearestFoeDist(f) > 340) {
+          let best = null, bd = 460;
+          B.terrain.props.forEach(o => {
+            if (o.kind !== "supply" || o.dead || o.cargo) return;
+            const dd = Math.hypot(o.x - f.x, o.y - f.y);
+            if (dd < bd) { bd = dd; best = o; }
+          });
+          if (best) f.useTarget = { type: "supply", prop: best };
+        }
+        /* 已经在交互范围内 → 直接按 P
+         * v4.33：蓄力中不按第二次 —— doInteract 遇到「已在蓄力」会把第二次按下
+         * 当成提前开启 / 取消，AI 每帧都按的话，箱盖刚掀开就被自己按没了。 */
+        if (f.useTarget && !f.chg) {
           const it = B.interactTarget(f);
           if (it && it.prop === f.useTarget.prop) ctrl.press.interact = true;
         }
@@ -687,10 +751,13 @@
       }
       /* v3.3：走到掉落物旁按 P 拾取（两格满了自动替换最早获得的那个） */
       if (g.landed && (g.noPick || 0) <= 0 && Math.hypot(g.x - f.x, g.y - f.y) < f.r + 44) ctrl.press.interact = true;
-    } else if (f.useTarget) {                           // v3.3 交互目标（柜子 / 车 / 泥土）
+    } else if (f.useTarget) {                           // v3.3 交互目标（柜子 / 车 / 泥土 / 补给箱）
       const tp = f.useTarget.prop;
       const tx = tp.x - f.x, ty = tp.y - f.y, td = Math.hypot(tx, ty) || 1;
-      if (td > (tp.kind === "car" ? 56 : 30)) { mx += tx / td * 1.6; my += ty / td * 1.6; }
+      /* v4.33 补给箱 40×40：停在 54 而不是 30 —— 30 是「贴着物件边」的距离，
+       * 而箱子是实心的，人机会一直顶着箱子推、永远进不了 26px 的交互净距。 */
+      const stop = tp.kind === "car" ? 56 : (tp.kind === "supply" ? 54 : 30);
+      if (td > stop) { mx += tx / td * 1.6; my += ty / td * 1.6; }
     } else if (f.healTarget) {                          // v2.7 残血先补：冲去血包
       const hx = f.healTarget.x - f.x, hy = f.healTarget.y - f.y, hd = Math.hypot(hx, hy) || 1;
       mx += hx / hd * 1.7; my += hy / hd * 1.7;
