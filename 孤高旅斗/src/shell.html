@@ -439,6 +439,53 @@ h1.ztitle .zt{position:relative;z-index:1;color:#f6f8fc}
 #ovMenu .bgmSwitch{left:36px;bottom:66px;top:auto;right:auto;
   background:rgba(10,16,30,.42);border-color:rgba(150,185,255,.22);color:rgba(226,238,255,.86)}
 
+/* ---- v4.32 成长任务卡：左下角三行小字 ----
+   和主菜单那列纯文字同一套语言：没有按钮底色，只有一层压暗的玻璃。
+   放左下是因为右下整列已经被七个入口占满，而左下那块本来就是卡面
+   最暗的地方（menuVeil 的底部渐暗），压上去不抢立绘的视线。 */
+.growCard{position:absolute;left:36px;bottom:104px;z-index:3;width:252px;
+  padding:10px 13px 8px;border-radius:12px;overflow:hidden;
+  /* 底板要比 #tutTip 更实一档：这块正好压在人物的深色裙摆上，
+     .6 级别的透明度会让卡片和背景糊成一片，边界全靠猜。 */
+  background:linear-gradient(180deg,rgba(9,14,26,.9),rgba(5,9,17,.82));
+  border:1px solid rgba(160,196,255,.28);
+  box-shadow:0 16px 38px rgba(0,0,0,.5),inset 0 1px 0 rgba(200,228,255,.11);
+  transition:opacity .22s}
+/* 左边一道竖条：压在插画上时，这是唯一能把「这是一层 UI」说清楚的边 */
+.growCard::before{content:"";position:absolute;left:0;top:11px;bottom:11px;width:2px;border-radius:0 2px 2px 0;
+  background:linear-gradient(180deg,rgba(125,211,252,.92),rgba(125,211,252,.12))}
+.growCard.hide{display:none}
+.ghd{display:flex;align-items:center;gap:8px;padding-bottom:7px;margin-bottom:3px;
+  border-bottom:1px solid rgba(150,185,255,.17);
+  font-size:10.5px;letter-spacing:3px;color:rgba(206,224,248,.8)}
+.ghd .gnum{margin-left:auto;letter-spacing:1px;font-weight:700;color:rgba(125,211,252,.95)}
+.ghd .gfold{padding:0 1px;font-size:13px;line-height:1;cursor:pointer;
+  color:rgba(170,192,222,.6);transition:color .15s}
+.ghd .gfold:hover{color:#fff}
+.growRow{display:flex;align-items:center;gap:7px;padding:5px 0;cursor:pointer;
+  font-size:12.5px;color:#eaf2ff;
+  transition:color .15s,transform .18s,opacity .18s}
+.growRow:hover{color:#fff;transform:translateX(2px)}
+.growRow .gdot{flex:0 0 13px;width:13px;text-align:center;font-size:11.5px;
+  color:rgba(164,190,226,.72);transition:color .18s}
+.growRow .gname{letter-spacing:.5px}
+.growRow .gpay{margin-left:auto;font-size:10.5px;letter-spacing:.5px;
+  color:rgba(255,217,138,.9)}
+.growRow.done{color:rgba(178,198,226,.62)}
+.growRow.done:hover{transform:none;color:rgba(198,214,236,.75)}
+.growRow.done .gdot{color:#7ff0c4}
+.growRow.done .gpay{color:rgba(127,240,196,.66)}
+.gfoot{margin-top:3px;padding-top:6px;border-top:1px solid rgba(150,185,255,.13);
+  font-size:10px;letter-spacing:1.5px;color:rgba(127,240,196,.72)}
+/* 收起后的小条：同一个位置，只留一行字，点一下还原 */
+.growMini{position:absolute;left:36px;bottom:104px;z-index:3;cursor:pointer;
+  padding:6px 12px;border-radius:9px;
+  background:rgba(10,16,30,.55);border:1px solid rgba(150,185,255,.18);
+  font-size:10px;letter-spacing:2px;color:rgba(198,216,244,.78);
+  transition:.15s}
+.growMini:hover{background:rgba(18,28,48,.72);color:#fff}
+.growMini.hide{display:none}
+
 /* 标题 + 选项：右下角一列纯文字，无框无底，像刻在风景上 */
 .menuRight{position:absolute;right:52px;top:44px;bottom:26px;width:340px;z-index:2;
   display:flex;flex-direction:column;align-items:flex-end;text-align:right}
@@ -487,6 +534,16 @@ body.mobile .menuList{margin-top:14px;gap:0}
 body.mobile .mItem{padding:5px 0 5px 10px}
 body.mobile #ovMenu .bgmSwitch{left:18px;bottom:52px;font-size:10px;padding:5px 10px}
 body.mobile .menuBrand{left:18px;bottom:18px;font-size:10px;letter-spacing:4px}
+/* 成长任务卡：手机横屏的高度只有 420 逻辑像素，卡片要矮、要窄，否则会
+   顶到标题那一列去。宽度收到 208，字号按「舞台约 0.9 倍」折回来给到 12，
+   屏幕上的等效字号才不至于掉到 10px 以下。 */
+body.mobile .growCard{left:14px;bottom:84px;width:208px;padding:8px 11px 7px;border-radius:10px}
+body.mobile .ghd{font-size:9.5px;letter-spacing:2px;padding-bottom:5px;gap:6px}
+body.mobile .growRow{font-size:12px;padding:4.5px 0;gap:5px}
+body.mobile .growRow .gdot{flex:0 0 12px;width:12px;font-size:10.5px}
+body.mobile .growRow .gpay{font-size:9.5px}
+body.mobile .gfoot{font-size:9px;letter-spacing:1px}
+body.mobile .growMini{left:14px;bottom:84px;font-size:9.5px;padding:5px 9px;letter-spacing:1.5px}
 
 .skgrid{display:flex;align-items:center;gap:3px 7px;flex-wrap:wrap;justify-content:center}
 .ski{display:inline-flex;align-items:center;gap:3px;white-space:nowrap}
@@ -761,6 +818,11 @@ body.pad .bartxt{font-size:9px}
     <div class="menuScrim" aria-hidden="true"></div>
     <div class="menuBrand"><span>孤 高</span><i></i><span>听雨的声音</span></div>
     <div class="bgmSwitch" id="btnBgm" title="背景音乐开关（随机播放，低音量）">&#127925; 音乐开</div>
+
+    <!-- v4.32 成长任务卡：教买皮肤 / 装技能 / 开房间（内容由 70_ui.js 的
+         renderGrow 生成；教程没通关时整块隐藏） -->
+    <div class="growCard hide" id="growCard"></div>
+    <div class="growMini hide" id="growMini">成长任务 0 / 3</div>
 
     <div class="menuRight">
       <div class="mtCn">孤高旅斗</div>

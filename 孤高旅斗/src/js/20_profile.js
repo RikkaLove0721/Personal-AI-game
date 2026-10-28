@@ -27,12 +27,36 @@
       /* v4.19：新手教程是否通关过。没通关时主菜单第一行显示「新手教程」，
        * 通关后恢复成「单人游戏」，教程挪进单人菜单里（可重复挑战，只给 5 金币）。 */
       tutDone: false,
+      /* v4.32 成长任务卡（见 69_grow.js）：买皮肤 / 装技能 / 开一局房间。
+       * 三项各自独立置 1，完成后不再重复发奖。 */
+      grow: { shop: 0, skill: 0, room: 0 },
       stats: { kills: 0, wins: 0, losses: 0, bossWins: 0, relayWins: 0, huntWins: 0, dailyWins: 0, coinsEarned: 0,
                warmupWins: 0, zombieKills: 0, modeWins: {} },   // v2.6 累计战绩（v2.8 增补 modeWins 各模式胜场）
       ach: {},                             // v2.6 已解锁成就 { id: true }
       title: "",                           // v2.6 当前佩戴的称号
       daily: {}                            // v2.6 每日挑战 { "2026-09-21": 最快秒数 }
     };
+  }
+
+  /* v4.32 成长任务：新档三项都没做。
+   * 旧档没有这个字段，但不能一律当 0 —— 老玩家早就买过皮肤、装着技能、
+   * 打过几十局，一进主菜单却被告知「去买一套皮肤」，等于在骂人。
+   * 所以老档按已有资产反推一遍：有非免费部件就算买过皮肤，有超出初始
+   * 两招的技能就算装过技能，有过任何一场战绩就算开过房间。
+   * 只对已通关教程的档做反推：没通关的是真正的新档，应该从零开始。 */
+  function growOf(o, d) {
+    const g = o.grow;
+    if (g && typeof g === "object") {
+      return { shop: g.shop ? 1 : 0, skill: g.skill ? 1 : 0, room: g.room ? 1 : 0 };
+    }
+    const out = { shop: 0, skill: 0, room: 0 };
+    if (!o.tutDone) return out;
+    const free = (LD.FREE && [LD.FREE.head, LD.FREE.upper, LD.FREE.lower]) || [];
+    if ((d.ownedParts || []).some(id => free.indexOf(id) < 0)) out.shop = 1;
+    if ((d.ownedSkills || []).some(id => id !== "slash" && id !== "fireball")) out.skill = 1;
+    const st = d.stats || {};
+    if ((st.wins || 0) + (st.losses || 0) > 0) out.room = 1;
+    return out;
   }
 
   function merge(o) {
@@ -52,6 +76,7 @@
       if (v > (mm[pair[0]] || 0)) mm[pair[0]] = v;
     });
     d.tutDone = !!o.tutDone;
+    d.grow = growOf(o, d);
     d.ach = o.ach || {};
     d.title = o.title || "";
     d.daily = o.daily || {};
@@ -146,6 +171,7 @@
       try { if (UI.coins) UI.coins(); } catch (e) {}
       try { if (UI.renderMenuEntry) UI.renderMenuEntry(); } catch (e) {}
       try { if (UI.renderTutCard) UI.renderTutCard(); } catch (e) {}
+      try { if (UI.renderGrow) UI.renderGrow(); } catch (e) {}
     },
     get coins() { return this.d.coins; },
     displayName() {
@@ -237,6 +263,10 @@
       // 同一技能不能占两个槽
       ["basic", "skill1", "skill2", "ult"].forEach(k => { if (k !== slot && lo[k] === id) lo[k] = null; });
       lo[slot] = id; this.save();
+      /* v4.32 成长任务「装一个技能」：真正的装配动作就记在这里，
+       * 而不是在技能商店的点击回调里 —— 商店有「点卡片自动装」和
+       * 「按装配按钮」两条路径，挂底层才漏不掉。 */
+      if (LD.Grow) LD.Grow.hit("skill");
       return { ok: true };
     },
     findSlotOf(id) {

@@ -59,6 +59,46 @@ ACT = {
              'setTimeout(function(){var h=LD.Battle.tutHero;'
              'if(h){h.x+=520;h.y-=0;}}, 300);'),
     "multi": 'LD.UI.show("ovMulti");',
+    # v4.32 成长任务卡：教程已通关、三项都还没做（新号最该看到的样子）
+    "grow": ('LD.Profile.d.tutDone = true; LD.Profile.d.grow = {shop:0, skill:0, room:0};'
+             'LD.UI.growFold = false; LD.UI.show("ovMenu"); LD.UI.renderGrow();'),
+    # 做掉一项：看已完成那行的样式
+    "growmid": ('LD.Profile.d.tutDone = true; LD.Profile.d.grow = {shop:1, skill:0, room:0};'
+                'LD.UI.growFold = false; LD.UI.show("ovMenu"); LD.UI.renderGrow();'),
+    # 三条全做完：只剩收尾那句
+    "growall": ('LD.Profile.d.tutDone = true; LD.Profile.d.grow = {shop:1, skill:1, room:1};'
+                'LD.UI.growFold = false; LD.UI.show("ovMenu"); LD.UI.renderGrow();'),
+    # 收起态：左下角一条小字
+    "growfold": ('LD.Profile.d.tutDone = true; LD.Profile.d.grow = {shop:0, skill:0, room:0};'
+                 'LD.UI.growFold = true; LD.UI.show("ovMenu"); LD.UI.renderGrow();'),
+    # 手机横屏：720x420 逻辑舞台 + body.mobile（无头浏览器不进 pointer:coarse，手动摆）
+    "growmob": ('(function(){var app=document.getElementById("app"),cv=document.getElementById("cv");'
+                'if(cv){cv.width=720;cv.height=420;cv.style.width="720px";cv.style.height="420px";}'
+                'if(app){app.style.width="720px";app.style.height="420px";'
+                'app.style.transform="scale(0.9)";app.style.transformOrigin="center center";}'
+                'document.body.classList.add("mobile");'
+                'LD.Profile.d.tutDone=true;LD.Profile.d.grow={shop:0,skill:0,room:0};'
+                'LD.UI.growFold=false;LD.UI.show("ovMenu");LD.UI.renderGrow();})()'),
+    # 真实点击验证：行点得动、× 收得起（结果写到左上角 dbg，截图里能读）
+    "growtap": ('LD.Profile.d.tutDone = true; LD.Profile.d.grow = {shop:0,skill:0,room:0};'
+                'LD.UI.growFold = false; LD.UI.show("ovMenu"); LD.UI.renderGrow();'
+                'setTimeout(function(){'
+                'var r = document.querySelector("#growCard .growRow[data-g=\\"skill\\"]");'
+                'if (r) r.click();'
+                'var n = LD.UI.screen;'
+                'LD.UI.show("ovMenu");'
+                'var x = document.querySelector("#growCard [data-gfold]");'
+                'if (x) x.click();'
+                'var f = LD.UI.growFold;'
+                'var miniVisible = !document.getElementById("growMini").classList.contains("hide");'
+                'var m = document.querySelector("#growMini"); if (m) m.click();'
+                'var back = !document.getElementById("growCard").classList.contains("hide");'
+                'var d = document.createElement("div");'
+                'd.style.cssText="position:fixed;left:8px;top:8px;z-index:999;color:#0f0;'
+                'background:#000;font:16px monospace;padding:8px";'
+                'd.textContent="rowClick->"+n+" | fold="+f+" mini="+miniVisible+" back="+back;'
+                'document.body.appendChild(d);'
+                '},500);'),
 }
 
 

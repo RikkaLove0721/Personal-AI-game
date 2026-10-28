@@ -486,6 +486,7 @@
       mapCfg: UI.mapCfgForStart(room.map) });
     B.resetRound(false);                 // 按座位号摆位（最多 4 人），并设置对应规则的限时
     B.onEnd = win => UI.endDuel(win);
+    if (LD.Grow) LD.Grow.hit("room");    // v4.32 成长任务「开一局房间」
     UI.enterGame();
   };
 

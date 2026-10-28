@@ -54,7 +54,7 @@
     if (id === "ovSkill") UI.renderSkill();
     if (id === "ovLevels") UI.renderLevels();
     if (id === "ovSolo") { UI.renderGauntletCard(); UI.renderTutCard(); }
-    if (id === "ovMenu") UI.renderMenuEntry();
+    if (id === "ovMenu") { UI.renderMenuEntry(); UI.renderGrow(); }
     /* 不在战斗里就别留着教程提示条（退出 / 结算 / 回菜单都要收） */
     if (id !== "game" && B.tutHideTip) B.tutHideTip();
     if (id === "ovLoad") UI.renderLoad();
@@ -129,7 +129,10 @@
         d.onclick = () => {
           Audio2.ui();
           if (owned) { P.equipSuit(s.id); UI.toast('已整套穿上「' + s.name + '」'); UI.renderSkin(); }
-          else if (doBuy(P.buySuit(s.id), s.name)) UI.renderSkin();
+          else if (doBuy(P.buySuit(s.id), s.name)) {
+            if (LD.Grow) LD.Grow.hit("shop");     // v4.32 成长任务「买一套皮肤」
+            UI.renderSkin();
+          }
         };
         wrap.appendChild(d);
         const cv = d.querySelector('canvas');
@@ -148,7 +151,12 @@
       d.onclick = () => {
         Audio2.ui();
         if (owned) { P.equipPart(p.id); UI.toast("已换上「" + p.name + "」"); UI.renderSkin(); }
-        else if (doBuy(P.buyPart(p.id), p.name)) UI.renderSkin();
+        else if (doBuy(P.buyPart(p.id), p.name)) {
+          /* 只买一件散件也算 —— 任务叫「买一套皮肤」，但玩家的第一笔
+           * 消费很可能是个便宜的头饰，不该因为没买整套就不认。 */
+          if (LD.Grow) LD.Grow.hit("shop");
+          UI.renderSkin();
+        }
       };
       wrap.appendChild(d);
       const cv = d.querySelector("canvas");
@@ -921,6 +929,45 @@
         + (T.firstReward || 50) + " 金币";
   };
 
+  /* ==========================================================
+   *  v4.32 成长任务卡（数据与判定在 69_grow.js）
+   * ========================================================== */
+
+  /* 主菜单左下角的三行小卡：买皮肤 / 装技能 / 开房间。
+   * 教程没通关时整块不出现 —— 那时候玩家该做的事是先把教程走完。
+   *
+   * 为什么不逐行绑 onclick：整块 innerHTML 每次重画，绑在子元素上的
+   * 监听器会跟着一起没。卡片本体只绑一次（见 UI.init），点击靠
+   * data-g 分派下去。 */
+  UI.growFold = false;             // 收起状态只在本次会话里记，不写存档
+
+  UI.renderGrow = function () {
+    const card = $("growCard"), mini = $("growMini");
+    const G = LD.Grow;
+    if (!card || !G) return;
+    const show = G.visible(), fold = !!UI.growFold;
+    card.classList.toggle("hide", !show || fold);
+    if (mini) mini.classList.toggle("hide", !show || !fold);
+    if (!show) return;
+
+    const tot = G.DEF.length, n = G.count();
+    if (mini) mini.textContent = n >= tot ? "成长任务 · 已完成" : "成长任务 " + n + " / " + tot;
+    if (fold) return;
+
+    let html = '<div class="ghd"><span class="gtt">成长任务</span>'
+      + '<span class="gnum">' + n + " / " + tot + '</span>'
+      + '<span class="gfold" data-gfold="1" title="收起">−</span></div>';
+    G.DEF.forEach(d => {
+      const ok = G.done(d.key);
+      html += '<div class="growRow' + (ok ? " done" : "") + '" data-g="' + d.key + '" title="' + d.sub + '">'
+        + '<i class="gdot">' + (ok ? "✓" : "○") + '</i>'
+        + '<span class="gname">' + d.name + '</span>'
+        + '<span class="gpay">' + (ok ? "已领" : "+" + G.REWARD) + '</span></div>';
+    });
+    if (n >= tot) html += '<div class="gfoot">三条都做完，接下来随便玩</div>';
+    card.innerHTML = html;
+  };
+
   UI.startTutorial = function () {
     const T = LD.TUT || {};
     const w = T.world || { w: 2600, h: 900, pt: 100 };
@@ -1436,6 +1483,7 @@
       matchT: matchT || 120, mapCfg: mapCfg || null
     });
     B.onEnd = win => UI.endNet(win);
+    if (LD.Grow) LD.Grow.hit("room");          // v4.32 成长任务「开一局房间」（联机侧）
     UI.enterGame();
   };
 
@@ -1584,6 +1632,19 @@
       /* 换歌 / 开关之后把提示刷一遍（BGM 内部会在换歌时回调这里） */
       LD.BGM.onChange = paint;
     }
+
+    /* v4.32 成长任务卡：整张卡只绑一次点，行与「收起」都靠 data 属性分派。
+     * 收起后变成左下角一条小字，点回来还原 —— 不写存档，下次启动仍是展开的。 */
+    const gc = $("growCard");
+    if (gc) gc.onclick = ev => {
+      const t = ev && ev.target;
+      const el = t && t.closest ? t.closest("[data-g],[data-gfold]") : null;
+      if (!el) return;
+      if (el.dataset.gfold) { Audio2.ui(); UI.growFold = true; UI.renderGrow(); return; }
+      if (el.dataset.g && LD.Grow) LD.Grow.go(el.dataset.g);
+    };
+    const gm = $("growMini");
+    if (gm) gm.onclick = () => { Audio2.ui(); UI.growFold = false; UI.renderGrow(); };
 
     $("codeInput").addEventListener("input", e => { e.target.value = e.target.value.replace(/\D/g, "").slice(0, 4); });
     $("codeInput").addEventListener("keydown", e => { if (e.key === "Enter") $("btnJoin").onclick(); });

@@ -35,6 +35,12 @@ function setupHot(n) {
   /* 开局位置拉开，免得一开始就触发传递 */
   const w = B.world.w, top = B.world.pt || 0, cy = top + (B.world.h - top) / 2;
   list.forEach((f, i) => { f.x = 180 + i * (w - 360) / Math.max(1, list.length - 1 || 1); f.y = cy + (i % 2 ? 120 : -120); });
+  /* 山芋的落点是在 resetRound 之后、这里把人拉开**之前**算的（potatoPickTarget
+   * 里 st.y = 目标当时的 y - 300）。人一挪，山芋还停在旧坐标上，于是
+   * 「还在高空」这条断言拿新 tgt.y 去比旧 st.y —— 两者本来就不在同一处，
+   * 命中率只有五成左右（实测连跑 10 次挂 4 次）。
+   * dt = 0 跑一帧只是让 warn 分支把坐标重新对齐到 tgt.y - 300，不推进倒计时。 */
+  B.updateHotPotato(0);
   return list;
 }
 /** 把山芋直接塞到某人头上（跳过预警与天降） */

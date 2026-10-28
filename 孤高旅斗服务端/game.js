@@ -1,16 +1,16 @@
 /* 主菜单立绘由 build.py 自动内嵌，请勿手改 */
-window.LD_MENU_BG="assets/menu-bg.webp?v=ec8841211e";
+window.LD_MENU_BG="assets/menu-bg.webp?v=0a0f7be17a";
 /* 主菜单分层素材由 build.py 自动内嵌，请勿手改 */
-window.LD_CHAR={"frame": [3840, 2156], "layers": {"body": {"uv": [0.07578125, 0.05983302411873841, 0.71640625, 1.0], "px": [1315, 1084], "src": "assets/char/body.webp?v=ec8841211e"}, "armA": {"uv": [0.29635416666666664, 0.22541743970315398, 0.33359375, 0.4819109461966605], "px": [76, 296], "src": "assets/char/armA.webp?v=ec8841211e"}, "armB": {"uv": [0.37421875, 0.22356215213358072, 0.40963541666666664, 0.4819109461966605], "px": [73, 298], "src": "assets/char/armB.webp?v=ec8841211e"}, "hair": {"uv": [0.12369791666666667, 0.19387755102040816, 0.33177083333333335, 0.7407235621521335], "px": [427, 630], "src": "assets/char/hair.webp?v=ec8841211e"}, "skirt": {"uv": [0.2265625, 0.4072356215213358, 0.44583333333333336, 0.9786641929499073], "px": [450, 659], "src": "assets/char/skirt.webp?v=ec8841211e"}, "sword": {"uv": [0.22890625, 0.5176252319109462, 0.7119791666666667, 0.9257884972170687], "px": [992, 470], "src": "assets/char/sword.webp?v=ec8841211e"}, "eye": {"uv": [0.34479166666666666, 0.16326530612244897, 0.3765625, 0.19341372912801486], "px": [130, 69], "src": "assets/char/eye.webp?v=ec8841211e", "content": [0.3463541666666667, 0.1660482374768089, 0.375, 0.1906307977736549]}, "mouth": {"uv": [0.35625, 0.20269016697588127, 0.38697916666666665, 0.22634508348794063], "px": [126, 55], "src": "assets/char/mouth.webp?v=ec8841211e"}, "lid": {"uv": [0.34479166666666666, 0.16326530612244897, 0.3765625, 0.19341372912801486], "px": [130, 69], "src": "assets/char/lid.webp?v=ec8841211e"}, "lidFar": {"uv": [0.3768229166666667, 0.1702226345083488, 0.38958333333333334, 0.19387755102040816], "px": [52, 55], "src": "assets/char/lidFar.webp?v=ec8841211e", "content": [0.37890625, 0.17393320964749537, 0.3875, 0.1901669758812616]}, "bg": {"uv": [0, 0, 1, 1], "px": [0, 0], "src": "assets/char/bg.webp?v=ec8841211e"}}, "order": ["body", "skirt", "sword", "armA", "armB", "hair", "eye", "mouth"]};
+window.LD_CHAR={"frame": [3840, 2156], "layers": {"body": {"uv": [0.07578125, 0.05983302411873841, 0.71640625, 1.0], "px": [1315, 1084], "src": "assets/char/body.webp?v=0a0f7be17a"}, "armA": {"uv": [0.29635416666666664, 0.22541743970315398, 0.33359375, 0.4819109461966605], "px": [76, 296], "src": "assets/char/armA.webp?v=0a0f7be17a"}, "armB": {"uv": [0.37421875, 0.22356215213358072, 0.40963541666666664, 0.4819109461966605], "px": [73, 298], "src": "assets/char/armB.webp?v=0a0f7be17a"}, "hair": {"uv": [0.12369791666666667, 0.19387755102040816, 0.33177083333333335, 0.7407235621521335], "px": [427, 630], "src": "assets/char/hair.webp?v=0a0f7be17a"}, "skirt": {"uv": [0.2265625, 0.4072356215213358, 0.44583333333333336, 0.9786641929499073], "px": [450, 659], "src": "assets/char/skirt.webp?v=0a0f7be17a"}, "sword": {"uv": [0.22890625, 0.5176252319109462, 0.7119791666666667, 0.9257884972170687], "px": [992, 470], "src": "assets/char/sword.webp?v=0a0f7be17a"}, "eye": {"uv": [0.34479166666666666, 0.16326530612244897, 0.3765625, 0.19341372912801486], "px": [130, 69], "src": "assets/char/eye.webp?v=0a0f7be17a", "content": [0.3463541666666667, 0.1660482374768089, 0.375, 0.1906307977736549]}, "mouth": {"uv": [0.35625, 0.20269016697588127, 0.38697916666666665, 0.22634508348794063], "px": [126, 55], "src": "assets/char/mouth.webp?v=0a0f7be17a"}, "lid": {"uv": [0.34479166666666666, 0.16326530612244897, 0.3765625, 0.19341372912801486], "px": [130, 69], "src": "assets/char/lid.webp?v=0a0f7be17a"}, "lidFar": {"uv": [0.3768229166666667, 0.1702226345083488, 0.38958333333333334, 0.19387755102040816], "px": [52, 55], "src": "assets/char/lidFar.webp?v=0a0f7be17a", "content": [0.37890625, 0.17393320964749537, 0.3875, 0.1901669758812616]}, "bg": {"uv": [0, 0, 1, 1], "px": [0, 0], "src": "assets/char/bg.webp?v=0a0f7be17a"}}, "order": ["body", "skirt", "sword", "armA", "armB", "hair", "eye", "mouth"]};
 /* 背景音乐由 build.py 自动内嵌，请勿手改 */
-window.LD_MUSIC=[{n:"Feel You",d:"music/Feel%20You.m4a?v=ec8841211e"},{n:"Weight of the World",d:"music/Weight%20of%20the%20World.m4a?v=ec8841211e"},{n:"\u66d6\u6627\u30ca\u5e0c\u671b\uff0f\u6c37\u96e8",d:"music/%E6%9B%96%E6%98%A7%E3%83%8A%E5%B8%8C%E6%9C%9B%EF%BC%8F%E6%B0%B7%E9%9B%A8.m4a?v=ec8841211e"},{n:"\u904a\u5712\u65bd\u8a2d",d:"music/%E9%81%8A%E5%9C%92%E6%96%BD%E8%A8%AD.m4a?v=ec8841211e"},{n:"\u907a\u30b5\u30ec\u30bf\u5834\u6240\uff0f\u659c\u5149",d:"music/%E9%81%BA%E3%82%B5%E3%83%AC%E3%82%BF%E5%A0%B4%E6%89%80%EF%BC%8F%E6%96%9C%E5%85%89.m4a?v=ec8841211e"}];
+window.LD_MUSIC=[{n:"Feel You",d:"music/Feel%20You.m4a?v=0a0f7be17a"},{n:"Weight of the World",d:"music/Weight%20of%20the%20World.m4a?v=0a0f7be17a"},{n:"\u66d6\u6627\u30ca\u5e0c\u671b\uff0f\u6c37\u96e8",d:"music/%E6%9B%96%E6%98%A7%E3%83%8A%E5%B8%8C%E6%9C%9B%EF%BC%8F%E6%B0%B7%E9%9B%A8.m4a?v=0a0f7be17a"},{n:"\u904a\u5712\u65bd\u8a2d",d:"music/%E9%81%8A%E5%9C%92%E6%96%BD%E8%A8%AD.m4a?v=0a0f7be17a"},{n:"\u907a\u30b5\u30ec\u30bf\u5834\u6240\uff0f\u659c\u5149",d:"music/%E9%81%BA%E3%82%B5%E3%83%AC%E3%82%BF%E5%A0%B4%E6%89%80%EF%BC%8F%E6%96%9C%E5%85%89.m4a?v=0a0f7be17a"}];
 /* 建筑贴图由 build.py 自动内嵌，请勿手改 */
-window.LD_PROP_IMG={};LD_PROP_IMG["boat_fish"]="assets/props/boat_fish.png?v=ec8841211e";LD_PROP_IMG["boat_junk"]="assets/props/boat_junk.png?v=ec8841211e";LD_PROP_IMG["boat_raft"]="assets/props/boat_raft.png?v=ec8841211e";LD_PROP_IMG["boat_row"]="assets/props/boat_row.png?v=ec8841211e";LD_PROP_IMG["cannon"]="assets/props/cannon.png?v=ec8841211e";LD_PROP_IMG["charger"]="assets/props/charger.png?v=ec8841211e";LD_PROP_IMG["cliff"]="assets/props/cliff.png?v=ec8841211e";LD_PROP_IMG["crystal"]="assets/props/crystal.png?v=ec8841211e";LD_PROP_IMG["grave"]="assets/props/grave.png?v=ec8841211e";LD_PROP_IMG["tower"]="assets/props/tower.png?v=ec8841211e";LD_PROP_IMG["turret"]="assets/props/turret.png?v=ec8841211e";
+window.LD_PROP_IMG={};LD_PROP_IMG["boat_fish"]="assets/props/boat_fish.png?v=0a0f7be17a";LD_PROP_IMG["boat_junk"]="assets/props/boat_junk.png?v=0a0f7be17a";LD_PROP_IMG["boat_raft"]="assets/props/boat_raft.png?v=0a0f7be17a";LD_PROP_IMG["boat_row"]="assets/props/boat_row.png?v=0a0f7be17a";LD_PROP_IMG["cannon"]="assets/props/cannon.png?v=0a0f7be17a";LD_PROP_IMG["charger"]="assets/props/charger.png?v=0a0f7be17a";LD_PROP_IMG["cliff"]="assets/props/cliff.png?v=0a0f7be17a";LD_PROP_IMG["crystal"]="assets/props/crystal.png?v=0a0f7be17a";LD_PROP_IMG["grave"]="assets/props/grave.png?v=0a0f7be17a";LD_PROP_IMG["tower"]="assets/props/tower.png?v=0a0f7be17a";LD_PROP_IMG["turret"]="assets/props/turret.png?v=0a0f7be17a";
 /* 皮肤贴图由 build.py 自动内嵌，请勿手改 */
-window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/daishu_head.png?v=ec8841211e";LD_SKIN_IMG["daishu_lower"]="assets/skins/daishu/parts/daishu_lower.png?v=ec8841211e";LD_SKIN_IMG["daishu_upper"]="assets/skins/daishu/parts/daishu_upper.png?v=ec8841211e";LD_SKIN_IMG["doubao_head"]="assets/skins/doubao/parts/doubao_head.png?v=ec8841211e";LD_SKIN_IMG["doubao_lower"]="assets/skins/doubao/parts/doubao_lower.png?v=ec8841211e";LD_SKIN_IMG["doubao_upper"]="assets/skins/doubao/parts/doubao_upper.png?v=ec8841211e";LD_SKIN_IMG["gaosongdeng_head"]="assets/skins/gaosongdeng/parts/gaosongdeng_head.png?v=ec8841211e";LD_SKIN_IMG["gaosongdeng_lower"]="assets/skins/gaosongdeng/parts/gaosongdeng_lower.png?v=ec8841211e";LD_SKIN_IMG["gaosongdeng_upper"]="assets/skins/gaosongdeng/parts/gaosongdeng_upper.png?v=ec8841211e";LD_SKIN_IMG["gaoya_head"]="assets/skins/gaoya/parts/gaoya_head.png?v=ec8841211e";LD_SKIN_IMG["gaoya_lower"]="assets/skins/gaoya/parts/gaoya_lower.png?v=ec8841211e";LD_SKIN_IMG["gaoya_upper"]="assets/skins/gaoya/parts/gaoya_upper.png?v=ec8841211e";LD_SKIN_IMG["gojo_head"]="assets/skins/gojo/parts/gojo_head.png?v=ec8841211e";LD_SKIN_IMG["gojo_lower"]="assets/skins/gojo/parts/gojo_lower.png?v=ec8841211e";LD_SKIN_IMG["gojo_upper"]="assets/skins/gojo/parts/gojo_upper.png?v=ec8841211e";LD_SKIN_IMG["kobe_head"]="assets/skins/kobe/parts/kobe_head.png?v=ec8841211e";LD_SKIN_IMG["kobe_lower"]="assets/skins/kobe/parts/kobe_lower.png?v=ec8841211e";LD_SKIN_IMG["kobe_upper"]="assets/skins/kobe/parts/kobe_upper.png?v=ec8841211e";LD_SKIN_IMG["kunkun_head"]="assets/skins/kunkun/parts/kunkun_head.png?v=ec8841211e";LD_SKIN_IMG["kunkun_lower"]="assets/skins/kunkun/parts/kunkun_lower.png?v=ec8841211e";LD_SKIN_IMG["kunkun_upper"]="assets/skins/kunkun/parts/kunkun_upper.png?v=ec8841211e";LD_SKIN_IMG["naiwa_head"]="assets/skins/naiwa/parts/naiwa_head.png?v=ec8841211e";LD_SKIN_IMG["naiwa_lower"]="assets/skins/naiwa/parts/naiwa_lower.png?v=ec8841211e";LD_SKIN_IMG["naiwa_upper"]="assets/skins/naiwa/parts/naiwa_upper.png?v=ec8841211e";LD_SKIN_IMG["pangmao_head"]="assets/skins/pangmao/parts/pangmao_head.png?v=ec8841211e";LD_SKIN_IMG["pangmao_lower"]="assets/skins/pangmao/parts/pangmao_lower.png?v=ec8841211e";LD_SKIN_IMG["pangmao_upper"]="assets/skins/pangmao/parts/pangmao_upper.png?v=ec8841211e";
+window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/daishu_head.png?v=0a0f7be17a";LD_SKIN_IMG["daishu_lower"]="assets/skins/daishu/parts/daishu_lower.png?v=0a0f7be17a";LD_SKIN_IMG["daishu_upper"]="assets/skins/daishu/parts/daishu_upper.png?v=0a0f7be17a";LD_SKIN_IMG["doubao_head"]="assets/skins/doubao/parts/doubao_head.png?v=0a0f7be17a";LD_SKIN_IMG["doubao_lower"]="assets/skins/doubao/parts/doubao_lower.png?v=0a0f7be17a";LD_SKIN_IMG["doubao_upper"]="assets/skins/doubao/parts/doubao_upper.png?v=0a0f7be17a";LD_SKIN_IMG["gaosongdeng_head"]="assets/skins/gaosongdeng/parts/gaosongdeng_head.png?v=0a0f7be17a";LD_SKIN_IMG["gaosongdeng_lower"]="assets/skins/gaosongdeng/parts/gaosongdeng_lower.png?v=0a0f7be17a";LD_SKIN_IMG["gaosongdeng_upper"]="assets/skins/gaosongdeng/parts/gaosongdeng_upper.png?v=0a0f7be17a";LD_SKIN_IMG["gaoya_head"]="assets/skins/gaoya/parts/gaoya_head.png?v=0a0f7be17a";LD_SKIN_IMG["gaoya_lower"]="assets/skins/gaoya/parts/gaoya_lower.png?v=0a0f7be17a";LD_SKIN_IMG["gaoya_upper"]="assets/skins/gaoya/parts/gaoya_upper.png?v=0a0f7be17a";LD_SKIN_IMG["gojo_head"]="assets/skins/gojo/parts/gojo_head.png?v=0a0f7be17a";LD_SKIN_IMG["gojo_lower"]="assets/skins/gojo/parts/gojo_lower.png?v=0a0f7be17a";LD_SKIN_IMG["gojo_upper"]="assets/skins/gojo/parts/gojo_upper.png?v=0a0f7be17a";LD_SKIN_IMG["kobe_head"]="assets/skins/kobe/parts/kobe_head.png?v=0a0f7be17a";LD_SKIN_IMG["kobe_lower"]="assets/skins/kobe/parts/kobe_lower.png?v=0a0f7be17a";LD_SKIN_IMG["kobe_upper"]="assets/skins/kobe/parts/kobe_upper.png?v=0a0f7be17a";LD_SKIN_IMG["kunkun_head"]="assets/skins/kunkun/parts/kunkun_head.png?v=0a0f7be17a";LD_SKIN_IMG["kunkun_lower"]="assets/skins/kunkun/parts/kunkun_lower.png?v=0a0f7be17a";LD_SKIN_IMG["kunkun_upper"]="assets/skins/kunkun/parts/kunkun_upper.png?v=0a0f7be17a";LD_SKIN_IMG["naiwa_head"]="assets/skins/naiwa/parts/naiwa_head.png?v=0a0f7be17a";LD_SKIN_IMG["naiwa_lower"]="assets/skins/naiwa/parts/naiwa_lower.png?v=0a0f7be17a";LD_SKIN_IMG["naiwa_upper"]="assets/skins/naiwa/parts/naiwa_upper.png?v=0a0f7be17a";LD_SKIN_IMG["pangmao_head"]="assets/skins/pangmao/parts/pangmao_head.png?v=0a0f7be17a";LD_SKIN_IMG["pangmao_lower"]="assets/skins/pangmao/parts/pangmao_lower.png?v=0a0f7be17a";LD_SKIN_IMG["pangmao_upper"]="assets/skins/pangmao/parts/pangmao_upper.png?v=0a0f7be17a";
 /* ===== 00_version.js ===== */
 /* 由 build.py 自动生成，请勿手改 */
-(function (LD) { LD.VERSION = "4.31"; LD.AUTHOR = "RikkaLove0721"; })(window.LD = window.LD || {});
+(function (LD) { LD.VERSION = "4.32"; LD.AUTHOR = "RikkaLove0721"; })(window.LD = window.LD || {});
 
 /* ===== 10_data.js ===== */
 /* ============================================================
@@ -3189,12 +3189,36 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
       /* v4.19：新手教程是否通关过。没通关时主菜单第一行显示「新手教程」，
        * 通关后恢复成「单人游戏」，教程挪进单人菜单里（可重复挑战，只给 5 金币）。 */
       tutDone: false,
+      /* v4.32 成长任务卡（见 69_grow.js）：买皮肤 / 装技能 / 开一局房间。
+       * 三项各自独立置 1，完成后不再重复发奖。 */
+      grow: { shop: 0, skill: 0, room: 0 },
       stats: { kills: 0, wins: 0, losses: 0, bossWins: 0, relayWins: 0, huntWins: 0, dailyWins: 0, coinsEarned: 0,
                warmupWins: 0, zombieKills: 0, modeWins: {} },   // v2.6 累计战绩（v2.8 增补 modeWins 各模式胜场）
       ach: {},                             // v2.6 已解锁成就 { id: true }
       title: "",                           // v2.6 当前佩戴的称号
       daily: {}                            // v2.6 每日挑战 { "2026-09-21": 最快秒数 }
     };
+  }
+
+  /* v4.32 成长任务：新档三项都没做。
+   * 旧档没有这个字段，但不能一律当 0 —— 老玩家早就买过皮肤、装着技能、
+   * 打过几十局，一进主菜单却被告知「去买一套皮肤」，等于在骂人。
+   * 所以老档按已有资产反推一遍：有非免费部件就算买过皮肤，有超出初始
+   * 两招的技能就算装过技能，有过任何一场战绩就算开过房间。
+   * 只对已通关教程的档做反推：没通关的是真正的新档，应该从零开始。 */
+  function growOf(o, d) {
+    const g = o.grow;
+    if (g && typeof g === "object") {
+      return { shop: g.shop ? 1 : 0, skill: g.skill ? 1 : 0, room: g.room ? 1 : 0 };
+    }
+    const out = { shop: 0, skill: 0, room: 0 };
+    if (!o.tutDone) return out;
+    const free = (LD.FREE && [LD.FREE.head, LD.FREE.upper, LD.FREE.lower]) || [];
+    if ((d.ownedParts || []).some(id => free.indexOf(id) < 0)) out.shop = 1;
+    if ((d.ownedSkills || []).some(id => id !== "slash" && id !== "fireball")) out.skill = 1;
+    const st = d.stats || {};
+    if ((st.wins || 0) + (st.losses || 0) > 0) out.room = 1;
+    return out;
   }
 
   function merge(o) {
@@ -3214,6 +3238,7 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
       if (v > (mm[pair[0]] || 0)) mm[pair[0]] = v;
     });
     d.tutDone = !!o.tutDone;
+    d.grow = growOf(o, d);
     d.ach = o.ach || {};
     d.title = o.title || "";
     d.daily = o.daily || {};
@@ -3308,6 +3333,7 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
       try { if (UI.coins) UI.coins(); } catch (e) {}
       try { if (UI.renderMenuEntry) UI.renderMenuEntry(); } catch (e) {}
       try { if (UI.renderTutCard) UI.renderTutCard(); } catch (e) {}
+      try { if (UI.renderGrow) UI.renderGrow(); } catch (e) {}
     },
     get coins() { return this.d.coins; },
     displayName() {
@@ -3399,6 +3425,10 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
       // 同一技能不能占两个槽
       ["basic", "skill1", "skill2", "ult"].forEach(k => { if (k !== slot && lo[k] === id) lo[k] = null; });
       lo[slot] = id; this.save();
+      /* v4.32 成长任务「装一个技能」：真正的装配动作就记在这里，
+       * 而不是在技能商店的点击回调里 —— 商店有「点卡片自动装」和
+       * 「按装配按钮」两条路径，挂底层才漏不掉。 */
+      if (LD.Grow) LD.Grow.hit("skill");
       return { ok: true };
     },
     findSlotOf(id) {
@@ -21624,6 +21654,108 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
   };
 })(window.LD = window.LD || {});
 
+/* ===== 69_grow.js ===== */
+/* ============================================================
+ *  69_grow.js — v4.32 成长任务卡
+ *
+ *  新手教程教的是「怎么打」，教完就结束了 —— 但一个刚通关的新人
+ *  仍然站在主菜单上发愣：皮肤商店里那些套装怎么买？技能怎么装到
+ *  K 和 L 上？勇者格斗那个房间是干嘛的？
+ *
+ *  这一批把这三件事做成主菜单左下角的三行小卡：
+ *  做完一项自动打勾 + 10 金币，点那一行直接跳到对应界面。
+ *
+ *  为什么不做成「教程第二步」（强制教学）：
+ *  刚打完九步的人最想干的是自己开一局，不是再被按着头点三个菜单。
+ *  做成常驻小卡，什么时候想做都行，不打断任何流程。
+ *
+ *  为什么不轮询存档判断「买过没有」：
+ *  轮询分不出「本来就有」和「刚刚做的」。老玩家一进游戏，三条早就
+ *  该做的事全亮成未完成 —— 那不是在引导，是在骂人。所以完成状态
+ *  必须由**事件**推进（买成功 / 装成功 / 开局成功），旧档另行走一遍
+ *  资产反推（见 20_profile.js 的 growOf）。
+ * ============================================================ */
+(function (LD) {
+  "use strict";
+
+  const REWARD = 10;
+
+  /* 三条任务的顺序就是新手最自然的动线：
+   * 先花钱（皮肤）→ 再改战斗手感（技能）→ 最后进场（房间）。 */
+  const DEF = [
+    { key: "shop",  name: "买一套皮肤", sub: "皮肤商店 · 挑一套穿上" },
+    { key: "skill", name: "装一个技能", sub: "技能商店 · J / K / L / O 四个槽" },
+    { key: "room",  name: "开一局房间", sub: "勇者格斗 · 挑个模式开打" }
+  ];
+
+  const Grow = LD.Grow = {
+    REWARD: REWARD,
+    DEF: DEF,
+
+    /* 存档里没有这个字段时按空档处理（正常情况 merge 已经补齐） */
+    box() {
+      const d = LD.Profile.d;
+      if (!d.grow || typeof d.grow !== "object") d.grow = { shop: 0, skill: 0, room: 0 };
+      return d.grow;
+    },
+
+    done(key) { return !!this.box()[key]; },
+    count() { const self = this; return DEF.filter(x => self.done(x.key)).length; },
+    allDone() { return this.count() >= DEF.length; },
+
+    /* 卡片要不要出现在主菜单：教程没过之前不出现。
+     * 没通关时主菜单第一行本来就是「新手教程」，玩家还没有「该去逛逛」的语境；
+     * 三条任务一起糊上去只会让人更不知道先点哪个。 */
+    visible() { return !!LD.Profile.d.tutDone; },
+
+    /* 完成一项。重复调用 / 未知 key 都直接返回 false，不发钱。
+     * 返回 true 表示「这一次真的完成了」。 */
+    hit(key) {
+      if (!DEF.some(x => x.key === key)) return false;
+      const P = LD.Profile;
+      const g = this.box();
+      if (g[key]) return false;
+      g[key] = 1;
+      /* addCoins 内部会 save（含 exe 侧回写），不要在外面再存一次 */
+      P.addCoins(REWARD);
+      if (LD.Audio && LD.Audio.buy) LD.Audio.buy();
+      const name = (DEF.find(x => x.key === key) || {}).name || key;
+      if (LD.UI && LD.UI.toast) {
+        LD.UI.toast("成长任务 · " + name + "　+" + REWARD + " 金币", true, 2200);
+      }
+      if (LD.UI) {
+        try { if (LD.UI.coins) LD.UI.coins(); } catch (e) {}
+        try { if (LD.UI.renderGrow) LD.UI.renderGrow(); } catch (e) {}
+      }
+      if (this.allDone() && LD.UI && LD.UI.toast) {
+        /* 三条全绿只说一句，不弹面板 —— 玩家此刻多半在商店或房间里，
+         * 拦住他去路只为报个喜，反而烦。 */
+        setTimeout(() => { try { LD.UI.toast("成长任务全部完成　共 " + (REWARD * DEF.length) + " 金币", true, 2600); } catch (e) {} }, 900);
+      }
+      return true;
+    },
+
+    /* 点任务行 → 跳到对应界面。缺哪个界面就静默不动（老版本产物里没这些页）。 */
+    go(key) {
+      const UI = LD.UI;
+      if (!UI) return false;
+      if (LD.Audio && LD.Audio.ui) LD.Audio.ui();
+      if (key === "shop") { UI.skinTab = "suit"; UI.show("ovSkin"); return true; }
+      if (key === "skill") { UI.show("ovSkill"); return true; }
+      if (key === "room") { UI.show("ovDuelSetup"); if (UI.renderRoom) UI.renderRoom(); return true; }
+      return false;
+    },
+
+    /* 测试 / 调试用：把三条重置成未完成（不发不退金币） */
+    reset() {
+      const P = LD.Profile;
+      P.d.grow = { shop: 0, skill: 0, room: 0 };
+      P.save();
+      if (LD.UI && LD.UI.renderGrow) LD.UI.renderGrow();
+    }
+  };
+})(window.LD = window.LD || {});
+
 /* ===== 70_ui.js ===== */
 /* ============================================================
  *  70_ui.js — 界面 / 商店 / 帮助 / HUD / 输入
@@ -21681,7 +21813,7 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
     if (id === "ovSkill") UI.renderSkill();
     if (id === "ovLevels") UI.renderLevels();
     if (id === "ovSolo") { UI.renderGauntletCard(); UI.renderTutCard(); }
-    if (id === "ovMenu") UI.renderMenuEntry();
+    if (id === "ovMenu") { UI.renderMenuEntry(); UI.renderGrow(); }
     /* 不在战斗里就别留着教程提示条（退出 / 结算 / 回菜单都要收） */
     if (id !== "game" && B.tutHideTip) B.tutHideTip();
     if (id === "ovLoad") UI.renderLoad();
@@ -21756,7 +21888,10 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
         d.onclick = () => {
           Audio2.ui();
           if (owned) { P.equipSuit(s.id); UI.toast('已整套穿上「' + s.name + '」'); UI.renderSkin(); }
-          else if (doBuy(P.buySuit(s.id), s.name)) UI.renderSkin();
+          else if (doBuy(P.buySuit(s.id), s.name)) {
+            if (LD.Grow) LD.Grow.hit("shop");     // v4.32 成长任务「买一套皮肤」
+            UI.renderSkin();
+          }
         };
         wrap.appendChild(d);
         const cv = d.querySelector('canvas');
@@ -21775,7 +21910,12 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
       d.onclick = () => {
         Audio2.ui();
         if (owned) { P.equipPart(p.id); UI.toast("已换上「" + p.name + "」"); UI.renderSkin(); }
-        else if (doBuy(P.buyPart(p.id), p.name)) UI.renderSkin();
+        else if (doBuy(P.buyPart(p.id), p.name)) {
+          /* 只买一件散件也算 —— 任务叫「买一套皮肤」，但玩家的第一笔
+           * 消费很可能是个便宜的头饰，不该因为没买整套就不认。 */
+          if (LD.Grow) LD.Grow.hit("shop");
+          UI.renderSkin();
+        }
       };
       wrap.appendChild(d);
       const cv = d.querySelector("canvas");
@@ -22548,6 +22688,45 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
         + (T.firstReward || 50) + " 金币";
   };
 
+  /* ==========================================================
+   *  v4.32 成长任务卡（数据与判定在 69_grow.js）
+   * ========================================================== */
+
+  /* 主菜单左下角的三行小卡：买皮肤 / 装技能 / 开房间。
+   * 教程没通关时整块不出现 —— 那时候玩家该做的事是先把教程走完。
+   *
+   * 为什么不逐行绑 onclick：整块 innerHTML 每次重画，绑在子元素上的
+   * 监听器会跟着一起没。卡片本体只绑一次（见 UI.init），点击靠
+   * data-g 分派下去。 */
+  UI.growFold = false;             // 收起状态只在本次会话里记，不写存档
+
+  UI.renderGrow = function () {
+    const card = $("growCard"), mini = $("growMini");
+    const G = LD.Grow;
+    if (!card || !G) return;
+    const show = G.visible(), fold = !!UI.growFold;
+    card.classList.toggle("hide", !show || fold);
+    if (mini) mini.classList.toggle("hide", !show || !fold);
+    if (!show) return;
+
+    const tot = G.DEF.length, n = G.count();
+    if (mini) mini.textContent = n >= tot ? "成长任务 · 已完成" : "成长任务 " + n + " / " + tot;
+    if (fold) return;
+
+    let html = '<div class="ghd"><span class="gtt">成长任务</span>'
+      + '<span class="gnum">' + n + " / " + tot + '</span>'
+      + '<span class="gfold" data-gfold="1" title="收起">−</span></div>';
+    G.DEF.forEach(d => {
+      const ok = G.done(d.key);
+      html += '<div class="growRow' + (ok ? " done" : "") + '" data-g="' + d.key + '" title="' + d.sub + '">'
+        + '<i class="gdot">' + (ok ? "✓" : "○") + '</i>'
+        + '<span class="gname">' + d.name + '</span>'
+        + '<span class="gpay">' + (ok ? "已领" : "+" + G.REWARD) + '</span></div>';
+    });
+    if (n >= tot) html += '<div class="gfoot">三条都做完，接下来随便玩</div>';
+    card.innerHTML = html;
+  };
+
   UI.startTutorial = function () {
     const T = LD.TUT || {};
     const w = T.world || { w: 2600, h: 900, pt: 100 };
@@ -23063,6 +23242,7 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
       matchT: matchT || 120, mapCfg: mapCfg || null
     });
     B.onEnd = win => UI.endNet(win);
+    if (LD.Grow) LD.Grow.hit("room");          // v4.32 成长任务「开一局房间」（联机侧）
     UI.enterGame();
   };
 
@@ -23211,6 +23391,19 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
       /* 换歌 / 开关之后把提示刷一遍（BGM 内部会在换歌时回调这里） */
       LD.BGM.onChange = paint;
     }
+
+    /* v4.32 成长任务卡：整张卡只绑一次点，行与「收起」都靠 data 属性分派。
+     * 收起后变成左下角一条小字，点回来还原 —— 不写存档，下次启动仍是展开的。 */
+    const gc = $("growCard");
+    if (gc) gc.onclick = ev => {
+      const t = ev && ev.target;
+      const el = t && t.closest ? t.closest("[data-g],[data-gfold]") : null;
+      if (!el) return;
+      if (el.dataset.gfold) { Audio2.ui(); UI.growFold = true; UI.renderGrow(); return; }
+      if (el.dataset.g && LD.Grow) LD.Grow.go(el.dataset.g);
+    };
+    const gm = $("growMini");
+    if (gm) gm.onclick = () => { Audio2.ui(); UI.growFold = false; UI.renderGrow(); };
 
     $("codeInput").addEventListener("input", e => { e.target.value = e.target.value.replace(/\D/g, "").slice(0, 4); });
     $("codeInput").addEventListener("keydown", e => { if (e.key === "Enter") $("btnJoin").onclick(); });
@@ -23762,6 +23955,7 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
       mapCfg: UI.mapCfgForStart(room.map) });
     B.resetRound(false);                 // 按座位号摆位（最多 4 人），并设置对应规则的限时
     B.onEnd = win => UI.endDuel(win);
+    if (LD.Grow) LD.Grow.hit("room");    // v4.32 成长任务「开一局房间」
     UI.enterGame();
   };
 
