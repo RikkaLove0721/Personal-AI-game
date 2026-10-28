@@ -2,7 +2,7 @@
 
 一个用原生 JavaScript + Canvas 写的 Q 版对战游戏。单人闯关、人机对战、局域网联机三种玩法共用同一套角色与技能，双端同源 —— 电脑是键盘鼠标，手机是虚拟摇杆与按钮，混着联机也没有障碍。
 
-当前版本: 4.35
+当前版本: 4.36
 
 ## 玩法一览
 
@@ -62,13 +62,19 @@
 ## 开发
 
 ```bash
-python scripts/build.py --version 4.35   # 构建单文件产物到 dist/
+python scripts/build.py --version 4.36   # 构建单文件产物到 dist/
 python scripts/build.py --keep --web     # 另出一份 dist/web（game.js 外链 + 素材分文件）
+python scripts/sync_server.py            # 构建 + 同步 dist/web 到服务端目录 + 引用自检
 node tests/run_tests.js --fast           # 全量回归（2400+ 条）
 python 服务端/server.py --server --port 8123
 ```
 
 发布前所有测试全绿再打包。
+
+> **同步服务端请走 `scripts/sync_server.py`，别手工 `cp game.js`。**
+> 服务端把两张背景原图转成了 webp（省 300KB+），而 `build.py` 生成的素材清单按 dist
+> 里实际存在的文件名写死，手工只覆盖 `game.js` 会让清单指向不存在的 `.jpg`，
+> 结果是主菜单立绘和角色背景静默 404。脚本会自动改写这类引用，并打印缺失数。
 
 ## 目录
 
