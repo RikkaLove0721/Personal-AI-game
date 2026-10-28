@@ -135,7 +135,10 @@
       const hero = B.fighters.filter(f => f.kind === "hero");
       return [B.tScore[0] || 0, B.tScore[1] || 0, r2(B.waveT), B.waveN || 0,
         (B.towerKills || [0, 0]).slice(), B.towerDone ? 1 : 0, B.towerResult || "",
-        hero.map(f => [sideOf(f), f.level || 1, f.xp || 0, Math.round(f.bcoins || 0)])];
+        hero.map(f => [sideOf(f), f.level || 1, f.xp || 0, Math.round(f.bcoins || 0)]),
+        /* v4.35 墓碑：塔防阵亡会在地上留一块墓碑（显示复活倒计时），
+         * 客机的 B.graves 一直是 undefined，于是「队友死在哪儿」完全看不到 */
+        (B.graves || []).map(g => [Math.round(g.x), Math.round(g.y), g.side, r2(g.born)])];
     },
     apply(d) {
       if (!d) return;
@@ -148,6 +151,11 @@
         if (!f) return;
         f.level = a[1]; f.xp = a[2]; f.bcoins = a[3];
       });
+      if (d[8]) {
+        B.graves = B.graves || [];
+        B.graves.length = 0;
+        d[8].forEach(a => B.graves.push({ x: a[0], y: a[1], side: a[2], born: a[3], hero: bySide(a[2]) }));
+      }
     }
   };
 

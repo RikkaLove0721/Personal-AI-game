@@ -451,6 +451,196 @@ console.log("\n=== 8. 多人模式里的塔防 ===");
   check("go 消息里的 seed 被透传下去", /d\.seed/.test(ui));
 }
 
+/* ================================================================== *
+ *  9. 「画得出来」不等于「画得对」：逐实体比对
+ * ==================================================================
+ *  第 4.5 节只比了绘图指令的**总数**。总数一样，仍可能「房主画了 A，
+ *  客机画成了 B」。这里 hook 掉 View 的实体绘制函数，记录每一笔
+ *  「谁被画在哪儿」，再逐类对账。
+ *  另外两个坑必须写进断言：
+ *    · 王从天降的红圈 kingMark（global 的那个是给**全员**的预警，
+ *      漏了客机被砸之前没有任何预兆）
+ *    · 丧尸超过 10 具后 corpseGone 不再画老尸体，漏了客机画面越堆越脏
+ */
+console.log("\n=== 9. 逐实体比对（画的是不是同一批东西） ===");
+{
+  const SB = require("./_sandbox.js");
+  const FNS = ["chibi", "dragon", "minion", "robot", "grave", "bomb", "structure", "prop"];
+  const hook = (LD, sink) => {
+    const V = LD.View;
+    FNS.forEach(name => {
+      if (typeof V[name] !== "function" || V[name].__hooked) return;
+      const orig = V[name];
+      const w = function () {
+        const a = arguments;
+        let rec;
+        if (name === "prop") rec = { fn: name, kind: a[1] && a[1].kind };
+        else rec = { fn: name };
+        sink.push(rec);
+        return orig.apply(this, a);
+      };
+      w.__hooked = true;
+      V[name] = w;
+    });
+  };
+  const bad = [];
+  for (const rule of STATEFUL.concat(["brawl", "gifts", "auction", "doomsday", "warmup"])) {
+    const p = P.makePair({ rule: rule, fighters: 3, seed: 20260214, draw: false });
+    const hl = [], cl = [];
+    hook(p.host.LD, hl); hook(p.client.LD, cl);
+    const ctx = SB.makeCtx();
+    /* 跑 24 秒：王冠落地、僵尸堆起来、船换过一批……这些都要时间才出现 */
+    let badRule = false;
+    for (let step = 0; step < 8 && !badRule; step++) {
+      p.frame(3);
+      hl.length = 0; cl.length = 0;
+      try { p.HP.draw(ctx); } catch (e) {}
+      try { p.CP.draw(ctx); } catch (e) {}
+      const t = arr => {
+        const m = {};
+        arr.forEach(r => { const k = r.fn + (r.kind ? ":" + r.kind : ""); m[k] = (m[k] || 0) + 1; });
+        return m;
+      };
+      const hs = t(hl), cs = t(cl);
+      const keys = new Set([...Object.keys(hs), ...Object.keys(cs)]);
+      for (const k of keys) {
+        const a = hs[k] || 0, b = cs[k] || 0;
+        if (a === b) continue;
+        /* 人形差 1 个是合法的「视角差」：夜战全员隐身、草丛隐身、躲进柜子，
+         * 设计上都是「自己看得见、别人看不见」，而两端各看各的 meHero
+         * （房主看自己，客机看自己），所以各自少画一个人才对。
+         * 车 / 塔 / 墓碑 / 小兵这些没有视角概念，差一个就是真漏了。 */
+        if (k === "chibi" && Math.abs(a - b) <= 1) continue;
+        badRule = true;
+      }
+    }
+    if (badRule) bad.push(rule);
+  }
+  check("9 秒 × 8 轮里双端画出的实体种类与数量始终一致", bad.length === 0, bad.join(",") || "20/20");
+}
+
+/* ================================================================== *
+ *  10. 客机的按键真的能驱动自己那台角色
+ * ==================================================================
+ *  这条链路以前完全没测过 —— 测试台里客机座位也是人机，从不按任何一个键。
+ *  而「变鬼后搜不了柜子」「上不了车」「打不出伤害」全在这条链路上。
+ *  链路：客机 UI.ctrl → Net.sendInput → 房主 applyRemoteInput → remoteCtrl
+ *        → 房主权威逻辑 → 快照回传
+ */
+console.log("\n=== 10. 客机按键 → 房主执行 → 回传 ===");
+{
+  const mk = rule => {
+    const p = P.makePair({ rule: rule, fighters: 3, seed: 20260214, draw: false, clientManual: true });
+    p.frame(3);                     // 过掉 2 秒倒计时，否则 state 不是 fight，按键不生效
+    return p;
+  };
+  {
+    const p = mk("brawl");
+    const h = p.HP.fighters.find(f => f.side === 1);
+    check("客机座位不是人机（不然测不到按键）", !h.bot && !h.isBot);
+    const x0 = h.x;
+    p.CB.UI.ctrl.mx = 1; p.CB.UI.ctrl.my = 0;
+    p.frame(0.8);
+    p.CB.UI.ctrl.mx = 0;
+    check("客机按住方向键，房主侧那台角色真的在走",
+      Math.abs(p.HP.fighters.find(f => f.side === 1).x - x0) > 20,
+      "Δx=" + (p.HP.fighters.find(f => f.side === 1).x - x0).toFixed(1));
+
+    const before = p.HP.fighters.find(f => f.side === 1).cd.basic;
+    p.CB.UI.ctrl.press.basic = true;
+    p.frame(0.15);
+    const after = p.HP.fighters.find(f => f.side === 1).cd.basic;
+    check("客机按普攻，房主侧进入攻击冷却", after > before, before + " → " + after.toFixed(2));
+    check("攻击动画也回传到客机（不然客机看不到自己在打）",
+      p.CP.fighters.find(f => f.side === 1).atkAnim > 0,
+      p.CP.fighters.find(f => f.side === 1).atkAnim.toFixed(2));
+  }
+  {
+    /* 躲猫猫：变鬼之后按 P 能不能搜柜子 —— 用户亲自报的问题 */
+    const p = mk("hide");
+    const me = p.HP.fighters.find(f => f.side === 1);
+    const lockers = p.HP.terrain.props.filter(o => o.kind === "locker" && !o.dead);
+    if (!lockers.length) check("躲猫猫地图里有柜子", false);
+    else {
+      const L = lockers[0];
+      me.x = L.x; me.y = L.y + (L.h || 40) / 2 + 18;
+      p.frame(0.2);
+      p.CB.UI.ctrl.press.interact = true;
+      p.frame(0.6);
+      check("客机按 P 真的钻进了柜子（房主侧）", !!p.HP.fighters.find(f => f.side === 1).hideProp);
+      /* v4.35：在柜子里用的是 hideProp（自己看得见自己），不再和「在开车」共用 hiddenNet */
+      check("客机自己也看到自己躲进柜子（hideProp 回传，自己仍可见）",
+        !!p.CP.fighters.find(f => f.side === 1).hideProp &&
+        !p.CP.fighters.find(f => f.side === 1).hiddenNet);
+    }
+  }
+}
+
+/* ================================================================== *
+ *  11. 开局道具的运行时变量（tm 那 9 个字段之外的部分）
+ * ==================================================================
+ *  packProp 只管「运行期 push 的道具」，开局就摆好的车 / 船 / 炮塔只走 tm。
+ *  tm 原来只发 [dead, x, y, hp, fuel, driver, carried, cargo, occupant]，
+ *  于是这几样在客机上永远停在开局值：
+ *    · 碰碰车的车损 bumpHp —— 客机看到的每辆车都是满耐久
+ *    · 炮塔的炮管朝向 aimAngle —— 客机的炮管永远朝左
+ *    · 船的型号 / 油箱 —— 激流模式整批换船后，客机还拿着开局那条旧船
+ */
+console.log("\n=== 11. 开局道具的运行时变量 ===");
+{
+  {
+    const p = P.makePair({ rule: "bump", fighters: 3, seed: 20260214, draw: false });
+    p.frame(20);
+    const hc = p.HP.terrain.props.filter(o => o.kind === "car");
+    const cc = p.CP.terrain.props.filter(o => o.kind === "car");
+    const mismatch = hc.filter((o, i) => !cc[i] || Math.abs((o.bumpHp || 0) - (cc[i].bumpHp || 0)) > 1);
+    check("碰碰车 20 秒后车损一致（客机不再全是满耐久）", mismatch.length === 0,
+      mismatch.length ? mismatch.length + " 辆车对不上" : hc.map(o => Math.round(o.bumpHp)).join("/"));
+  }
+  {
+    const p = P.makePair({ rule: "tower", fighters: 3, seed: 20260214, draw: false });
+    p.frame(20);
+    const ht = p.HP.terrain.props.filter(o => o.kind === "tower");
+    const ct = p.CP.terrain.props.filter(o => o.kind === "tower");
+    const mismatch = ht.filter((o, i) => !ct[i] || Math.abs((o.aimAngle || 0) - (ct[i].aimAngle || 0)) > 0.05);
+    check("塔防的炮管朝向一致（客机的炮管会转）", mismatch.length === 0,
+      mismatch.length ? mismatch.length + " 座塔朝向不同" : ht.length + " 座塔");
+  }
+  {
+    const p = P.makePair({ rule: "river", fighters: 3, seed: 20260214, draw: false });
+    p.frame(20);
+    const hs = p.HP.terrain.props.filter(o => o.ship);
+    const cs = p.CP.terrain.props.filter(o => o.ship);
+    const same = hs.length === cs.length && hs.every((o, i) =>
+      o.vtype === cs[i].vtype && (o.fuelMax || 0) === (cs[i].fuelMax || 0));
+    check("激流换船后两端型号与油箱一致", same,
+      hs.map((o, i) => o.vtype + "/" + o.fuelMax + (cs[i] ? " vs " + cs[i].vtype + "/" + cs[i].fuelMax : ""))
+        .join("  "));
+  }
+}
+
+/* ================================================================== *
+ *  12. 纯视觉字段（画面上看不见但必须对）
+ * ================================================================== */
+console.log("\n=== 12. 纯视觉字段 ===");
+{
+  const root = path.join(__dirname, "..");
+  const net = fs.readFileSync(path.join(root, "src/js/60_net.js"), "utf8");
+  check("kingRise（飞天抬升）过线", /f\.kingRise/.test(net) === false ? false : /Math\.round\(\(f\.kingRise \|\| 0\) \* 100\)/.test(net));
+  check("corpseGone（老尸体已清理）过线", /f\.corpseGone \? 1 : 0/.test(net));
+  check("kingMark（全员可见的落点红圈）过线", /f\.kingMark \? \[/.test(net));
+  check("respawnT（复活倒计时）过线", /r\(f\.respawnT \|\| 0, 1\)/.test(net));
+
+  /* 塔防墓碑：客机的 B.graves 以前是 undefined，于是「队友死在哪儿」完全看不到 */
+  const nm = fs.readFileSync(path.join(root, "src/js/61_netmode.js"), "utf8");
+  check("塔防墓碑过线", /B\.graves \|\| \[\]/.test(nm) && /B\.graves\.push/.test(nm));
+
+  const p = P.makePair({ rule: "tower", fighters: 3, seed: 20260214, draw: false });
+  p.frame(24);
+  check("塔防跑 24 秒后客机有墓碑列表（哪怕空数组也不是 undefined）",
+    Array.isArray(p.CP.graves), typeof p.CP.graves + "/" + (p.CP.graves && p.CP.graves.length));
+}
+
 console.log("\n=== 结果 ===");
 console.log("通过 " + pass + " 项，失败 " + fail + " 项");
 process.exit(fail ? 1 : 0);

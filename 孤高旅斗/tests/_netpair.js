@@ -52,7 +52,7 @@ function makePair(opt) {
   /* ---------------- 组装花名册 ---------------- */
   const roster = [];
   for (let i = 0; i < n; i++) {
-    const asBot = withBots && i > 0;
+    const asBot = withBots && i > 0 && !(o.clientManual && i === 1);
     roster.push({
       look: null,                        // 由 mkHero 自己取默认外观
       loadout: Object.assign({}, BASE_LOADOUT),
@@ -117,6 +117,10 @@ function makePair(opt) {
 
         /* 客机：收快照 → 自己那一帧的平滑 / 特效 */
         while (toClient.length) CB.Net.handle({ t: "m", d: toClient.shift() });
+        /* v4.35：客机真人操作。以前客机座位也是人机，于是「客机按键 → 房主」这条链路
+         * 一次都没被测过 —— 而躲猫猫搜柜子、上车、捡补给全靠它。
+         * 放在房主消费消息之前，和真实网络里「先发输入、再收下一帧」的顺序一致。 */
+        if (o.clientManual) { try { CB.Net.sendInput(CB.UI.ctrl, dt); } catch (e) {} }
         while (toHost.length) HB.Net.handle({ t: "m", d: toHost.shift() });
         CP.update(dt);
 

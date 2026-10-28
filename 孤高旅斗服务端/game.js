@@ -1,16 +1,16 @@
 /* 主菜单立绘由 build.py 自动内嵌，请勿手改 */
-window.LD_MENU_BG="assets/menu-bg.jpg?v=4f51e2aa1f";
+window.LD_MENU_BG="assets/menu-bg.jpg?v=142f20490e";
 /* 主菜单分层素材由 build.py 自动内嵌，请勿手改 */
-window.LD_CHAR={"frame": [3840, 2156], "layers": {"body": {"uv": [0.07578125, 0.05983302411873841, 0.71640625, 1.0], "px": [1315, 1084], "src": "assets/char/body.webp?v=4f51e2aa1f"}, "armA": {"uv": [0.29635416666666664, 0.22541743970315398, 0.33359375, 0.4819109461966605], "px": [76, 296], "src": "assets/char/armA.webp?v=4f51e2aa1f"}, "armB": {"uv": [0.37421875, 0.22356215213358072, 0.40963541666666664, 0.4819109461966605], "px": [73, 298], "src": "assets/char/armB.webp?v=4f51e2aa1f"}, "hair": {"uv": [0.12369791666666667, 0.19387755102040816, 0.33177083333333335, 0.7407235621521335], "px": [427, 630], "src": "assets/char/hair.webp?v=4f51e2aa1f"}, "skirt": {"uv": [0.2265625, 0.4072356215213358, 0.44583333333333336, 0.9786641929499073], "px": [450, 659], "src": "assets/char/skirt.webp?v=4f51e2aa1f"}, "sword": {"uv": [0.22890625, 0.5176252319109462, 0.7119791666666667, 0.9257884972170687], "px": [992, 470], "src": "assets/char/sword.webp?v=4f51e2aa1f"}, "eye": {"uv": [0.34479166666666666, 0.16326530612244897, 0.3765625, 0.19341372912801486], "px": [130, 69], "src": "assets/char/eye.webp?v=4f51e2aa1f", "content": [0.3463541666666667, 0.1660482374768089, 0.375, 0.1906307977736549]}, "mouth": {"uv": [0.35625, 0.20269016697588127, 0.38697916666666665, 0.22634508348794063], "px": [126, 55], "src": "assets/char/mouth.webp?v=4f51e2aa1f"}, "lid": {"uv": [0.34479166666666666, 0.16326530612244897, 0.3765625, 0.19341372912801486], "px": [130, 69], "src": "assets/char/lid.webp?v=4f51e2aa1f"}, "lidFar": {"uv": [0.3768229166666667, 0.1702226345083488, 0.38958333333333334, 0.19387755102040816], "px": [52, 55], "src": "assets/char/lidFar.webp?v=4f51e2aa1f", "content": [0.37890625, 0.17393320964749537, 0.3875, 0.1901669758812616]}, "bg": {"uv": [0, 0, 1, 1], "px": [0, 0], "src": "assets/char/bg.jpg?v=4f51e2aa1f"}}, "order": ["body", "skirt", "sword", "armA", "armB", "hair", "eye", "mouth"]};
+window.LD_CHAR={"frame": [3840, 2156], "layers": {"body": {"uv": [0.07578125, 0.05983302411873841, 0.71640625, 1.0], "px": [1315, 1084], "src": "assets/char/body.webp?v=142f20490e"}, "armA": {"uv": [0.29635416666666664, 0.22541743970315398, 0.33359375, 0.4819109461966605], "px": [76, 296], "src": "assets/char/armA.webp?v=142f20490e"}, "armB": {"uv": [0.37421875, 0.22356215213358072, 0.40963541666666664, 0.4819109461966605], "px": [73, 298], "src": "assets/char/armB.webp?v=142f20490e"}, "hair": {"uv": [0.12369791666666667, 0.19387755102040816, 0.33177083333333335, 0.7407235621521335], "px": [427, 630], "src": "assets/char/hair.webp?v=142f20490e"}, "skirt": {"uv": [0.2265625, 0.4072356215213358, 0.44583333333333336, 0.9786641929499073], "px": [450, 659], "src": "assets/char/skirt.webp?v=142f20490e"}, "sword": {"uv": [0.22890625, 0.5176252319109462, 0.7119791666666667, 0.9257884972170687], "px": [992, 470], "src": "assets/char/sword.webp?v=142f20490e"}, "eye": {"uv": [0.34479166666666666, 0.16326530612244897, 0.3765625, 0.19341372912801486], "px": [130, 69], "src": "assets/char/eye.webp?v=142f20490e", "content": [0.3463541666666667, 0.1660482374768089, 0.375, 0.1906307977736549]}, "mouth": {"uv": [0.35625, 0.20269016697588127, 0.38697916666666665, 0.22634508348794063], "px": [126, 55], "src": "assets/char/mouth.webp?v=142f20490e"}, "lid": {"uv": [0.34479166666666666, 0.16326530612244897, 0.3765625, 0.19341372912801486], "px": [130, 69], "src": "assets/char/lid.webp?v=142f20490e"}, "lidFar": {"uv": [0.3768229166666667, 0.1702226345083488, 0.38958333333333334, 0.19387755102040816], "px": [52, 55], "src": "assets/char/lidFar.webp?v=142f20490e", "content": [0.37890625, 0.17393320964749537, 0.3875, 0.1901669758812616]}, "bg": {"uv": [0, 0, 1, 1], "px": [0, 0], "src": "assets/char/bg.jpg?v=142f20490e"}}, "order": ["body", "skirt", "sword", "armA", "armB", "hair", "eye", "mouth"]};
 /* 背景音乐由 build.py 自动内嵌，请勿手改 */
-window.LD_MUSIC=[{n:"Feel You",d:"music/Feel%20You.m4a?v=4f51e2aa1f"},{n:"Weight of the World",d:"music/Weight%20of%20the%20World.m4a?v=4f51e2aa1f"},{n:"\u66d6\u6627\u30ca\u5e0c\u671b\uff0f\u6c37\u96e8",d:"music/%E6%9B%96%E6%98%A7%E3%83%8A%E5%B8%8C%E6%9C%9B%EF%BC%8F%E6%B0%B7%E9%9B%A8.m4a?v=4f51e2aa1f"},{n:"\u904a\u5712\u65bd\u8a2d",d:"music/%E9%81%8A%E5%9C%92%E6%96%BD%E8%A8%AD.m4a?v=4f51e2aa1f"},{n:"\u907a\u30b5\u30ec\u30bf\u5834\u6240\uff0f\u659c\u5149",d:"music/%E9%81%BA%E3%82%B5%E3%83%AC%E3%82%BF%E5%A0%B4%E6%89%80%EF%BC%8F%E6%96%9C%E5%85%89.m4a?v=4f51e2aa1f"}];
+window.LD_MUSIC=[{n:"Feel You",d:"music/Feel%20You.m4a?v=142f20490e"},{n:"Weight of the World",d:"music/Weight%20of%20the%20World.m4a?v=142f20490e"},{n:"\u66d6\u6627\u30ca\u5e0c\u671b\uff0f\u6c37\u96e8",d:"music/%E6%9B%96%E6%98%A7%E3%83%8A%E5%B8%8C%E6%9C%9B%EF%BC%8F%E6%B0%B7%E9%9B%A8.m4a?v=142f20490e"},{n:"\u904a\u5712\u65bd\u8a2d",d:"music/%E9%81%8A%E5%9C%92%E6%96%BD%E8%A8%AD.m4a?v=142f20490e"},{n:"\u907a\u30b5\u30ec\u30bf\u5834\u6240\uff0f\u659c\u5149",d:"music/%E9%81%BA%E3%82%B5%E3%83%AC%E3%82%BF%E5%A0%B4%E6%89%80%EF%BC%8F%E6%96%9C%E5%85%89.m4a?v=142f20490e"}];
 /* 建筑贴图由 build.py 自动内嵌，请勿手改 */
-window.LD_PROP_IMG={};LD_PROP_IMG["boat_fish"]="assets/props/boat_fish.png?v=4f51e2aa1f";LD_PROP_IMG["boat_junk"]="assets/props/boat_junk.png?v=4f51e2aa1f";LD_PROP_IMG["boat_raft"]="assets/props/boat_raft.png?v=4f51e2aa1f";LD_PROP_IMG["boat_row"]="assets/props/boat_row.png?v=4f51e2aa1f";LD_PROP_IMG["cannon"]="assets/props/cannon.png?v=4f51e2aa1f";LD_PROP_IMG["charger"]="assets/props/charger.png?v=4f51e2aa1f";LD_PROP_IMG["cliff"]="assets/props/cliff.png?v=4f51e2aa1f";LD_PROP_IMG["crystal"]="assets/props/crystal.png?v=4f51e2aa1f";LD_PROP_IMG["grave"]="assets/props/grave.png?v=4f51e2aa1f";LD_PROP_IMG["tower"]="assets/props/tower.png?v=4f51e2aa1f";LD_PROP_IMG["turret"]="assets/props/turret.png?v=4f51e2aa1f";
+window.LD_PROP_IMG={};LD_PROP_IMG["boat_fish"]="assets/props/boat_fish.png?v=142f20490e";LD_PROP_IMG["boat_junk"]="assets/props/boat_junk.png?v=142f20490e";LD_PROP_IMG["boat_raft"]="assets/props/boat_raft.png?v=142f20490e";LD_PROP_IMG["boat_row"]="assets/props/boat_row.png?v=142f20490e";LD_PROP_IMG["cannon"]="assets/props/cannon.png?v=142f20490e";LD_PROP_IMG["charger"]="assets/props/charger.png?v=142f20490e";LD_PROP_IMG["cliff"]="assets/props/cliff.png?v=142f20490e";LD_PROP_IMG["crystal"]="assets/props/crystal.png?v=142f20490e";LD_PROP_IMG["grave"]="assets/props/grave.png?v=142f20490e";LD_PROP_IMG["tower"]="assets/props/tower.png?v=142f20490e";LD_PROP_IMG["turret"]="assets/props/turret.png?v=142f20490e";
 /* 皮肤贴图由 build.py 自动内嵌，请勿手改 */
-window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/daishu_head.png?v=4f51e2aa1f";LD_SKIN_IMG["daishu_lower"]="assets/skins/daishu/parts/daishu_lower.png?v=4f51e2aa1f";LD_SKIN_IMG["daishu_upper"]="assets/skins/daishu/parts/daishu_upper.png?v=4f51e2aa1f";LD_SKIN_IMG["doubao_head"]="assets/skins/doubao/parts/doubao_head.png?v=4f51e2aa1f";LD_SKIN_IMG["doubao_lower"]="assets/skins/doubao/parts/doubao_lower.png?v=4f51e2aa1f";LD_SKIN_IMG["doubao_upper"]="assets/skins/doubao/parts/doubao_upper.png?v=4f51e2aa1f";LD_SKIN_IMG["gaosongdeng_head"]="assets/skins/gaosongdeng/parts/gaosongdeng_head.png?v=4f51e2aa1f";LD_SKIN_IMG["gaosongdeng_lower"]="assets/skins/gaosongdeng/parts/gaosongdeng_lower.png?v=4f51e2aa1f";LD_SKIN_IMG["gaosongdeng_upper"]="assets/skins/gaosongdeng/parts/gaosongdeng_upper.png?v=4f51e2aa1f";LD_SKIN_IMG["gaoya_head"]="assets/skins/gaoya/parts/gaoya_head.png?v=4f51e2aa1f";LD_SKIN_IMG["gaoya_lower"]="assets/skins/gaoya/parts/gaoya_lower.png?v=4f51e2aa1f";LD_SKIN_IMG["gaoya_upper"]="assets/skins/gaoya/parts/gaoya_upper.png?v=4f51e2aa1f";LD_SKIN_IMG["gojo_head"]="assets/skins/gojo/parts/gojo_head.png?v=4f51e2aa1f";LD_SKIN_IMG["gojo_lower"]="assets/skins/gojo/parts/gojo_lower.png?v=4f51e2aa1f";LD_SKIN_IMG["gojo_upper"]="assets/skins/gojo/parts/gojo_upper.png?v=4f51e2aa1f";LD_SKIN_IMG["kobe_head"]="assets/skins/kobe/parts/kobe_head.png?v=4f51e2aa1f";LD_SKIN_IMG["kobe_lower"]="assets/skins/kobe/parts/kobe_lower.png?v=4f51e2aa1f";LD_SKIN_IMG["kobe_upper"]="assets/skins/kobe/parts/kobe_upper.png?v=4f51e2aa1f";LD_SKIN_IMG["kunkun_head"]="assets/skins/kunkun/parts/kunkun_head.png?v=4f51e2aa1f";LD_SKIN_IMG["kunkun_lower"]="assets/skins/kunkun/parts/kunkun_lower.png?v=4f51e2aa1f";LD_SKIN_IMG["kunkun_upper"]="assets/skins/kunkun/parts/kunkun_upper.png?v=4f51e2aa1f";LD_SKIN_IMG["naiwa_head"]="assets/skins/naiwa/parts/naiwa_head.png?v=4f51e2aa1f";LD_SKIN_IMG["naiwa_lower"]="assets/skins/naiwa/parts/naiwa_lower.png?v=4f51e2aa1f";LD_SKIN_IMG["naiwa_upper"]="assets/skins/naiwa/parts/naiwa_upper.png?v=4f51e2aa1f";LD_SKIN_IMG["pangmao_head"]="assets/skins/pangmao/parts/pangmao_head.png?v=4f51e2aa1f";LD_SKIN_IMG["pangmao_lower"]="assets/skins/pangmao/parts/pangmao_lower.png?v=4f51e2aa1f";LD_SKIN_IMG["pangmao_upper"]="assets/skins/pangmao/parts/pangmao_upper.png?v=4f51e2aa1f";
+window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/daishu_head.png?v=142f20490e";LD_SKIN_IMG["daishu_lower"]="assets/skins/daishu/parts/daishu_lower.png?v=142f20490e";LD_SKIN_IMG["daishu_upper"]="assets/skins/daishu/parts/daishu_upper.png?v=142f20490e";LD_SKIN_IMG["doubao_head"]="assets/skins/doubao/parts/doubao_head.png?v=142f20490e";LD_SKIN_IMG["doubao_lower"]="assets/skins/doubao/parts/doubao_lower.png?v=142f20490e";LD_SKIN_IMG["doubao_upper"]="assets/skins/doubao/parts/doubao_upper.png?v=142f20490e";LD_SKIN_IMG["gaosongdeng_head"]="assets/skins/gaosongdeng/parts/gaosongdeng_head.png?v=142f20490e";LD_SKIN_IMG["gaosongdeng_lower"]="assets/skins/gaosongdeng/parts/gaosongdeng_lower.png?v=142f20490e";LD_SKIN_IMG["gaosongdeng_upper"]="assets/skins/gaosongdeng/parts/gaosongdeng_upper.png?v=142f20490e";LD_SKIN_IMG["gaoya_head"]="assets/skins/gaoya/parts/gaoya_head.png?v=142f20490e";LD_SKIN_IMG["gaoya_lower"]="assets/skins/gaoya/parts/gaoya_lower.png?v=142f20490e";LD_SKIN_IMG["gaoya_upper"]="assets/skins/gaoya/parts/gaoya_upper.png?v=142f20490e";LD_SKIN_IMG["gojo_head"]="assets/skins/gojo/parts/gojo_head.png?v=142f20490e";LD_SKIN_IMG["gojo_lower"]="assets/skins/gojo/parts/gojo_lower.png?v=142f20490e";LD_SKIN_IMG["gojo_upper"]="assets/skins/gojo/parts/gojo_upper.png?v=142f20490e";LD_SKIN_IMG["kobe_head"]="assets/skins/kobe/parts/kobe_head.png?v=142f20490e";LD_SKIN_IMG["kobe_lower"]="assets/skins/kobe/parts/kobe_lower.png?v=142f20490e";LD_SKIN_IMG["kobe_upper"]="assets/skins/kobe/parts/kobe_upper.png?v=142f20490e";LD_SKIN_IMG["kunkun_head"]="assets/skins/kunkun/parts/kunkun_head.png?v=142f20490e";LD_SKIN_IMG["kunkun_lower"]="assets/skins/kunkun/parts/kunkun_lower.png?v=142f20490e";LD_SKIN_IMG["kunkun_upper"]="assets/skins/kunkun/parts/kunkun_upper.png?v=142f20490e";LD_SKIN_IMG["naiwa_head"]="assets/skins/naiwa/parts/naiwa_head.png?v=142f20490e";LD_SKIN_IMG["naiwa_lower"]="assets/skins/naiwa/parts/naiwa_lower.png?v=142f20490e";LD_SKIN_IMG["naiwa_upper"]="assets/skins/naiwa/parts/naiwa_upper.png?v=142f20490e";LD_SKIN_IMG["pangmao_head"]="assets/skins/pangmao/parts/pangmao_head.png?v=142f20490e";LD_SKIN_IMG["pangmao_lower"]="assets/skins/pangmao/parts/pangmao_lower.png?v=142f20490e";LD_SKIN_IMG["pangmao_upper"]="assets/skins/pangmao/parts/pangmao_upper.png?v=142f20490e";
 /* ===== 00_version.js ===== */
 /* 由 build.py 自动生成，请勿手改 */
-(function (LD) { LD.VERSION = "4.34"; LD.AUTHOR = "RikkaLove0721"; })(window.LD = window.LD || {});
+(function (LD) { LD.VERSION = "4.35"; LD.AUTHOR = "RikkaLove0721"; })(window.LD = window.LD || {});
 
 /* ===== 10_data.js ===== */
 /* ============================================================
@@ -21550,7 +21550,14 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
       r(f.stealthT || 0, 2),
       f.kind === "hero" ? [f.loadout.skill1 || "", f.loadout.skill2 || "", f.loadout.ult || ""].join("|") : "",
       Math.round(f.maxHp), f.isZombie ? 1 : 0,      // v2.7：血上限（猎人 800 / 霸主 ×1.5）+ 僵尸标记
-      (f.hideProp || f.rideCar) ? 1 : 0,            // v3.3：躲在柜子 / 坐在车上（客机据此不画人）
+      /* v4.35：0 = 空手 / 1 = 躲在柜子里 / 2 = 在开车。
+       * 以前这里把「柜子」和「车」压成同一个 1，客机只能知道「这人被藏起来了」，
+       * 既分不出是在车上还是在柜子里，也没法把 rideCar / hideProp 还原成对象。
+       * 后果：
+       *   · 客机的 f.rideCar 是开局的残留对象 —— 客机不跑 exitCar，永远清不掉，
+       *     于是所有人被永久当成「在车上」，人一个都不画；
+       *   · 躲进柜子的人自己看不见自己（房主那边自己看自己是画的）。 */
+      f.rideCar ? 2 : f.hideProp ? 1 : 0,
       /* ---- v4.34 各模式专用状态（以前全留在房主进程里，客机看不到） ---- */
       f.flash ? 1 : 0,                              // 停电夜战：手电筒是否开着（客机据此画光锥）
       r(f.battery == null ? 100 : f.battery, 0),    // 电量
@@ -21563,7 +21570,24 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
       /* v4.34 实体种类：房主会往 fighters 里追加小兵 / 分身 / 僵尸，
        * 客机得知道该补哪种壳（以前只认僵尸，塔防小兵和分身直接被丢掉） */
       f.kind === "laneMinion" ? 1 : f.kind === "minion" ? 2 : f.kind === "dragon" ? 3
-        : f.isClone ? 4 : f.kind === "hero" ? 0 : 5
+        : f.isClone ? 4 : f.kind === "hero" ? 0 : 5,
+      /* v4.35：只影响「画出来什么」的三个纯视觉字段。
+       *   kingRise —— 王从天降的飞天抬升量，漏了客机看到人瞬移；
+       *   kingMark —— 红圈落点，global 的那个是给**全员**的预警圈，
+       *               漏了客机被砸之前完全没有预兆（不只是不好看，是不公平）；
+       *   corpseGone —— 丧尸超过 10 具后房主不再画老尸体，漏了客机画面越堆越脏。 */
+      Math.round((f.kingRise || 0) * 100),
+      f.corpseGone ? 1 : 0,
+      f.kingMark ? [Math.round(f.kingMark.x), Math.round(f.kingMark.y), f.kingMark.global ? 1 : 0] : null,
+      /* v4.35：HUD 直接读的两个布尔
+       *   lit     —— 停电夜战「站在灯下」，漏了客机 HUD 永远显示「摸黑 · 隐匿」；
+       *   pushBox —— 情报箱「推箱中」，漏了客机不显示自己正在推箱。 */
+      f.lit ? 1 : 0,
+      f.pushBox ? 1 : 0,
+      /* v4.35：复活倒计时。塔防的墓碑上直接写「还差几秒」，热身赛 HUD 用它显示
+       * 「复活中 / 已倒下」，情报箱和据点也各有自己的复活计时 —— 以前客机
+       * 永远读到 0，于是别人明明马上要站起来，客机显示「已倒下」。 */
+      r(f.respawnT || 0, 1)
     ];
     function r(v, n) { return n ? Math.round(v * Math.pow(10, n)) / Math.pow(10, n) : Math.round(v); }
   }
@@ -21590,10 +21614,22 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
       g: (B.gifts || []).map(g => [Math.round(g.x), Math.round(g.y), g.kind === "ult" ? 1 : 0, g.id,
         Math.round((g.t || 0) * 100) / 100, g.landed ? 1 : 0, Math.round((g.born || 0) * 100) / 100]),
       /* v3.0 地形：只同步会变化的部分（是否被打碎 / 方块位置 / 剩余血量），
-         布局本身由房主下发的 mapCfg 种子在两端各生成一份，完全一致 */
+         布局本身由房主下发的 mapCfg 种子在两端各生成一份，完全一致。
+         v4.35 补三类「开局道具的运行时变量」——它们不会走 packProp（那只管运行期
+         push 的道具），所以以前在客机上永远停在开局值：
+           [9]  aimAngle    —— 炮塔炮管朝向（32_terrain_view 直接按它转炮管）
+           [10] bumpHp      —— 碰碰车耐久（画车损 + HUD「车 XX」）
+           [11] bumpRespawn —— 碰碰车报废后的重生倒计时
+           [12] 船扩展      —— 船的型号/外观/油箱/是否空着。船会在运行期被整批换掉，
+                              只靠 [1][2] 对齐位置的话，客机会拿旧船对象套新船坐标,
+                              型号和油箱全错位（激流模式里最明显）。 */
       tm: B.terrain ? B.terrain.props.map(o => [o.dead ? 1 : 0, Math.round(o.x), Math.round(o.y),
         Math.round(o.hp || 0), Math.round(o.fuel || 0), o.driver ? o.driver.side : -1,
-        o.carried ? 1 : 0, o.cargo ? 1 : 0, o.occupant ? o.occupant.side : -1]) : null,
+        o.carried ? 1 : 0, o.cargo ? 1 : 0, o.occupant ? o.occupant.side : -1,
+        Math.round((o.aimAngle || 0) * 100) / 100,
+        Math.round(o.bumpHp || 0),
+        Math.round((o.bumpRespawn || 0) * 10) / 10,
+        o.ship ? [o.vtype, o.variant || 0, Math.round(o.fuelMax || 0), o.free ? 1 : 0] : null]) : null,
       /* v4.34 各模式自己的动态状态（山芋 / 情报箱 / 据点 / 椅子 / 岩浆 / 弹幕…）
        * 与运行期新增道具。以前这些只在房主进程里，客机看到的是「一张静止的空场」。 */
       mo: LD.NetMode ? LD.NetMode.pack() : null
@@ -21632,7 +21668,11 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
       if (f.loadout.ult !== (parts[2] || null)) f.loadout.ult = parts[2] || null;
     }
     if (a[34] != null) f.maxHp = a[34];               // v2.7：血量上限随快照同步
-    f.hiddenNet = !!a[36];                            // v3.3：躲藏 / 驾驶中，客机不画小人
+    /* v4.35：0 空手 / 1 在柜子里 / 2 在开车。真正指向道具对象的引用要等 tm 应用完
+     * 才能回填（那时的 o.driver / o.occupant 才是这一帧的），所以先记下，
+     * 由 applySnapshot 末尾的 syncHoldRefs 统一校正。 */
+    f._netHold = a[36] || 0;
+    f.hiddenNet = (a[36] || 0) === 2;                 // 在车上才不画人（车由 prop 负责画）
     f.isZombie = !!a[35];                             // 僵尸走另一套画法（补壳时也要正确）
     /* v4.34 各模式专用状态 */
     f.flash = !!a[37];
@@ -21644,6 +21684,19 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
     if (a[42] != null) f.level = a[42];
     if (a[43] != null) f.bcoins = a[43];
     f.chairSeat = a[46] == null ? -1 : a[46];
+    /* v4.35：纯视觉字段 —— 王冠抬升 / 落点红圈 / 老尸体已清理 */
+    f.kingRise = a[48] == null ? 0 : a[48] / 100;
+    f.corpseGone = !!a[49];
+    /* 客机的 mkHero 里 kingMark 初值是 null，这里只在有值时覆盖，
+     * 房主清空后（a[50] === null）也要跟着清，否则红圈会一直挂在场上 */
+    if (a[50]) f.kingMark = { x: a[50][0], y: a[50][1], global: !!a[50][2] };
+    else if (f.kingMark) f.kingMark = null;
+    f.lit = !!a[51];
+    /* pushBox 在客机上只需要「是不是在推」；指向本地的箱子对象（由 NetMode 同步），
+     * 这样 HUD 的「推箱中」和交互提示都能正常显示。
+     * 客机不跑逻辑，所以这个引用不会被拿去 push。 */
+    f.pushBox = a[52] ? ((B.escort && B.escort.box) || true) : null;
+    f.respawnT = a[53] || 0;
     /* v2.7 追猎：猎人的身份靠 team（9）判断，客机不需要自己抽签 */
     if (B.rule === "hunt" && f.kind === "hero") {
       f.huntRole = f.team === 9 ? "hunter" : "runner";
@@ -21695,6 +21748,37 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
           o.fuel = a[4] || 0;
           o.driver = a[5] >= 0 ? (B.fighters.find(f => f.side === a[5]) || null) : null;
         }
+        /* v4.35 开局道具的运行时变量 */
+        /* 只在非 0 时写：0 是初始朝向，客机本来就是 0，
+         * 给所有道具都塞一个 aimAngle=0 只会让「字段 diff」这类排查工具全是噪音 */
+        if (a[9]) o.aimAngle = a[9];                    // 炮管朝向
+        if (o.bump) {                                    // 碰碰车：耐久 + 重生倒计时
+          if (a[10] != null) o.bumpHp = a[10];
+          if (a[11] != null) o.bumpRespawn = a[11];
+        }
+        /* 船：运行期会被整批换掉，型号 / 外观 / 油箱 / 是否空着都要跟着换，
+         * 否则客机会拿「开局那条旧船」套新船的坐标和油量。 */
+        if (o.ship && a[12]) {
+          if (o.vtype !== a[12][0]) {
+            /* 换型号：贴图与材质名都要跟着换，否则客机还在画「原来那条船」 */
+            o.vtype = a[12][0];
+            o.mat = "ship_" + o.vtype;
+            const sh = (LD.SHIPS || {})[o.vtype];
+            const tile = (LD.TERRAIN && LD.TERRAIN.tile) || 40;
+            if (sh) {
+              /* 尺寸 / 质量 / 是否大船都要跟着型号一起换：
+               * 船的体积参与碰撞与登船判定，只改贴图会让客机画一条「小一号」的船 */
+              o.shipImg = sh.img;
+              o.cw = sh.tiles[0]; o.ch = sh.tiles[1];
+              o.w = o.cw * tile; o.h = o.ch * tile;
+              o.mass = sh.big ? 5.2 : 3.2;
+              o.big = !!sh.big;
+            }
+          }
+          o.variant = a[12][1];
+          o.fuelMax = a[12][2];
+          o.free = !!a[12][3];
+        }
         if (o.kind === "mud") {
           /* v3.3：泥土被搬起 / 正在飞行 / 已落地，客机要跟着同步，否则会看到它原地不动 */
           o.carried = !!a[6];
@@ -21727,6 +21811,25 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
       unpackFighter(B.fighters[i], a);
     });
     if (B.fighters.length > s.f.length) B.fighters.length = s.f.length;   // 房主清场后同步裁掉多余僵尸
+    /* v4.35：把 f.rideCar / f.hideProp 校正成「这一帧真实的道具对象」。
+     * 客机不跑 enterCar / exitCar / 进出柜子，这两个引用一旦被写进来就再也不会被清，
+     * 开局就有车的人会被永久当成「在车上」——绘制层直接 return，人一个都画不出来。
+     * 放在 tm 之后，因为要读的 o.driver / o.occupant 是刚才那一步才写好的。 */
+    if (B.terrain && B.terrain.props) {
+      const props = B.terrain.props;
+      B.fighters.forEach(f => {
+        const hold = f._netHold || 0;
+        if (hold === 2) {
+          f.hideProp = null;
+          if (!f.rideCar) f.rideCar = props.find(o => o.driver === f && (o.kind === "car" || o.ship)) || null;
+        } else if (hold === 1) {
+          f.rideCar = null;
+          if (!f.hideProp) f.hideProp = props.find(o => o.kind === "locker" && o.occupant === f) || null;
+        } else {
+          f.rideCar = null; f.hideProp = null;
+        }
+      });
+    }
     // 天外来物掉落物：直接重建（拾取与置换由房主权威结算，客机只管渲染）
     B.gifts = (s.g || []).map(a => ({
       x: a[0], y: a[1], kind: a[2] ? "ult" : "skill", id: a[3], t: a[4], landed: !!a[5], born: a[6]
@@ -22010,7 +22113,10 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
       const hero = B.fighters.filter(f => f.kind === "hero");
       return [B.tScore[0] || 0, B.tScore[1] || 0, r2(B.waveT), B.waveN || 0,
         (B.towerKills || [0, 0]).slice(), B.towerDone ? 1 : 0, B.towerResult || "",
-        hero.map(f => [sideOf(f), f.level || 1, f.xp || 0, Math.round(f.bcoins || 0)])];
+        hero.map(f => [sideOf(f), f.level || 1, f.xp || 0, Math.round(f.bcoins || 0)]),
+        /* v4.35 墓碑：塔防阵亡会在地上留一块墓碑（显示复活倒计时），
+         * 客机的 B.graves 一直是 undefined，于是「队友死在哪儿」完全看不到 */
+        (B.graves || []).map(g => [Math.round(g.x), Math.round(g.y), g.side, r2(g.born)])];
     },
     apply(d) {
       if (!d) return;
@@ -22023,6 +22129,11 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
         if (!f) return;
         f.level = a[1]; f.xp = a[2]; f.bcoins = a[3];
       });
+      if (d[8]) {
+        B.graves = B.graves || [];
+        B.graves.length = 0;
+        d[8].forEach(a => B.graves.push({ x: a[0], y: a[1], side: a[2], born: a[3], hero: bySide(a[2]) }));
+      }
     }
   };
 
