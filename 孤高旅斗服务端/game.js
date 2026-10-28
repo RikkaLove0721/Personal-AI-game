@@ -1,16 +1,16 @@
 /* 主菜单立绘由 build.py 自动内嵌，请勿手改 */
-window.LD_MENU_BG="assets/menu-bg.webp?v=f7e042ce55";
+window.LD_MENU_BG="assets/menu-bg.jpg?v=4f51e2aa1f";
 /* 主菜单分层素材由 build.py 自动内嵌，请勿手改 */
-window.LD_CHAR={"frame": [3840, 2156], "layers": {"body": {"uv": [0.07578125, 0.05983302411873841, 0.71640625, 1.0], "px": [1315, 1084], "src": "assets/char/body.webp?v=f7e042ce55"}, "armA": {"uv": [0.29635416666666664, 0.22541743970315398, 0.33359375, 0.4819109461966605], "px": [76, 296], "src": "assets/char/armA.webp?v=f7e042ce55"}, "armB": {"uv": [0.37421875, 0.22356215213358072, 0.40963541666666664, 0.4819109461966605], "px": [73, 298], "src": "assets/char/armB.webp?v=f7e042ce55"}, "hair": {"uv": [0.12369791666666667, 0.19387755102040816, 0.33177083333333335, 0.7407235621521335], "px": [427, 630], "src": "assets/char/hair.webp?v=f7e042ce55"}, "skirt": {"uv": [0.2265625, 0.4072356215213358, 0.44583333333333336, 0.9786641929499073], "px": [450, 659], "src": "assets/char/skirt.webp?v=f7e042ce55"}, "sword": {"uv": [0.22890625, 0.5176252319109462, 0.7119791666666667, 0.9257884972170687], "px": [992, 470], "src": "assets/char/sword.webp?v=f7e042ce55"}, "eye": {"uv": [0.34479166666666666, 0.16326530612244897, 0.3765625, 0.19341372912801486], "px": [130, 69], "src": "assets/char/eye.webp?v=f7e042ce55", "content": [0.3463541666666667, 0.1660482374768089, 0.375, 0.1906307977736549]}, "mouth": {"uv": [0.35625, 0.20269016697588127, 0.38697916666666665, 0.22634508348794063], "px": [126, 55], "src": "assets/char/mouth.webp?v=f7e042ce55"}, "lid": {"uv": [0.34479166666666666, 0.16326530612244897, 0.3765625, 0.19341372912801486], "px": [130, 69], "src": "assets/char/lid.webp?v=f7e042ce55"}, "lidFar": {"uv": [0.3768229166666667, 0.1702226345083488, 0.38958333333333334, 0.19387755102040816], "px": [52, 55], "src": "assets/char/lidFar.webp?v=f7e042ce55", "content": [0.37890625, 0.17393320964749537, 0.3875, 0.1901669758812616]}, "bg": {"uv": [0, 0, 1, 1], "px": [0, 0], "src": "assets/char/bg.webp?v=f7e042ce55"}}, "order": ["body", "skirt", "sword", "armA", "armB", "hair", "eye", "mouth"]};
+window.LD_CHAR={"frame": [3840, 2156], "layers": {"body": {"uv": [0.07578125, 0.05983302411873841, 0.71640625, 1.0], "px": [1315, 1084], "src": "assets/char/body.webp?v=4f51e2aa1f"}, "armA": {"uv": [0.29635416666666664, 0.22541743970315398, 0.33359375, 0.4819109461966605], "px": [76, 296], "src": "assets/char/armA.webp?v=4f51e2aa1f"}, "armB": {"uv": [0.37421875, 0.22356215213358072, 0.40963541666666664, 0.4819109461966605], "px": [73, 298], "src": "assets/char/armB.webp?v=4f51e2aa1f"}, "hair": {"uv": [0.12369791666666667, 0.19387755102040816, 0.33177083333333335, 0.7407235621521335], "px": [427, 630], "src": "assets/char/hair.webp?v=4f51e2aa1f"}, "skirt": {"uv": [0.2265625, 0.4072356215213358, 0.44583333333333336, 0.9786641929499073], "px": [450, 659], "src": "assets/char/skirt.webp?v=4f51e2aa1f"}, "sword": {"uv": [0.22890625, 0.5176252319109462, 0.7119791666666667, 0.9257884972170687], "px": [992, 470], "src": "assets/char/sword.webp?v=4f51e2aa1f"}, "eye": {"uv": [0.34479166666666666, 0.16326530612244897, 0.3765625, 0.19341372912801486], "px": [130, 69], "src": "assets/char/eye.webp?v=4f51e2aa1f", "content": [0.3463541666666667, 0.1660482374768089, 0.375, 0.1906307977736549]}, "mouth": {"uv": [0.35625, 0.20269016697588127, 0.38697916666666665, 0.22634508348794063], "px": [126, 55], "src": "assets/char/mouth.webp?v=4f51e2aa1f"}, "lid": {"uv": [0.34479166666666666, 0.16326530612244897, 0.3765625, 0.19341372912801486], "px": [130, 69], "src": "assets/char/lid.webp?v=4f51e2aa1f"}, "lidFar": {"uv": [0.3768229166666667, 0.1702226345083488, 0.38958333333333334, 0.19387755102040816], "px": [52, 55], "src": "assets/char/lidFar.webp?v=4f51e2aa1f", "content": [0.37890625, 0.17393320964749537, 0.3875, 0.1901669758812616]}, "bg": {"uv": [0, 0, 1, 1], "px": [0, 0], "src": "assets/char/bg.jpg?v=4f51e2aa1f"}}, "order": ["body", "skirt", "sword", "armA", "armB", "hair", "eye", "mouth"]};
 /* 背景音乐由 build.py 自动内嵌，请勿手改 */
-window.LD_MUSIC=[{n:"Feel You",d:"music/Feel%20You.m4a?v=f7e042ce55"},{n:"Weight of the World",d:"music/Weight%20of%20the%20World.m4a?v=f7e042ce55"},{n:"\u66d6\u6627\u30ca\u5e0c\u671b\uff0f\u6c37\u96e8",d:"music/%E6%9B%96%E6%98%A7%E3%83%8A%E5%B8%8C%E6%9C%9B%EF%BC%8F%E6%B0%B7%E9%9B%A8.m4a?v=f7e042ce55"},{n:"\u904a\u5712\u65bd\u8a2d",d:"music/%E9%81%8A%E5%9C%92%E6%96%BD%E8%A8%AD.m4a?v=f7e042ce55"},{n:"\u907a\u30b5\u30ec\u30bf\u5834\u6240\uff0f\u659c\u5149",d:"music/%E9%81%BA%E3%82%B5%E3%83%AC%E3%82%BF%E5%A0%B4%E6%89%80%EF%BC%8F%E6%96%9C%E5%85%89.m4a?v=f7e042ce55"}];
+window.LD_MUSIC=[{n:"Feel You",d:"music/Feel%20You.m4a?v=4f51e2aa1f"},{n:"Weight of the World",d:"music/Weight%20of%20the%20World.m4a?v=4f51e2aa1f"},{n:"\u66d6\u6627\u30ca\u5e0c\u671b\uff0f\u6c37\u96e8",d:"music/%E6%9B%96%E6%98%A7%E3%83%8A%E5%B8%8C%E6%9C%9B%EF%BC%8F%E6%B0%B7%E9%9B%A8.m4a?v=4f51e2aa1f"},{n:"\u904a\u5712\u65bd\u8a2d",d:"music/%E9%81%8A%E5%9C%92%E6%96%BD%E8%A8%AD.m4a?v=4f51e2aa1f"},{n:"\u907a\u30b5\u30ec\u30bf\u5834\u6240\uff0f\u659c\u5149",d:"music/%E9%81%BA%E3%82%B5%E3%83%AC%E3%82%BF%E5%A0%B4%E6%89%80%EF%BC%8F%E6%96%9C%E5%85%89.m4a?v=4f51e2aa1f"}];
 /* 建筑贴图由 build.py 自动内嵌，请勿手改 */
-window.LD_PROP_IMG={};LD_PROP_IMG["boat_fish"]="assets/props/boat_fish.png?v=f7e042ce55";LD_PROP_IMG["boat_junk"]="assets/props/boat_junk.png?v=f7e042ce55";LD_PROP_IMG["boat_raft"]="assets/props/boat_raft.png?v=f7e042ce55";LD_PROP_IMG["boat_row"]="assets/props/boat_row.png?v=f7e042ce55";LD_PROP_IMG["cannon"]="assets/props/cannon.png?v=f7e042ce55";LD_PROP_IMG["charger"]="assets/props/charger.png?v=f7e042ce55";LD_PROP_IMG["cliff"]="assets/props/cliff.png?v=f7e042ce55";LD_PROP_IMG["crystal"]="assets/props/crystal.png?v=f7e042ce55";LD_PROP_IMG["grave"]="assets/props/grave.png?v=f7e042ce55";LD_PROP_IMG["tower"]="assets/props/tower.png?v=f7e042ce55";LD_PROP_IMG["turret"]="assets/props/turret.png?v=f7e042ce55";
+window.LD_PROP_IMG={};LD_PROP_IMG["boat_fish"]="assets/props/boat_fish.png?v=4f51e2aa1f";LD_PROP_IMG["boat_junk"]="assets/props/boat_junk.png?v=4f51e2aa1f";LD_PROP_IMG["boat_raft"]="assets/props/boat_raft.png?v=4f51e2aa1f";LD_PROP_IMG["boat_row"]="assets/props/boat_row.png?v=4f51e2aa1f";LD_PROP_IMG["cannon"]="assets/props/cannon.png?v=4f51e2aa1f";LD_PROP_IMG["charger"]="assets/props/charger.png?v=4f51e2aa1f";LD_PROP_IMG["cliff"]="assets/props/cliff.png?v=4f51e2aa1f";LD_PROP_IMG["crystal"]="assets/props/crystal.png?v=4f51e2aa1f";LD_PROP_IMG["grave"]="assets/props/grave.png?v=4f51e2aa1f";LD_PROP_IMG["tower"]="assets/props/tower.png?v=4f51e2aa1f";LD_PROP_IMG["turret"]="assets/props/turret.png?v=4f51e2aa1f";
 /* 皮肤贴图由 build.py 自动内嵌，请勿手改 */
-window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/daishu_head.png?v=f7e042ce55";LD_SKIN_IMG["daishu_lower"]="assets/skins/daishu/parts/daishu_lower.png?v=f7e042ce55";LD_SKIN_IMG["daishu_upper"]="assets/skins/daishu/parts/daishu_upper.png?v=f7e042ce55";LD_SKIN_IMG["doubao_head"]="assets/skins/doubao/parts/doubao_head.png?v=f7e042ce55";LD_SKIN_IMG["doubao_lower"]="assets/skins/doubao/parts/doubao_lower.png?v=f7e042ce55";LD_SKIN_IMG["doubao_upper"]="assets/skins/doubao/parts/doubao_upper.png?v=f7e042ce55";LD_SKIN_IMG["gaosongdeng_head"]="assets/skins/gaosongdeng/parts/gaosongdeng_head.png?v=f7e042ce55";LD_SKIN_IMG["gaosongdeng_lower"]="assets/skins/gaosongdeng/parts/gaosongdeng_lower.png?v=f7e042ce55";LD_SKIN_IMG["gaosongdeng_upper"]="assets/skins/gaosongdeng/parts/gaosongdeng_upper.png?v=f7e042ce55";LD_SKIN_IMG["gaoya_head"]="assets/skins/gaoya/parts/gaoya_head.png?v=f7e042ce55";LD_SKIN_IMG["gaoya_lower"]="assets/skins/gaoya/parts/gaoya_lower.png?v=f7e042ce55";LD_SKIN_IMG["gaoya_upper"]="assets/skins/gaoya/parts/gaoya_upper.png?v=f7e042ce55";LD_SKIN_IMG["gojo_head"]="assets/skins/gojo/parts/gojo_head.png?v=f7e042ce55";LD_SKIN_IMG["gojo_lower"]="assets/skins/gojo/parts/gojo_lower.png?v=f7e042ce55";LD_SKIN_IMG["gojo_upper"]="assets/skins/gojo/parts/gojo_upper.png?v=f7e042ce55";LD_SKIN_IMG["kobe_head"]="assets/skins/kobe/parts/kobe_head.png?v=f7e042ce55";LD_SKIN_IMG["kobe_lower"]="assets/skins/kobe/parts/kobe_lower.png?v=f7e042ce55";LD_SKIN_IMG["kobe_upper"]="assets/skins/kobe/parts/kobe_upper.png?v=f7e042ce55";LD_SKIN_IMG["kunkun_head"]="assets/skins/kunkun/parts/kunkun_head.png?v=f7e042ce55";LD_SKIN_IMG["kunkun_lower"]="assets/skins/kunkun/parts/kunkun_lower.png?v=f7e042ce55";LD_SKIN_IMG["kunkun_upper"]="assets/skins/kunkun/parts/kunkun_upper.png?v=f7e042ce55";LD_SKIN_IMG["naiwa_head"]="assets/skins/naiwa/parts/naiwa_head.png?v=f7e042ce55";LD_SKIN_IMG["naiwa_lower"]="assets/skins/naiwa/parts/naiwa_lower.png?v=f7e042ce55";LD_SKIN_IMG["naiwa_upper"]="assets/skins/naiwa/parts/naiwa_upper.png?v=f7e042ce55";LD_SKIN_IMG["pangmao_head"]="assets/skins/pangmao/parts/pangmao_head.png?v=f7e042ce55";LD_SKIN_IMG["pangmao_lower"]="assets/skins/pangmao/parts/pangmao_lower.png?v=f7e042ce55";LD_SKIN_IMG["pangmao_upper"]="assets/skins/pangmao/parts/pangmao_upper.png?v=f7e042ce55";
+window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/daishu_head.png?v=4f51e2aa1f";LD_SKIN_IMG["daishu_lower"]="assets/skins/daishu/parts/daishu_lower.png?v=4f51e2aa1f";LD_SKIN_IMG["daishu_upper"]="assets/skins/daishu/parts/daishu_upper.png?v=4f51e2aa1f";LD_SKIN_IMG["doubao_head"]="assets/skins/doubao/parts/doubao_head.png?v=4f51e2aa1f";LD_SKIN_IMG["doubao_lower"]="assets/skins/doubao/parts/doubao_lower.png?v=4f51e2aa1f";LD_SKIN_IMG["doubao_upper"]="assets/skins/doubao/parts/doubao_upper.png?v=4f51e2aa1f";LD_SKIN_IMG["gaosongdeng_head"]="assets/skins/gaosongdeng/parts/gaosongdeng_head.png?v=4f51e2aa1f";LD_SKIN_IMG["gaosongdeng_lower"]="assets/skins/gaosongdeng/parts/gaosongdeng_lower.png?v=4f51e2aa1f";LD_SKIN_IMG["gaosongdeng_upper"]="assets/skins/gaosongdeng/parts/gaosongdeng_upper.png?v=4f51e2aa1f";LD_SKIN_IMG["gaoya_head"]="assets/skins/gaoya/parts/gaoya_head.png?v=4f51e2aa1f";LD_SKIN_IMG["gaoya_lower"]="assets/skins/gaoya/parts/gaoya_lower.png?v=4f51e2aa1f";LD_SKIN_IMG["gaoya_upper"]="assets/skins/gaoya/parts/gaoya_upper.png?v=4f51e2aa1f";LD_SKIN_IMG["gojo_head"]="assets/skins/gojo/parts/gojo_head.png?v=4f51e2aa1f";LD_SKIN_IMG["gojo_lower"]="assets/skins/gojo/parts/gojo_lower.png?v=4f51e2aa1f";LD_SKIN_IMG["gojo_upper"]="assets/skins/gojo/parts/gojo_upper.png?v=4f51e2aa1f";LD_SKIN_IMG["kobe_head"]="assets/skins/kobe/parts/kobe_head.png?v=4f51e2aa1f";LD_SKIN_IMG["kobe_lower"]="assets/skins/kobe/parts/kobe_lower.png?v=4f51e2aa1f";LD_SKIN_IMG["kobe_upper"]="assets/skins/kobe/parts/kobe_upper.png?v=4f51e2aa1f";LD_SKIN_IMG["kunkun_head"]="assets/skins/kunkun/parts/kunkun_head.png?v=4f51e2aa1f";LD_SKIN_IMG["kunkun_lower"]="assets/skins/kunkun/parts/kunkun_lower.png?v=4f51e2aa1f";LD_SKIN_IMG["kunkun_upper"]="assets/skins/kunkun/parts/kunkun_upper.png?v=4f51e2aa1f";LD_SKIN_IMG["naiwa_head"]="assets/skins/naiwa/parts/naiwa_head.png?v=4f51e2aa1f";LD_SKIN_IMG["naiwa_lower"]="assets/skins/naiwa/parts/naiwa_lower.png?v=4f51e2aa1f";LD_SKIN_IMG["naiwa_upper"]="assets/skins/naiwa/parts/naiwa_upper.png?v=4f51e2aa1f";LD_SKIN_IMG["pangmao_head"]="assets/skins/pangmao/parts/pangmao_head.png?v=4f51e2aa1f";LD_SKIN_IMG["pangmao_lower"]="assets/skins/pangmao/parts/pangmao_lower.png?v=4f51e2aa1f";LD_SKIN_IMG["pangmao_upper"]="assets/skins/pangmao/parts/pangmao_upper.png?v=4f51e2aa1f";
 /* ===== 00_version.js ===== */
 /* 由 build.py 自动生成，请勿手改 */
-(function (LD) { LD.VERSION = "4.33"; LD.AUTHOR = "RikkaLove0721"; })(window.LD = window.LD || {});
+(function (LD) { LD.VERSION = "4.34"; LD.AUTHOR = "RikkaLove0721"; })(window.LD = window.LD || {});
 
 /* ===== 10_data.js ===== */
 /* ============================================================
@@ -1973,6 +1973,88 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
       patches: src.patches || p.patches || null
     };
   };
+})(window.LD = window.LD || {});
+
+/* ===== 14_rand.js ===== */
+/* ============================================================
+ *  14_rand.js — 可复现随机（v4.34）
+ * ============================================================
+ *  联机时房主与客机各自在本地跑一遍 B.setup / B.resetRound，
+ *  而这些函数里到处是 Math.random：撤离点撒哪、充电站摆哪、
+ *  据点选哪、椅子刷哪、船刷哪……两端摇出来的数不一样，
+ *  于是「客机看到的地图」和「房主判定的地图」是两张图。
+ *  以前这些差异靠快照里的 tm 数组按索引对齐去补，位置 / 数量一旦不同
+ *  就整体错位——这正是「情报箱停在地图中间」「夜战看不到手电」一类
+ *  现象的底层原因之一。
+ *
+ *  解决办法不是把布局一个个发过去（那要几百字节 × 每秒三十次），
+ *  而是**让两端跑同一串随机数**：
+ *    · 房主开局抽一个 seed 随 go 消息下发
+ *    · 两端在每个 initXxx 前用 LD.withSeed(seed, 标签, fn) 重设随机源
+ *    · 这些 init 内部只读随机、不读时钟 / 网络 / 玩家输入，所以结果必然相同
+ *  离开 init 段就恢复真随机——战斗里的暴击、AI 抖动不该被同步。
+ *
+ *  为什么每个 init 各设一次种子，而不是整个 setup 设一次：
+ *  个别 init 有 isHost 分支（如追猎的猎人抽签只在房主跑），
+ *  整段共用一条随机流的话，跳过一支就整体错位；按函数重置就互不牵连。
+ * ============================================================ */
+(function (LD) {
+  "use strict";
+
+  /** mulberry32：32 位状态，短、快、无依赖，够做布局随机 */
+  function mulberry32(a) {
+    return function () {
+      a = (a + 0x6D2B79F5) >>> 0;
+      let t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  /* FNV-1a：把「模式名 / 阶段名」压成一个号，
+   * 相同 seed + 相同标签 → 同一个序列，彼此不互相干扰 */
+  function hash(s) {
+    let h = 2166136261;
+    for (let i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
+  }
+
+  const R = LD.Rand = {
+    base: 0,          // 本局种子；0 = 不做确定性随机
+    depth: 0,
+    saved: null,      // 进入确定性模式前的 Math.random
+
+    hash: hash,
+    mulberry32: mulberry32,
+
+    /** 设置本局种子（房主开局调用；0 / null 表示退回真随机） */
+    seed(n) { this.base = (n >>> 0) || 0; },
+
+    /**
+     * 在确定性随机源下执行 fn，结束后原样恢复。
+     * 支持嵌套（内层换新种子，出栈时还原外层），否则两个 init 互相包裹时会串味。
+     */
+    withSeed(base, tag, fn) {
+      if (!base || typeof fn !== "function") return fn();
+      const outerMath = Math.random;
+      const outerDepth = this.depth;
+      Math.random = mulberry32(((base ^ hash(String(tag))) >>> 0) || 1);
+      this.depth = outerDepth + 1;
+      try {
+        return fn();
+      } finally {
+        Math.random = outerMath;
+        this.depth = outerDepth;
+      }
+    }
+  };
+
+  /* 全局简写：B.setup / B.resetRound 里逐段调用 */
+  LD.withSeed = function (base, tag, fn) { return R.withSeed(base, tag, fn); };
 })(window.LD = window.LD || {});
 
 /* ===== 15_terrain.js ===== */
@@ -6167,6 +6249,10 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
   const rand = (a, b) => a + Math.random() * (b - a);
   const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
+  /* v4.34 联机布局一致：init 段的随机必须两端可复现（见 14_rand.js）。
+   * 单机 / 闯关没有 netSeed，这里退化成直接调用，行为不变。 */
+  const seeded = (b, tag, fn) => (b && b.netSeed ? LD.withSeed(b.netSeed, tag, fn) : fn());
+
   const B = LD.Battle = {
     W: C.W, H: C.H,
     /* v2.6 世界与摄像机：world 是逻辑世界尺寸（可大于画布视口），cam 是视口左上角的世界坐标。
@@ -6342,6 +6428,9 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
    * ========================================================== */
   B.setup = function (cfg) {
     this.mode = cfg.mode;
+    /* v4.34 本局确定性随机种子：联机由房主下发，两端用同一串随机数生成布局。
+     * 单机 / 闯关传 0 = 保持原样（每次都不一样）。必须早于任何 init 赋值。 */
+    this.netSeed = cfg.seed ? (cfg.seed >>> 0) : 0;
     this.rule = cfg.rule || "brawl";     // brawl 乱斗 | team 阵营 | overlord 霸主争霸 | gifts 天外来物
                                           // | ring 缩圈 | auction 军备竞赛 | relay 车轮战 | hunt 追猎时刻
     this.diff = cfg.diff || LD.DIFF.normal;
@@ -6431,9 +6520,11 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
     }
     this.mapCfg = mapCfg;
     if (this.rule === "tower" && LD.Terrain.buildTowerMap) {
-      /* v3.7 塔防：对称地图 + 双方水晶 / 防御塔，不走随机设施生成器 */
+      /* v3.7 塔防：对称地图 + 双方水晶 / 防御塔，不走随机设施生成器
+       * v4.34：buildTowerMap 内部拿 Math.random 当盐撒随机设施，必须进确定性段，
+       * 否则联机两端的塔防地图是两张图（客机看到的水晶位置和房主判定对不上）。 */
       this.mapCfg = LD.mapCfg({ preset: "arena", seed: 20261019, ground: "stone", patches: ["sand"] });
-      this.terrain = LD.Terrain.buildTowerMap(this.world);
+      this.terrain = seeded(this, "towermap", () => LD.Terrain.buildTowerMap(this.world));
       mapCfg = this.mapCfg;
     } else {
       this.terrain = mapCfg ? LD.Terrain.build(mapCfg, this.world,
@@ -6441,7 +6532,7 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
     }
     if (mapCfg) this.terrainMapCfg = mapCfg;
     this.shelter = null;
-    if (this.rule === "doomsday" && this.terrain) this.shelter = LD.Terrain.buildDoomsday(this.terrain, this.world);
+    if (this.rule === "doomsday" && this.terrain) this.shelter = seeded(this, "doomsday", () => LD.Terrain.buildDoomsday(this.terrain, this.world));
     /* v2.6 / v2.7 规则修饰符（可叠加）：
      * lowgrav 低重力 / speed 高速 / heal 回复 / zombie 僵尸 / wheel 技能轮盘 */
     this.mods = (cfg.mods || []).slice();
@@ -6460,11 +6551,11 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
     if (this.mods.indexOf("speed") >= 0) this.fighters.forEach(f => { f.rateM = (f.rateM || 1) * 0.7; });
     /* v2.7 追猎时刻：随机抽一名玩家当猎人。抽签只在房主端（或单机）进行——
      * 联机客机的猎人身份等房主快照下发，避免两边各抽一个。 */
-    if (this.rule === "hunt" && cfg.isHost !== false) this.initHunt();
+    if (this.rule === "hunt" && cfg.isHost !== false) seeded(this, "hunt", () => this.initHunt());
     /* v2.6 车轮战：擂台两端之外的全部坐板凳 */
     if (this.rule === "relay") this.initRelay();
     /* v2.7 缩圈乱斗：地图上只有几个大安全圈，其余全是毒 */
-    if (this.rule === "ring") this.initRing();
+    if (this.rule === "ring") seeded(this, "ring", () => this.initRing());
     /* v4.11 跨模式状态残留清理：stations / crown 只在夜战 / 霸主的 init 里重建，
      * 但 interactTarget 扫描它们时**不看当前规则**——上一局打过夜战，这局的
      * 乱斗 / 塔防 / 丧尸里就会凭空冒出「充电」；霸主同理会冒出「争夺皇冠」。
@@ -6472,9 +6563,9 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
     this.stations = [];
     this.crown = null;
     /* v3.7 塔防：分队 / 等级 / 金币 / 禁大招 */
-    if (this.rule === "tower" && this.initTower) this.initTower();
+    if (this.rule === "tower" && this.initTower) seeded(this, "tower", () => this.initTower());
     /* v3.9 霸主争霸：天降皇冠循环从这里起步（每回合重来） */
-    if (this.rule === "overlord" && this.initCrown) this.initCrown();
+    if (this.rule === "overlord" && this.initCrown) seeded(this, "crown", () => this.initCrown());
     /* v4.19 新手教程：到这里 fighter / 地形 / mods 都就位了，可以摆第一步。
      * 必须放在 setup 里而不是 resetRound：闯关 / 教程这条线只走 setup，
      * resetRound 只有房间对局才会调（见 75_room.js），放那儿等于永远不会触发。 */
@@ -6537,7 +6628,7 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
         this.fighters.splice(i, 1);
     const placed = [];
     const ins = this.rule === "doomsday" ? this.shelter : null;
-    this.fighters.forEach(f => {
+    seeded(this, "place", () => this.fighters.forEach(f => {
       if (f.kind === "hero" && !f.bench) {
         let bx, by;
         if (ins) {
@@ -6600,7 +6691,7 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
       f.lock = -1;                                        // 索敌锁定每回合重置
       if (f.kind === "dragon") { f.mode = "idle"; f.modeT = 0; f.charge = 0; f.telegraph = null; f.rageStage = 0; }
       if (this.rule === "overlord") f.overlord = false;   // 霸主标记每回合重置
-    });
+    }));
     /* v3.7 塔防：所有人回自家基地，不随机撒点 */
     if (this.rule === "tower" && this.placeTowerHeroes) this.placeTowerHeroes();
     this.projs = []; this.zones = [];
@@ -6630,25 +6721,29 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
     }
     this.healT = (LD.HEALS && LD.HEALS.first) || 4;
     /* 缩圈乱斗：每回合重新撒安全圈并把所有人挪进圈内 */
-    if (this.rule === "ring") this.initRing();
+    if (this.rule === "ring") seeded(this, "ring", () => this.initRing());
     /* v2.7 追猎时刻：每回合重新抽猎人 + 重置大毒圈（客机等房主快照，不自行抽签） */
-    if (this.rule === "hunt" && this.isHost) this.initHunt();
+    if (this.rule === "hunt" && this.isHost) seeded(this, "hunt", () => this.initHunt());
     /* v3.9 霸主争霸：每回合重新开始皇冠循环 */
-    if (this.rule === "overlord" && this.initCrown) this.initCrown();
+    if (this.rule === "overlord" && this.initCrown) seeded(this, "crown", () => this.initCrown());
     /* v3.9.1 停电夜战：固定配装（J 位移斩 / K 手里剑）+ 撒充电站 + 黑暗状态复位 */
-    if (this.rule === "blackout" && this.initBlackout) this.initBlackout();
+    if (this.rule === "blackout" && this.initBlackout) seeded(this, "blackout", () => this.initBlackout());
     /* v4.5 护送情报箱：两队归并 + 两侧交付点 + 中央投放箱子 */
-    if (this.rule === "escort" && this.initEscort) this.initEscort();
+    if (this.rule === "escort" && this.initEscort) seeded(this, "escort", () => this.initEscort());
     /* v4.6 占点争夺：三座据点 + 队伍归并 + 各自半场开局 */
-    if (this.rule === "capture" && this.initCapture) this.initCapture();
+    if (this.rule === "capture" && this.initCapture) seeded(this, "capture", () => this.initCapture());
     /* v4.13 渡江战役：铺水面 / 小岛 / 右岸旗子 */
-    if (this.rule === "river" && this.initRiver) this.initRiver();
+    if (this.rule === "river" && this.initRiver) seeded(this, "river", () => this.initRiver());
     /* v4.8 碰碰车竞技：圆形擂台清场 + 发碰碰车 + 每人上车 */
-    if (this.rule === "bump" && this.initBump) this.initBump();
+    if (this.rule === "bump" && this.initBump) seeded(this, "bump", () => this.initBump());
     /* v4.11 烫手山芋：全员脱队（互不伤害）+ 抽第一个倒霉蛋 */
-    if (this.rule === "hotpotato" && this.initHotPotato) this.initHotPotato();
+    if (this.rule === "hotpotato" && this.initHotPotato) seeded(this, "hotpotato", () => this.initHotPotato());
     /* v4.12 娱乐模式批次：木头人 / 抢椅子 / 躲猫猫 / 岩浆 / 弹幕 */
-    if (LD.isCasual && LD.isCasual(this.rule) && this.initCasual) this.initCasual();
+    if (LD.isCasual && LD.isCasual(this.rule) && this.initCasual) seeded(this, "casual", () => this.initCasual());
+    /* v4.34 布局基线：到这里为止的道具数组两端应当逐项相同（同种子）。
+     * 之后运行期新增的道具（据点炮塔 / 椅子 / 船 / 土墙 / 补给箱）客机没有，
+     * 由快照里的 px 增量补出来——见 61_netmode.js。 */
+    this.propBase = this.terrain && this.terrain.props ? this.terrain.props.length : 0;
     /* v4.19 新手教程：fighter / 地形 / mods 都齐了才能摆步骤，
      * 所以放在这里（setup 的最后一段），和娱乐模式的 initCasual 同一位置。 */
     if (this.mode === "tutorial" && this.tutInit && !this.tut) this.tutInit();
@@ -21455,7 +21550,20 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
       r(f.stealthT || 0, 2),
       f.kind === "hero" ? [f.loadout.skill1 || "", f.loadout.skill2 || "", f.loadout.ult || ""].join("|") : "",
       Math.round(f.maxHp), f.isZombie ? 1 : 0,      // v2.7：血上限（猎人 800 / 霸主 ×1.5）+ 僵尸标记
-      (f.hideProp || f.rideCar) ? 1 : 0             // v3.3：躲在柜子 / 坐在车上（客机据此不画人）
+      (f.hideProp || f.rideCar) ? 1 : 0,            // v3.3：躲在柜子 / 坐在车上（客机据此不画人）
+      /* ---- v4.34 各模式专用状态（以前全留在房主进程里，客机看不到） ---- */
+      f.flash ? 1 : 0,                              // 停电夜战：手电筒是否开着（客机据此画光锥）
+      r(f.battery == null ? 100 : f.battery, 0),    // 电量
+      r(f.dark || 0, 1),                            // 黑暗条
+      f.hideRole === "seeker" ? 2 : f.hideRole === "hider" ? 1 : 0,   // 躲猫猫身份
+      (f.loadout && f.loadout.basic) || "",         // J 槽（躲猫猫里会随身份从隐匿换成抓人）
+      f.level || 1, Math.round(f.bcoins || 0),      // 塔防 / 丧尸：等级与局内金币（HUD 直接读）
+      f.bushHide ? 1 : 0, f.inBush ? 1 : 0,          // 躲进草丛
+      f.chairSeat == null ? -1 : f.chairSeat,       // 抢椅子：坐的是哪一把
+      /* v4.34 实体种类：房主会往 fighters 里追加小兵 / 分身 / 僵尸，
+       * 客机得知道该补哪种壳（以前只认僵尸，塔防小兵和分身直接被丢掉） */
+      f.kind === "laneMinion" ? 1 : f.kind === "minion" ? 2 : f.kind === "dragon" ? 3
+        : f.isClone ? 4 : f.kind === "hero" ? 0 : 5
     ];
     function r(v, n) { return n ? Math.round(v * Math.pow(10, n)) / Math.pow(10, n) : Math.round(v); }
   }
@@ -21485,7 +21593,10 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
          布局本身由房主下发的 mapCfg 种子在两端各生成一份，完全一致 */
       tm: B.terrain ? B.terrain.props.map(o => [o.dead ? 1 : 0, Math.round(o.x), Math.round(o.y),
         Math.round(o.hp || 0), Math.round(o.fuel || 0), o.driver ? o.driver.side : -1,
-        o.carried ? 1 : 0, o.cargo ? 1 : 0, o.occupant ? o.occupant.side : -1]) : null
+        o.carried ? 1 : 0, o.cargo ? 1 : 0, o.occupant ? o.occupant.side : -1]) : null,
+      /* v4.34 各模式自己的动态状态（山芋 / 情报箱 / 据点 / 椅子 / 岩浆 / 弹幕…）
+       * 与运行期新增道具。以前这些只在房主进程里，客机看到的是「一张静止的空场」。 */
+      mo: LD.NetMode ? LD.NetMode.pack() : null
     };
   };
 
@@ -21522,6 +21633,17 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
     }
     if (a[34] != null) f.maxHp = a[34];               // v2.7：血量上限随快照同步
     f.hiddenNet = !!a[36];                            // v3.3：躲藏 / 驾驶中，客机不画小人
+    f.isZombie = !!a[35];                             // 僵尸走另一套画法（补壳时也要正确）
+    /* v4.34 各模式专用状态 */
+    f.flash = !!a[37];
+    if (a[38] != null) f.battery = a[38];
+    f.dark = a[39] || 0;
+    f.hideRole = a[40] === 2 ? "seeker" : a[40] === 1 ? "hider" : f.hideRole;
+    f.bushHide = !!a[44]; f.inBush = !!a[45];
+    if (f.loadout && a[41] != null && a[41] !== f.loadout.basic) f.loadout.basic = a[41] || f.loadout.basic;
+    if (a[42] != null) f.level = a[42];
+    if (a[43] != null) f.bcoins = a[43];
+    f.chairSeat = a[46] == null ? -1 : a[46];
     /* v2.7 追猎：猎人的身份靠 team（9）判断，客机不需要自己抽签 */
     if (B.rule === "hunt" && f.kind === "hero") {
       f.huntRole = f.team === 9 ? "hunter" : "runner";
@@ -21529,6 +21651,21 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
     }
     if (!wasDead && f.dead) { LD.FX.shake(14); LD.FX.burst(f.x, f.y - 26, 34, ["#fff", "#fb7185"], { speed: 340, life: 0.9 }); }
   }
+
+  /* v4.34 客机侧「空壳实体」：房主追加的小兵 / 分身 / 僵尸只需要能画出来。
+   * 用 mkHero 起底再改 kind —— 直接手搓对象会漏掉 look / 技能槽等绘制依赖，
+   * 那正是「客机画到一半崩在 look.head 上」的来源。 */
+  B.mkRemoteShell = function (kc) {
+    const f = this.mkHero(-1 - (this._shellSeq = (this._shellSeq || 0) + 1), { x: 0, y: 0, look: null, name: "" });
+    f.kind = kc === 1 ? "laneMinion" : kc === 2 ? "minion" : kc === 3 ? "dragon" : "hero";
+    f.isRemote = true;
+    f.isClone = (kc === 0 || kc === 4) && f.kind === "hero";
+    f.r = f.kind === "dragon" ? 60 : kc === 1 ? 13 : 16;
+    f.hp = f.maxHp = 1;
+    f.team = -1;
+    f.dead = false;
+    return f;
+  };
 
   Net.applySnapshot = function (s) {
     this.snapCur = s; this.snapT = 0;
@@ -21542,14 +21679,19 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
     if (s.rt) B.roundT = s.rt;
     B.score = s.sc; B.roundWinner = s.rw; B.matchWinner = s.mw;
     if (s.w) B.wScore = s.w.slice();                  // v2.7 乱斗热身计分板
+    /* v4.34 模式状态必须先于地形应用：它会调整 terrain.props 的结构（新增炮塔 / 船 / 土墙），
+     * 结构不对齐的话，紧跟其后的 tm 按索引写血量就会写到别人身上去。 */
+    if (s.mo && LD.NetMode) LD.NetMode.apply(s.mo);
     if (s.tm && B.terrain && B.terrain.props) {
       s.tm.forEach((a, i) => {
         const o = B.terrain.props[i];
         if (!o) return;
         o.dead = !!a[0];
         if (o.maxHp > 0) o.hp = a[3];
-        if (o.kind === "pushable" || o.kind === "car" || o.kind === "mud") { o.x = a[1]; o.y = a[2]; }
-        if (o.kind === "car") {
+        /* v4.34：所有道具都跟随位置（船 / 被技能推动的墙 / 泥土都会动），
+         * 以前只同步 pushable / car / mud，客机看到的船是钉在水里的。 */
+        o.x = a[1]; o.y = a[2];
+        if (o.kind === "car" || o.ship) {
           o.fuel = a[4] || 0;
           o.driver = a[5] >= 0 ? (B.fighters.find(f => f.side === a[5]) || null) : null;
         }
@@ -21578,8 +21720,9 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
     s.f.forEach((a, i) => {
       /* v2.7：房主多出来的实体（僵尸永远追加在数组末尾）按需在客机侧补出外壳 */
       if (!B.fighters[i]) {
-        if (!(a && a[35])) return;
-        B.fighters[i] = B.mkZombieShell();
+        const kc = a ? a[47] : 0;
+        if (!(a && (a[35] || kc > 0))) return;
+        B.fighters[i] = B.mkRemoteShell(kc);
       }
       unpackFighter(B.fighters[i], a);
     });
@@ -21611,6 +21754,11 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
 
   /* 客机位置平滑 */
   Net.smooth = function (dt) {
+    /* v4.34 客机的世界时钟也要走：绘制层大量用 B.t 做呼吸 / 闪烁 / 虚线滚动
+     * （「山芋来了 3.0s」的抖动、充电站呼吸灯、胜利圈旋转…）。
+     * 以前客机不跑 B.update，B.t 永远停在 0，于是这些动画在客机眼里是死的，
+     * 玩家感受到的就是「卡住」。 */
+    B.t = (B.t || 0) + dt;
     const k = 1 - Math.exp(-22 * dt);
     B.fighters.forEach(f => {
       if (f._tx == null) return;
@@ -21692,7 +21840,10 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
       fighters.push(dr);
     }
     B.setup({ mode: "net", rule: cfg.rule || "brawl", isHost: cfg.isHost, mySide: me, fighters, theme: {},
-      mods: cfg.mods || [], matchT: cfg.matchT || 120, mapCfg: cfg.mapCfg || null });
+      mods: cfg.mods || [], matchT: cfg.matchT || 120, mapCfg: cfg.mapCfg || null,
+      /* v4.34：布局种子随 go 下发，两端用同一串随机数生成地图 / 据点 / 椅子 / 船…… */
+      seed: cfg.seed || 0 });
+    if (LD.NetMode) LD.NetMode.reset();
     B.authoritative = !!cfg.isHost;
     fighters.forEach((f, i) => {
       if (f.kind !== "hero") return;
@@ -21719,6 +21870,442 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
     this.authoritative = !(cfg.mode === "net" && cfg.isHost === false);
     return r;
   };
+})(window.LD = window.LD || {});
+
+/* ===== 61_netmode.js ===== */
+/* ============================================================
+ *  61_netmode.js — v4.34 联机「世界状态」补全
+ * ============================================================
+ *  背景：60_net.js 的快照只带了 fighters / projs / zones / 地形血量，
+ *  各模式自己那几个状态对象（山芋、情报箱、充电站、据点、椅子、岩浆……）
+ *  从来只在房主进程里存在。于是客机看到的是：
+ *    · 山芋模式：看不到山芋（本地那份永远停在「预警」）
+ *    · 护送情报箱：箱子杵在地图正中不动
+ *    · 停电夜战：看不到任何人的手电筒光锥
+ *    · 躲猫猫：不知道自己已经变成鬼，也看不到搜查进度
+ *    · 抢椅子 / 木头人 / 岩浆 / 弹幕 / 渡江 / 碰碰车：同理
+ *  因为客机不跑 B.update（它是纯观众），这些状态必须有线送过来。
+ *
+ *  分两段：
+ *    1. 各模式动态状态 —— 本文件 mo 字段，每帧随快照下发（都是小数组）
+ *    2. 运行期新增的「道具」 —— px 字段。据点炮塔 / 椅子 / 船 / 土墙 /
+ *       补给箱这些都是中途 push 进 terrain.props 的，客机根本没有；
+ *       一旦两端数组长度不同，60_net 那套按索引对齐的 tm 会整体错位。
+ *       这里用「道具签名」判断：签名变了才整段重发（几十条，不是每帧）。
+ *
+ *  设计原则：客机只用来**看**。所有数值最终以房主为准，
+ *  apply 只写进本地状态对象，不触发结算、不发事件、不改胜负。
+ * ============================================================ */
+(function (LD) {
+  "use strict";
+  const B = LD.Battle;
+
+  const NM = LD.NetMode = {};
+
+  /* ---------- 小工具 ---------- */
+  const sideOf = f => (f && f.side != null ? f.side : -1);
+  const bySide = s => (s != null && s >= 0 ? (B.fighters.find(f => f.side === s) || null) : null);
+  const r2 = v => Math.round((v || 0) * 100) / 100;
+
+  /** 对象 → 索引（模式状态里指向道具的字段用它压成数字） */
+  function propIdx(o) {
+    const list = B.terrain && B.terrain.props;
+    return o && list ? list.indexOf(o) : -1;
+  }
+
+  /* ==========================================================
+   *  一、各模式动态状态
+   * ========================================================== */
+
+  /* 每个规则一个 pack（房主）/ 一个 apply（客机）。
+   * 键名用规则 id，长度都很短——局域网带宽不是瓶颈，可读性优先。 */
+  const RULES = {};
+
+  /* ---------- 烫手山芋 ---------- */
+  RULES.hotpotato = {
+    pack() {
+      const p = B.potato;
+      if (!p) return null;
+      return [p.phase, r2(p.t), r2(p.fuse), p.round | 0, Math.round(p.x), Math.round(p.y),
+        r2(p.holdT), r2(p.passLockT), r2(p.boomT), sideOf(p.tgt), sideOf(p.holder)];
+    },
+    apply(d) {
+      if (!d) return;
+      const p = B.potato || (B.potato = {});
+      p.phase = d[0]; p.t = d[1]; p.fuse = d[2]; p.round = d[3];
+      p.x = d[4]; p.y = d[5];
+      p.holdT = d[6]; p.passLockT = d[7]; p.boomT = d[8];
+      p.tgt = bySide(d[9]);
+      p.holder = bySide(d[10]);
+    }
+  };
+
+  /* ---------- 停电夜战 ---------- */
+  RULES.blackout = {
+    pack() {
+      /* 手电筒 / 电量 / 黑暗条在 packFighter 里（每人都要看）；
+       * 这里只补充电站位置（布局理论上同种子一致，发一份便宜的保险） */
+      return (B.stations || []).map(s => [Math.round(s.x), Math.round(s.y)]);
+    },
+    apply(d) {
+      if (!d) return;
+      if (!B.stations) B.stations = [];
+      d.forEach((a, i) => {
+        const s = B.stations[i];
+        if (s) { s.x = a[0]; s.y = a[1]; }
+        else B.stations[i] = { x: a[0], y: a[1], t: 0 };
+      });
+    }
+  };
+
+  /* ---------- 护送情报箱 ---------- */
+  RULES.escort = {
+    pack() {
+      const st = B.escort;
+      if (!st) return null;
+      const b = st.box || {};
+      return [st.score[0] || 0, st.score[1] || 0, b.alive ? 1 : 0, Math.round(b.x || 0), Math.round(b.y || 0),
+        sideOf(b.pusher), r2(st.respawnT), r2(st.dropT), st.done ? 1 : 0];
+    },
+    apply(d) {
+      if (!d) return;
+      const st = B.escort || (B.escort = { score: [0, 0], box: { x: 0, y: 0, alive: true, pusher: null }, respawnT: 0, dropT: 0, done: false });
+      st.score = [d[0], d[1]];
+      const b = st.box || (st.box = {});
+      b.alive = !!d[2]; b.x = d[3]; b.y = d[4];
+      b.pusher = bySide(d[5]);
+      st.respawnT = d[6]; st.dropT = d[7]; st.done = !!d[8];
+      /* 客机不跑 updateEscort，推箱者的 f.pushBox 也得自己挂上（绘制用它画引导线） */
+      B.fighters.forEach(f => { if (f.pushBox && f.pushBox !== b) f.pushBox = null; });
+      if (b.pusher) b.pusher.pushBox = b;
+    }
+  };
+
+  /* ---------- 占点争夺 ---------- */
+  RULES.capture = {
+    pack() {
+      const st = B.capture;
+      if (!st) return null;
+      return [st.score[0] || 0, st.score[1] || 0, st.done ? 1 : 0,
+        st.pts.map(p => [Math.round(p.x), Math.round(p.y), Math.round(p.r), p.owner, r2(p.prog), p.by, p.c0 || 0, p.c1 || 0])];
+    },
+    apply(d) {
+      if (!d) return;
+      const st = B.capture || (B.capture = { score: [0, 0], acc: 0, done: false, pts: [] });
+      st.score = [d[0], d[1]]; st.done = !!d[2];
+      const list = d[3] || [];
+      list.forEach((a, i) => {
+        let p = st.pts[i];
+        if (!p) p = st.pts[i] = { i: i, big: i === 0, name: i === 0 ? "B" : "P" + i, w: i === 0 ? 2 : 1, turret: null };
+        p.x = a[0]; p.y = a[1]; p.r = a[2]; p.owner = a[3]; p.prog = a[4]; p.by = a[5]; p.c0 = a[6]; p.c1 = a[7];
+      });
+      if (st.pts.length > list.length) st.pts.length = list.length;
+    }
+  };
+
+  /* ---------- 塔防对战 ---------- */
+  RULES.tower = {
+    pack() {
+      if (!B.tScore) return null;
+      const hero = B.fighters.filter(f => f.kind === "hero");
+      return [B.tScore[0] || 0, B.tScore[1] || 0, r2(B.waveT), B.waveN || 0,
+        (B.towerKills || [0, 0]).slice(), B.towerDone ? 1 : 0, B.towerResult || "",
+        hero.map(f => [sideOf(f), f.level || 1, f.xp || 0, Math.round(f.bcoins || 0)])];
+    },
+    apply(d) {
+      if (!d) return;
+      B.tScore = [d[0], d[1]];
+      B.waveT = d[2]; B.waveN = d[3];
+      B.towerKills = d[4] || [0, 0];
+      B.towerDone = !!d[5]; B.towerResult = d[6] || "";
+      (d[7] || []).forEach(a => {
+        const f = bySide(a[0]);
+        if (!f) return;
+        f.level = a[1]; f.xp = a[2]; f.bcoins = a[3];
+      });
+    }
+  };
+
+  /* ---------- 躲猫猫 ---------- */
+  RULES.hide = {
+    pack() {
+      const st = B.hide;
+      if (!st) return null;
+      const s = st.search;
+      const rl = st.relic;
+      return [st.caught || 0, r2(st.hintT), r2(st.relicT), st.searchMulT > 0 ? 1 : 0,
+        rl ? 1 : 0, rl ? Math.round(rl.x) : 0, rl ? Math.round(rl.y) : 0,
+        st.mark ? st.mark.side : -1, st.mark ? r2(st.mark.t) : 0,
+        s ? sideOf(s.who) : -1, s ? propIdx(s.prop) : -1, s ? r2(s.t) : 0];
+    },
+    apply(d) {
+      if (!d) return;
+      const st = B.hide || (B.hide = { search: null, caught: 0, mark: null, relic: null, relicT: 0, searchMulT: 0, hintT: 0 });
+      st.caught = d[0]; st.hintT = d[1]; st.relicT = d[2];
+      st.searchMulT = d[3] ? 1 : 0;
+      if (d[4]) {
+        st.relic = st.relic || { t: 0, bob: 0, taken: false };
+        st.relic.x = d[5]; st.relic.y = d[6]; st.relic.taken = false;
+      } else st.relic = null;
+      st.mark = d[7] >= 0 ? { side: d[7], t: d[8] } : null;
+      const who = bySide(d[9]), prop = d[10] >= 0 ? (B.terrain && B.terrain.props[d[10]]) : null;
+      st.search = (who && prop) ? { who: who, prop: prop, t: d[11] } : null;
+    }
+  };
+
+  /* ---------- 抢椅子 ---------- */
+  RULES.chair = {
+    pack() {
+      const st = B.chair;
+      if (!st) return null;
+      return [st.phase, r2(st.t), st.round || 0, st.n || 0,
+        (st.seats || []).map(s => [Math.round(s.x), Math.round(s.y), Math.round(s.r || 62),
+          s.fake ? 1 : 0, s.broken ? 1 : 0, sideOf(s.taken)])];
+    },
+    apply(d) {
+      if (!d) return;
+      const st = B.chair || (B.chair = { seats: [], phase: "hint", t: 0, round: 0, n: 0 });
+      st.phase = d[0]; st.t = d[1]; st.round = d[2]; st.n = d[3];
+      st.seats = (d[4] || []).map(a => ({
+        x: a[0], y: a[1], r: a[2], fake: !!a[3], broken: !!a[4], taken: bySide(a[5]), t: 0
+      }));
+    }
+  };
+
+  /* ---------- 一二三木头人 ---------- */
+  RULES.statue = {
+    pack() {
+      const st = B.statue;
+      if (!st) return null;
+      return [st.phase, r2(st.t), st.round || 0, r2(st.packT), st.hitCount || 0,
+        (st.packs || []).map(p => [Math.round(p.x), Math.round(p.y), r2(p.bob || 0)]),
+        (st.beams || []).map(b => [Math.round(b.x), Math.round(b.y), r2(b.t)])];
+    },
+    apply(d) {
+      if (!d) return;
+      const st = B.statue || (B.statue = { packs: [], beams: [], phase: "idle", t: 0, packT: 0, round: 0, hitCount: 0 });
+      st.phase = d[0]; st.t = d[1]; st.round = d[2]; st.packT = d[3]; st.hitCount = d[4];
+      st.packs = (d[5] || []).map(a => ({ x: a[0], y: a[1], bob: a[2], t: 0 }));
+      st.beams = (d[6] || []).map(a => ({ x: a[0], y: a[1], t: a[2] }));
+    }
+  };
+
+  /* ---------- 地板是岩浆 ---------- */
+  RULES.lava = {
+    pack() {
+      const st = B.lava;
+      if (!st) return null;
+      const keys = set => (set ? Object.keys(set).map(Number) : null);
+      return [st.phase, r2(st.t), st.round || 0, r2(st.ratio), st.nSafe != null ? st.nSafe : null,
+        keys(st.hot), keys(st.warn)];
+    },
+    apply(d) {
+      if (!d) return;
+      const st = B.lava || (B.lava = { phase: "calm", t: 0, round: 0, ratio: 0, hot: null, warn: null });
+      st.phase = d[0]; st.t = d[1]; st.round = d[2]; st.ratio = d[3]; st.nSafe = d[4];
+      const toSet = arr => {
+        if (!arr) return null;
+        const o = {};
+        for (let i = 0; i < arr.length; i++) o[arr[i]] = 1;
+        return o;
+      };
+      st.hot = toSet(d[5]); st.warn = toSet(d[6]);
+    }
+  };
+
+  /* ---------- 弹幕生存 ---------- */
+  RULES.barrage = {
+    pack() {
+      const st = B.barrage;
+      if (!st) return null;
+      return [st.mode, r2(st.modeT), r2(st.gap), r2(st.flash),
+        (st.turrets || []).map(t => [Math.round(t.x), Math.round(t.y), r2(t.cd), r2(t.phase), t.k || 0]),
+        /* 弹幕本体不走 B.projs（它自己有独立数组），必须一并送过去，否则客机看不见子弹 */
+        (st.bullets || []).map(b => [Math.round(b.x), Math.round(b.y), Math.round(b.vx || 0),
+          Math.round(b.vy || 0), Math.round(b.r || 6)])];
+    },
+    apply(d) {
+      if (!d) return;
+      const st = B.barrage || (B.barrage = { turrets: [], bullets: [], mode: "sweep", modeT: 0, gap: 0, flash: 0 });
+      st.mode = d[0]; st.modeT = d[1]; st.gap = d[2]; st.flash = d[3];
+      st.turrets = (d[4] || []).map(a => ({ x: a[0], y: a[1], cd: a[2], phase: a[3], k: a[4] }));
+      st.bullets = (d[5] || []).map(a => ({ x: a[0], y: a[1], vx: a[2], vy: a[3], r: a[4] }));
+    }
+  };
+
+  /* ---------- 渡江战役 ---------- */
+  RULES.river = {
+    pack() {
+      const st = B.river;
+      if (!st) return null;
+      return [r2(st.rise), r2(st.riseT), r2(st.shipT), r2(st.refreshT), st.batch || 0,
+        (st.drums || []).map(d => [Math.round(d.x), Math.round(d.y), r2(d.t || 0)]),
+        st.flag ? [Math.round(st.flag.x), Math.round(st.flag.y)] : null];
+    },
+    apply(d) {
+      if (!d) return;
+      const st = B.river || (B.river = { drums: [], flag: null, rise: 0, riseT: 0, shipT: 0, refreshT: 0 });
+      st.rise = d[0]; st.riseT = d[1]; st.shipT = d[2]; st.refreshT = d[3]; st.batch = d[4];
+      st.drums = (d[5] || []).map(a => ({ x: a[0], y: a[1], t: a[2] }));
+      if (d[6]) st.flag = { x: d[6][0], y: d[6][1], r: (st.flag && st.flag.r) || 62 };
+    }
+  };
+
+  /* ---------- 碰碰车竞技 ---------- */
+  RULES.bump = {
+    pack() {
+      const st = B.bump;
+      if (!st) return null;
+      return [(st.score || []).slice(), st.done ? 1 : 0];
+    },
+    apply(d) {
+      if (!d) return;
+      const st = B.bump || (B.bump = { score: [], cd: {}, done: false, cars: [] });
+      st.score = d[0] || [];
+      st.done = !!d[1];
+    }
+  };
+
+  /* ---------- 缩圈乱斗 ---------- */
+  RULES.ring = {
+    pack() {
+      if (!B.rings) return null;
+      return [r2(B.ringT), B.rings.map(c => [Math.round(c.x), Math.round(c.y), Math.round(c.r), c.dead ? 1 : 0])];
+    },
+    apply(d) {
+      if (!d) return;
+      B.ringT = d[0];
+      B.rings = (d[1] || []).map(a => ({ x: a[0], y: a[1], r: a[2], r0: a[2], dead: !!a[3] }));
+    }
+  };
+
+  /* ---------- 追猎时刻 ---------- */
+  RULES.hunt = {
+    pack() {
+      const h = B.huntRing;
+      return [B.hunterSide == null ? -1 : B.hunterSide,
+        h ? Math.round(h.x) : 0, h ? Math.round(h.y) : 0, h ? Math.round(h.r) : 0];
+    },
+    apply(d) {
+      if (!d) return;
+      B.hunterSide = d[0];
+      if (d[3]) {
+        const h = B.huntRing || (B.huntRing = { tick: 0 });
+        h.x = d[1]; h.y = d[2]; h.r = d[3];
+      }
+    }
+  };
+
+  /* ---------- 霸主争霸 ---------- */
+  RULES.overlord = {
+    pack() {
+      const c = B.crown;
+      if (!c) return null;
+      return [c.phase, Math.round(c.x), Math.round(c.y), r2(c.warnT), r2(c.landT), sideOf(c.holder)];
+    },
+    apply(d) {
+      if (!d) return;
+      const c = B.crown || (B.crown = {});
+      c.phase = d[0]; c.x = d[1]; c.y = d[2]; c.warnT = d[3]; c.landT = d[4];
+      c.holder = bySide(d[5]);
+    }
+  };
+
+  /* ==========================================================
+   *  二、运行期新增的道具（px）
+   * ==========================================================
+   *  地形布局本身靠同种子两端一致（见 14_rand.js），这里只补「中途才出现」的：
+   *  据点炮塔、抢椅子的椅子（不是道具，另有 mo）、渡江的船、土墙、补给箱……
+   *
+   *  为什么用「签名 + 整段重发」而不是逐条增量：
+   *  船每 30 秒整批换新（先删后加），逐条增量要处理删除、顺序、ID 复用；
+   *  而这一段的道具总共也就几十个，签名一变就整段重发最省心，且签名
+   *  用 uid 求和，删一个加一个同帧发生也能察觉（长度相同的坑）。
+   * ========================================================== */
+
+  /** 道具 → 可 JSON 的描述（只留渲染用得上的标量；引用压成 side / 下标） */
+  function packProp(o) {
+    const out = {};
+    for (const k in o) {
+      if (k.charAt(0) === "_") continue;
+      const v = o[k];
+      const t = typeof v;
+      if (t === "number" || t === "string" || t === "boolean") out[k] = v;
+    }
+    out.driver = o.driver ? o.driver.side : -1;
+    out.occupant = o.occupant ? o.occupant.side : -1;
+    /* 据点炮塔要挂回它服务的那个点，客机才能画「炮塔转属」并且 captureTurretOf 找得到 */
+    if (o.pt && B.capture && B.capture.pts) out.pt = B.capture.pts.indexOf(o.pt);
+    return out;
+  }
+
+  NM.propBase = function () { return B.propBase || 0; };
+
+  /** 当前道具集合的签名（base 之后的那些） */
+  NM.propSig = function () {
+    const list = B.terrain && B.terrain.props;
+    if (!list) return 0;
+    const base = B.propBase || 0;
+    let s = list.length * 1000003;
+    for (let i = base; i < list.length; i++) {
+      const u = list[i].uid || 0;
+      s = (s + Math.imul(u | 0, i + 1)) | 0;
+    }
+    return s;
+  };
+
+  /* ==========================================================
+   *  三、对外：打包 / 应用
+   * ========================================================== */
+  let lastSig = null;
+
+  NM.pack = function () {
+    const r = B.rule;
+    const out = {};
+    const def = RULES[r];
+    if (def) {
+      const d = def.pack();
+      if (d != null) out[r] = d;
+    }
+    /* 道具签名变化时才带整段描述 */
+    const sig = NM.propSig();
+    out.g = sig;
+    if (sig !== lastSig) {
+      lastSig = sig;
+      const list = (B.terrain && B.terrain.props) || [];
+      out.p = list.slice(B.propBase || 0).map(packProp);
+    }
+    return out;
+  };
+
+  NM.apply = function (m) {
+    if (!m) return;
+    /* 道具：结构先对齐，后面 tm 那套按索引写血量才不会错位 */
+    if (m.p && B.terrain && B.terrain.props) {
+      const base = B.propBase || 0;
+      B.terrain.props.length = base;
+      m.p.forEach(d => {
+        const o = Object.assign({}, d);
+        o.driver = null; o.occupant = null;
+        if (typeof d.pt === "number" && d.pt >= 0) {
+          o.pt = B.capture && B.capture.pts ? B.capture.pts[d.pt] : null;
+          if (o.pt) o.pt.turret = o;
+        }
+        B.terrain.props.push(o);
+      });
+      /* 引用回填：车的司机 / 柜子里的人 */
+      for (let i = base; i < B.terrain.props.length; i++) {
+        const o = B.terrain.props[i], d = m.p[i - base];
+        if (d && d.driver >= 0) o.driver = bySide(d.driver);
+        if (d && d.occupant >= 0) o.occupant = bySide(d.occupant);
+      }
+    }
+    const def = RULES[B.rule];
+    if (def && m[B.rule] != null) def.apply(m[B.rule]);
+  };
+
+  /* 房主换规则重开时把签名清掉（道具数组整体换了一份） */
+  NM.reset = function () { lastSig = null; };
 })(window.LD = window.LD || {});
 
 /* ===== 69_grow.js ===== */
@@ -23323,12 +23910,12 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
   /* ==========================================================
    *  联机
    * ========================================================== */
-  UI.startNetBattle = function (roster, rule, dragonDiff, mods, matchT, mapCfg) {
+  UI.startNetBattle = function (roster, rule, dragonDiff, mods, matchT, mapCfg, seed) {
     const N = LD.Net;
     LD.Net.buildNetBattle({
       isHost: N.isHost, mySide: N.mySide, roster: roster || null,
       rule: rule || "brawl", dragonDiff: dragonDiff || "normal", mods: mods || [],
-      matchT: matchT || 120, mapCfg: mapCfg || null
+      matchT: matchT || 120, mapCfg: mapCfg || null, seed: seed || 0
     });
     B.onEnd = win => UI.endNet(win);
     if (LD.Grow) LD.Grow.hit("room");          // v4.32 成长任务「开一局房间」（联机侧）
@@ -23375,7 +23962,7 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
       if (B.mode === "net" && B.state !== "over" && B.state !== "idle") { B.state = "over"; UI.endNet(false); }
     });
     N.on("start", d => { UI.startNetBattle(d && d.roster, d && d.rule, d && d.dragonDiff, d && d.mods,
-      (d && (d.matchT || d.warmupT)) || 120, d && d.mapCfg); });
+      (d && (d.matchT || d.warmupT)) || 120, d && d.mapCfg, d && d.seed); });
     N.on("again", () => { if (LD.Net.isHost) UI.netHostStart(); });
     N.on("matchEnd", mw => { if (!LD.Net.isHost && B.mode === "net") { B.matchWinner = mw; UI.endNet(mw === LD.Net.mySide); } });
   };
@@ -24106,9 +24693,11 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
     /* 占点 / 护送也要给每个座位落到红蓝（否则开局前 R.teams 是空的） */
     if (R.rule === "team" || netTwo) players.forEach((p, i) => netTeamOf(players, i));
 
-    /* v4.12 分组排布；车轮战 / 塔防仅本地面板。
+    /* v4.12 分组排布；车轮战仅本地面板（v4.34 塔防重新回到联机：客机现在能收到
+     * 建筑血量 / 小兵 / 双方分数与等级，观感与房主一致；只有车轮战是真的不适合联机——
+     * 它按座位排队单挑，客机无法在自己这一侧切人）。
      * 非房主时整排按钮 disabled（保留分组标题，房主选了什么一眼看得出来）。 */
-    const ruleBar = ruleBarHtml(R.rule, ["relay", "tower"], "nrule", !isHost);
+    const ruleBar = ruleBarHtml(R.rule, ["relay"], "nrule", !isHost);
 
     const cards = players.map((p, i) => cardHtml(i, null, {
       kind: p.mine ? "me" : "player", name: p.name, look: p.look,
@@ -24308,8 +24897,11 @@ window.LD_SKIN_IMG={};LD_SKIN_IMG["daishu_head"]="assets/skins/daishu/parts/dais
     const mods = (R.mods || []).slice();
     const matchT = R.matchT || 120;
     const mapCfg = UI.mapCfgForStart(R.map);
-    N.toPeer({ t: "go", roster, rule: R.rule, dragonDiff, mods, matchT, mapCfg });
-    UI.startNetBattle(roster, R.rule, dragonDiff, mods, matchT, mapCfg);
+    /* v4.34 布局种子：随 go 一起发给所有客机，两端用同一串随机数生成场景，
+     * 客机看到的地图 / 据点 / 椅子 / 船才会和房主判定的是同一张。 */
+    const seed = ((Math.random() * 1e9) | 0) || 1;
+    N.toPeer({ t: "go", roster, rule: R.rule, dragonDiff, mods, matchT, mapCfg, seed });
+    UI.startNetBattle(roster, R.rule, dragonDiff, mods, matchT, mapCfg, seed);
   };
 
   /* 局域网地址是异步取回来的，拿到后如果正停在房间界面就刷新一次把网址显示出来 */

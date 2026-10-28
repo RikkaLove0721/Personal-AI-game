@@ -1480,12 +1480,12 @@
   /* ==========================================================
    *  联机
    * ========================================================== */
-  UI.startNetBattle = function (roster, rule, dragonDiff, mods, matchT, mapCfg) {
+  UI.startNetBattle = function (roster, rule, dragonDiff, mods, matchT, mapCfg, seed) {
     const N = LD.Net;
     LD.Net.buildNetBattle({
       isHost: N.isHost, mySide: N.mySide, roster: roster || null,
       rule: rule || "brawl", dragonDiff: dragonDiff || "normal", mods: mods || [],
-      matchT: matchT || 120, mapCfg: mapCfg || null
+      matchT: matchT || 120, mapCfg: mapCfg || null, seed: seed || 0
     });
     B.onEnd = win => UI.endNet(win);
     if (LD.Grow) LD.Grow.hit("room");          // v4.32 成长任务「开一局房间」（联机侧）
@@ -1532,7 +1532,7 @@
       if (B.mode === "net" && B.state !== "over" && B.state !== "idle") { B.state = "over"; UI.endNet(false); }
     });
     N.on("start", d => { UI.startNetBattle(d && d.roster, d && d.rule, d && d.dragonDiff, d && d.mods,
-      (d && (d.matchT || d.warmupT)) || 120, d && d.mapCfg); });
+      (d && (d.matchT || d.warmupT)) || 120, d && d.mapCfg, d && d.seed); });
     N.on("again", () => { if (LD.Net.isHost) UI.netHostStart(); });
     N.on("matchEnd", mw => { if (!LD.Net.isHost && B.mode === "net") { B.matchWinner = mw; UI.endNet(mw === LD.Net.mySide); } });
   };

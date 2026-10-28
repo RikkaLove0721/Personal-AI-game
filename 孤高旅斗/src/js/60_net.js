@@ -186,7 +186,20 @@
       r(f.stealthT || 0, 2),
       f.kind === "hero" ? [f.loadout.skill1 || "", f.loadout.skill2 || "", f.loadout.ult || ""].join("|") : "",
       Math.round(f.maxHp), f.isZombie ? 1 : 0,      // v2.7：血上限（猎人 800 / 霸主 ×1.5）+ 僵尸标记
-      (f.hideProp || f.rideCar) ? 1 : 0             // v3.3：躲在柜子 / 坐在车上（客机据此不画人）
+      (f.hideProp || f.rideCar) ? 1 : 0,            // v3.3：躲在柜子 / 坐在车上（客机据此不画人）
+      /* ---- v4.34 各模式专用状态（以前全留在房主进程里，客机看不到） ---- */
+      f.flash ? 1 : 0,                              // 停电夜战：手电筒是否开着（客机据此画光锥）
+      r(f.battery == null ? 100 : f.battery, 0),    // 电量
+      r(f.dark || 0, 1),                            // 黑暗条
+      f.hideRole === "seeker" ? 2 : f.hideRole === "hider" ? 1 : 0,   // 躲猫猫身份
+      (f.loadout && f.loadout.basic) || "",         // J 槽（躲猫猫里会随身份从隐匿换成抓人）
+      f.level || 1, Math.round(f.bcoins || 0),      // 塔防 / 丧尸：等级与局内金币（HUD 直接读）
+      f.bushHide ? 1 : 0, f.inBush ? 1 : 0,          // 躲进草丛
+      f.chairSeat == null ? -1 : f.chairSeat,       // 抢椅子：坐的是哪一把
+      /* v4.34 实体种类：房主会往 fighters 里追加小兵 / 分身 / 僵尸，
+       * 客机得知道该补哪种壳（以前只认僵尸，塔防小兵和分身直接被丢掉） */
+      f.kind === "laneMinion" ? 1 : f.kind === "minion" ? 2 : f.kind === "dragon" ? 3
+        : f.isClone ? 4 : f.kind === "hero" ? 0 : 5
     ];
     function r(v, n) { return n ? Math.round(v * Math.pow(10, n)) / Math.pow(10, n) : Math.round(v); }
   }
@@ -216,7 +229,10 @@
          布局本身由房主下发的 mapCfg 种子在两端各生成一份，完全一致 */
       tm: B.terrain ? B.terrain.props.map(o => [o.dead ? 1 : 0, Math.round(o.x), Math.round(o.y),
         Math.round(o.hp || 0), Math.round(o.fuel || 0), o.driver ? o.driver.side : -1,
-        o.carried ? 1 : 0, o.cargo ? 1 : 0, o.occupant ? o.occupant.side : -1]) : null
+        o.carried ? 1 : 0, o.cargo ? 1 : 0, o.occupant ? o.occupant.side : -1]) : null,
+      /* v4.34 各模式自己的动态状态（山芋 / 情报箱 / 据点 / 椅子 / 岩浆 / 弹幕…）
+       * 与运行期新增道具。以前这些只在房主进程里，客机看到的是「一张静止的空场」。 */
+      mo: LD.NetMode ? LD.NetMode.pack() : null
     };
   };
 
@@ -253,6 +269,17 @@
     }
     if (a[34] != null) f.maxHp = a[34];               // v2.7：血量上限随快照同步
     f.hiddenNet = !!a[36];                            // v3.3：躲藏 / 驾驶中，客机不画小人
+    f.isZombie = !!a[35];                             // 僵尸走另一套画法（补壳时也要正确）
+    /* v4.34 各模式专用状态 */
+    f.flash = !!a[37];
+    if (a[38] != null) f.battery = a[38];
+    f.dark = a[39] || 0;
+    f.hideRole = a[40] === 2 ? "seeker" : a[40] === 1 ? "hider" : f.hideRole;
+    f.bushHide = !!a[44]; f.inBush = !!a[45];
+    if (f.loadout && a[41] != null && a[41] !== f.loadout.basic) f.loadout.basic = a[41] || f.loadout.basic;
+    if (a[42] != null) f.level = a[42];
+    if (a[43] != null) f.bcoins = a[43];
+    f.chairSeat = a[46] == null ? -1 : a[46];
     /* v2.7 追猎：猎人的身份靠 team（9）判断，客机不需要自己抽签 */
     if (B.rule === "hunt" && f.kind === "hero") {
       f.huntRole = f.team === 9 ? "hunter" : "runner";
@@ -260,6 +287,21 @@
     }
     if (!wasDead && f.dead) { LD.FX.shake(14); LD.FX.burst(f.x, f.y - 26, 34, ["#fff", "#fb7185"], { speed: 340, life: 0.9 }); }
   }
+
+  /* v4.34 客机侧「空壳实体」：房主追加的小兵 / 分身 / 僵尸只需要能画出来。
+   * 用 mkHero 起底再改 kind —— 直接手搓对象会漏掉 look / 技能槽等绘制依赖，
+   * 那正是「客机画到一半崩在 look.head 上」的来源。 */
+  B.mkRemoteShell = function (kc) {
+    const f = this.mkHero(-1 - (this._shellSeq = (this._shellSeq || 0) + 1), { x: 0, y: 0, look: null, name: "" });
+    f.kind = kc === 1 ? "laneMinion" : kc === 2 ? "minion" : kc === 3 ? "dragon" : "hero";
+    f.isRemote = true;
+    f.isClone = (kc === 0 || kc === 4) && f.kind === "hero";
+    f.r = f.kind === "dragon" ? 60 : kc === 1 ? 13 : 16;
+    f.hp = f.maxHp = 1;
+    f.team = -1;
+    f.dead = false;
+    return f;
+  };
 
   Net.applySnapshot = function (s) {
     this.snapCur = s; this.snapT = 0;
@@ -273,14 +315,19 @@
     if (s.rt) B.roundT = s.rt;
     B.score = s.sc; B.roundWinner = s.rw; B.matchWinner = s.mw;
     if (s.w) B.wScore = s.w.slice();                  // v2.7 乱斗热身计分板
+    /* v4.34 模式状态必须先于地形应用：它会调整 terrain.props 的结构（新增炮塔 / 船 / 土墙），
+     * 结构不对齐的话，紧跟其后的 tm 按索引写血量就会写到别人身上去。 */
+    if (s.mo && LD.NetMode) LD.NetMode.apply(s.mo);
     if (s.tm && B.terrain && B.terrain.props) {
       s.tm.forEach((a, i) => {
         const o = B.terrain.props[i];
         if (!o) return;
         o.dead = !!a[0];
         if (o.maxHp > 0) o.hp = a[3];
-        if (o.kind === "pushable" || o.kind === "car" || o.kind === "mud") { o.x = a[1]; o.y = a[2]; }
-        if (o.kind === "car") {
+        /* v4.34：所有道具都跟随位置（船 / 被技能推动的墙 / 泥土都会动），
+         * 以前只同步 pushable / car / mud，客机看到的船是钉在水里的。 */
+        o.x = a[1]; o.y = a[2];
+        if (o.kind === "car" || o.ship) {
           o.fuel = a[4] || 0;
           o.driver = a[5] >= 0 ? (B.fighters.find(f => f.side === a[5]) || null) : null;
         }
@@ -309,8 +356,9 @@
     s.f.forEach((a, i) => {
       /* v2.7：房主多出来的实体（僵尸永远追加在数组末尾）按需在客机侧补出外壳 */
       if (!B.fighters[i]) {
-        if (!(a && a[35])) return;
-        B.fighters[i] = B.mkZombieShell();
+        const kc = a ? a[47] : 0;
+        if (!(a && (a[35] || kc > 0))) return;
+        B.fighters[i] = B.mkRemoteShell(kc);
       }
       unpackFighter(B.fighters[i], a);
     });
@@ -342,6 +390,11 @@
 
   /* 客机位置平滑 */
   Net.smooth = function (dt) {
+    /* v4.34 客机的世界时钟也要走：绘制层大量用 B.t 做呼吸 / 闪烁 / 虚线滚动
+     * （「山芋来了 3.0s」的抖动、充电站呼吸灯、胜利圈旋转…）。
+     * 以前客机不跑 B.update，B.t 永远停在 0，于是这些动画在客机眼里是死的，
+     * 玩家感受到的就是「卡住」。 */
+    B.t = (B.t || 0) + dt;
     const k = 1 - Math.exp(-22 * dt);
     B.fighters.forEach(f => {
       if (f._tx == null) return;
@@ -423,7 +476,10 @@
       fighters.push(dr);
     }
     B.setup({ mode: "net", rule: cfg.rule || "brawl", isHost: cfg.isHost, mySide: me, fighters, theme: {},
-      mods: cfg.mods || [], matchT: cfg.matchT || 120, mapCfg: cfg.mapCfg || null });
+      mods: cfg.mods || [], matchT: cfg.matchT || 120, mapCfg: cfg.mapCfg || null,
+      /* v4.34：布局种子随 go 下发，两端用同一串随机数生成地图 / 据点 / 椅子 / 船…… */
+      seed: cfg.seed || 0 });
+    if (LD.NetMode) LD.NetMode.reset();
     B.authoritative = !!cfg.isHost;
     fighters.forEach((f, i) => {
       if (f.kind !== "hero") return;

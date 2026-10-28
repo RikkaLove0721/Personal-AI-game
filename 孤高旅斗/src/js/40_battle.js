@@ -12,6 +12,10 @@
   const rand = (a, b) => a + Math.random() * (b - a);
   const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
+  /* v4.34 联机布局一致：init 段的随机必须两端可复现（见 14_rand.js）。
+   * 单机 / 闯关没有 netSeed，这里退化成直接调用，行为不变。 */
+  const seeded = (b, tag, fn) => (b && b.netSeed ? LD.withSeed(b.netSeed, tag, fn) : fn());
+
   const B = LD.Battle = {
     W: C.W, H: C.H,
     /* v2.6 世界与摄像机：world 是逻辑世界尺寸（可大于画布视口），cam 是视口左上角的世界坐标。
@@ -187,6 +191,9 @@
    * ========================================================== */
   B.setup = function (cfg) {
     this.mode = cfg.mode;
+    /* v4.34 本局确定性随机种子：联机由房主下发，两端用同一串随机数生成布局。
+     * 单机 / 闯关传 0 = 保持原样（每次都不一样）。必须早于任何 init 赋值。 */
+    this.netSeed = cfg.seed ? (cfg.seed >>> 0) : 0;
     this.rule = cfg.rule || "brawl";     // brawl 乱斗 | team 阵营 | overlord 霸主争霸 | gifts 天外来物
                                           // | ring 缩圈 | auction 军备竞赛 | relay 车轮战 | hunt 追猎时刻
     this.diff = cfg.diff || LD.DIFF.normal;
@@ -276,9 +283,11 @@
     }
     this.mapCfg = mapCfg;
     if (this.rule === "tower" && LD.Terrain.buildTowerMap) {
-      /* v3.7 塔防：对称地图 + 双方水晶 / 防御塔，不走随机设施生成器 */
+      /* v3.7 塔防：对称地图 + 双方水晶 / 防御塔，不走随机设施生成器
+       * v4.34：buildTowerMap 内部拿 Math.random 当盐撒随机设施，必须进确定性段，
+       * 否则联机两端的塔防地图是两张图（客机看到的水晶位置和房主判定对不上）。 */
       this.mapCfg = LD.mapCfg({ preset: "arena", seed: 20261019, ground: "stone", patches: ["sand"] });
-      this.terrain = LD.Terrain.buildTowerMap(this.world);
+      this.terrain = seeded(this, "towermap", () => LD.Terrain.buildTowerMap(this.world));
       mapCfg = this.mapCfg;
     } else {
       this.terrain = mapCfg ? LD.Terrain.build(mapCfg, this.world,
@@ -286,7 +295,7 @@
     }
     if (mapCfg) this.terrainMapCfg = mapCfg;
     this.shelter = null;
-    if (this.rule === "doomsday" && this.terrain) this.shelter = LD.Terrain.buildDoomsday(this.terrain, this.world);
+    if (this.rule === "doomsday" && this.terrain) this.shelter = seeded(this, "doomsday", () => LD.Terrain.buildDoomsday(this.terrain, this.world));
     /* v2.6 / v2.7 规则修饰符（可叠加）：
      * lowgrav 低重力 / speed 高速 / heal 回复 / zombie 僵尸 / wheel 技能轮盘 */
     this.mods = (cfg.mods || []).slice();
@@ -305,11 +314,11 @@
     if (this.mods.indexOf("speed") >= 0) this.fighters.forEach(f => { f.rateM = (f.rateM || 1) * 0.7; });
     /* v2.7 追猎时刻：随机抽一名玩家当猎人。抽签只在房主端（或单机）进行——
      * 联机客机的猎人身份等房主快照下发，避免两边各抽一个。 */
-    if (this.rule === "hunt" && cfg.isHost !== false) this.initHunt();
+    if (this.rule === "hunt" && cfg.isHost !== false) seeded(this, "hunt", () => this.initHunt());
     /* v2.6 车轮战：擂台两端之外的全部坐板凳 */
     if (this.rule === "relay") this.initRelay();
     /* v2.7 缩圈乱斗：地图上只有几个大安全圈，其余全是毒 */
-    if (this.rule === "ring") this.initRing();
+    if (this.rule === "ring") seeded(this, "ring", () => this.initRing());
     /* v4.11 跨模式状态残留清理：stations / crown 只在夜战 / 霸主的 init 里重建，
      * 但 interactTarget 扫描它们时**不看当前规则**——上一局打过夜战，这局的
      * 乱斗 / 塔防 / 丧尸里就会凭空冒出「充电」；霸主同理会冒出「争夺皇冠」。
@@ -317,9 +326,9 @@
     this.stations = [];
     this.crown = null;
     /* v3.7 塔防：分队 / 等级 / 金币 / 禁大招 */
-    if (this.rule === "tower" && this.initTower) this.initTower();
+    if (this.rule === "tower" && this.initTower) seeded(this, "tower", () => this.initTower());
     /* v3.9 霸主争霸：天降皇冠循环从这里起步（每回合重来） */
-    if (this.rule === "overlord" && this.initCrown) this.initCrown();
+    if (this.rule === "overlord" && this.initCrown) seeded(this, "crown", () => this.initCrown());
     /* v4.19 新手教程：到这里 fighter / 地形 / mods 都就位了，可以摆第一步。
      * 必须放在 setup 里而不是 resetRound：闯关 / 教程这条线只走 setup，
      * resetRound 只有房间对局才会调（见 75_room.js），放那儿等于永远不会触发。 */
@@ -382,7 +391,7 @@
         this.fighters.splice(i, 1);
     const placed = [];
     const ins = this.rule === "doomsday" ? this.shelter : null;
-    this.fighters.forEach(f => {
+    seeded(this, "place", () => this.fighters.forEach(f => {
       if (f.kind === "hero" && !f.bench) {
         let bx, by;
         if (ins) {
@@ -445,7 +454,7 @@
       f.lock = -1;                                        // 索敌锁定每回合重置
       if (f.kind === "dragon") { f.mode = "idle"; f.modeT = 0; f.charge = 0; f.telegraph = null; f.rageStage = 0; }
       if (this.rule === "overlord") f.overlord = false;   // 霸主标记每回合重置
-    });
+    }));
     /* v3.7 塔防：所有人回自家基地，不随机撒点 */
     if (this.rule === "tower" && this.placeTowerHeroes) this.placeTowerHeroes();
     this.projs = []; this.zones = [];
@@ -475,25 +484,29 @@
     }
     this.healT = (LD.HEALS && LD.HEALS.first) || 4;
     /* 缩圈乱斗：每回合重新撒安全圈并把所有人挪进圈内 */
-    if (this.rule === "ring") this.initRing();
+    if (this.rule === "ring") seeded(this, "ring", () => this.initRing());
     /* v2.7 追猎时刻：每回合重新抽猎人 + 重置大毒圈（客机等房主快照，不自行抽签） */
-    if (this.rule === "hunt" && this.isHost) this.initHunt();
+    if (this.rule === "hunt" && this.isHost) seeded(this, "hunt", () => this.initHunt());
     /* v3.9 霸主争霸：每回合重新开始皇冠循环 */
-    if (this.rule === "overlord" && this.initCrown) this.initCrown();
+    if (this.rule === "overlord" && this.initCrown) seeded(this, "crown", () => this.initCrown());
     /* v3.9.1 停电夜战：固定配装（J 位移斩 / K 手里剑）+ 撒充电站 + 黑暗状态复位 */
-    if (this.rule === "blackout" && this.initBlackout) this.initBlackout();
+    if (this.rule === "blackout" && this.initBlackout) seeded(this, "blackout", () => this.initBlackout());
     /* v4.5 护送情报箱：两队归并 + 两侧交付点 + 中央投放箱子 */
-    if (this.rule === "escort" && this.initEscort) this.initEscort();
+    if (this.rule === "escort" && this.initEscort) seeded(this, "escort", () => this.initEscort());
     /* v4.6 占点争夺：三座据点 + 队伍归并 + 各自半场开局 */
-    if (this.rule === "capture" && this.initCapture) this.initCapture();
+    if (this.rule === "capture" && this.initCapture) seeded(this, "capture", () => this.initCapture());
     /* v4.13 渡江战役：铺水面 / 小岛 / 右岸旗子 */
-    if (this.rule === "river" && this.initRiver) this.initRiver();
+    if (this.rule === "river" && this.initRiver) seeded(this, "river", () => this.initRiver());
     /* v4.8 碰碰车竞技：圆形擂台清场 + 发碰碰车 + 每人上车 */
-    if (this.rule === "bump" && this.initBump) this.initBump();
+    if (this.rule === "bump" && this.initBump) seeded(this, "bump", () => this.initBump());
     /* v4.11 烫手山芋：全员脱队（互不伤害）+ 抽第一个倒霉蛋 */
-    if (this.rule === "hotpotato" && this.initHotPotato) this.initHotPotato();
+    if (this.rule === "hotpotato" && this.initHotPotato) seeded(this, "hotpotato", () => this.initHotPotato());
     /* v4.12 娱乐模式批次：木头人 / 抢椅子 / 躲猫猫 / 岩浆 / 弹幕 */
-    if (LD.isCasual && LD.isCasual(this.rule) && this.initCasual) this.initCasual();
+    if (LD.isCasual && LD.isCasual(this.rule) && this.initCasual) seeded(this, "casual", () => this.initCasual());
+    /* v4.34 布局基线：到这里为止的道具数组两端应当逐项相同（同种子）。
+     * 之后运行期新增的道具（据点炮塔 / 椅子 / 船 / 土墙 / 补给箱）客机没有，
+     * 由快照里的 px 增量补出来——见 61_netmode.js。 */
+    this.propBase = this.terrain && this.terrain.props ? this.terrain.props.length : 0;
     /* v4.19 新手教程：fighter / 地形 / mods 都齐了才能摆步骤，
      * 所以放在这里（setup 的最后一段），和娱乐模式的 initCasual 同一位置。 */
     if (this.mode === "tutorial" && this.tutInit && !this.tut) this.tutInit();

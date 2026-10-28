@@ -548,9 +548,11 @@
     /* 占点 / 护送也要给每个座位落到红蓝（否则开局前 R.teams 是空的） */
     if (R.rule === "team" || netTwo) players.forEach((p, i) => netTeamOf(players, i));
 
-    /* v4.12 分组排布；车轮战 / 塔防仅本地面板。
+    /* v4.12 分组排布；车轮战仅本地面板（v4.34 塔防重新回到联机：客机现在能收到
+     * 建筑血量 / 小兵 / 双方分数与等级，观感与房主一致；只有车轮战是真的不适合联机——
+     * 它按座位排队单挑，客机无法在自己这一侧切人）。
      * 非房主时整排按钮 disabled（保留分组标题，房主选了什么一眼看得出来）。 */
-    const ruleBar = ruleBarHtml(R.rule, ["relay", "tower"], "nrule", !isHost);
+    const ruleBar = ruleBarHtml(R.rule, ["relay"], "nrule", !isHost);
 
     const cards = players.map((p, i) => cardHtml(i, null, {
       kind: p.mine ? "me" : "player", name: p.name, look: p.look,
@@ -750,8 +752,11 @@
     const mods = (R.mods || []).slice();
     const matchT = R.matchT || 120;
     const mapCfg = UI.mapCfgForStart(R.map);
-    N.toPeer({ t: "go", roster, rule: R.rule, dragonDiff, mods, matchT, mapCfg });
-    UI.startNetBattle(roster, R.rule, dragonDiff, mods, matchT, mapCfg);
+    /* v4.34 布局种子：随 go 一起发给所有客机，两端用同一串随机数生成场景，
+     * 客机看到的地图 / 据点 / 椅子 / 船才会和房主判定的是同一张。 */
+    const seed = ((Math.random() * 1e9) | 0) || 1;
+    N.toPeer({ t: "go", roster, rule: R.rule, dragonDiff, mods, matchT, mapCfg, seed });
+    UI.startNetBattle(roster, R.rule, dragonDiff, mods, matchT, mapCfg, seed);
   };
 
   /* 局域网地址是异步取回来的，拿到后如果正停在房间界面就刷新一次把网址显示出来 */
