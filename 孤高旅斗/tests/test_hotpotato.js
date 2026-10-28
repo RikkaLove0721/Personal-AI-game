@@ -70,7 +70,10 @@ console.log("\n=== 2. 开局：全员同队 + 抽人 + 预警 ===");
   check("开局进入预警", st.phase === "warn", st.phase);
   check("已锁定第一个倒霉蛋", !!st.tgt && hs.indexOf(st.tgt) >= 0, st.tgt && st.tgt.name);
   check("预警倒计时 3 秒", Math.abs(st.t - 3.0) < 1e-6, st.t);
-  check("山芋此刻还在高空", st.y < st.tgt.y - 100, Math.round(st.y));
+  /* 山芋从天上落下，开局应当在目标头顶上方至少 100px。
+     注意用 <= ：目标要是恰好站在 y=1050 这种位置，950 正好等于 1050-100，
+     原来的严格小于会随机挂（同一个随机种子 3 次里挂 1 次）。 */
+  check("山芋此刻还在高空", st.y <= st.tgt.y - 100, Math.round(st.y));
   step(60);
   check("预警期不落芋", st.phase === "warn" && !st.holder, st.phase);
 }

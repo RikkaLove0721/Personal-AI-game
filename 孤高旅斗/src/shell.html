@@ -226,18 +226,33 @@ h2{font-size:22px;letter-spacing:3px;margin-bottom:4px}
    旧版 #ovLevels 是 flex 居中 + overflow-y:auto，顶部内容永远滚不到，
    于是第 1-3 关（熔核巨龙 / 神秘黑侠客 / 西部快枪手）看起来像「被删掉了」。 */
 #ovLevels,#ovAch,#ovPerk,#ovArmy,#ovTower{justify-content:flex-start}
+/* v4.31 商店改成按内容撑开后，桌面小窗口也可能装不下：这些页面本来就让内容顶端对齐，
+   直接开启纵向滚动即可（内容不溢出时不会出现滚动条）。 */
+#ovSkin,#ovSkill,#ovLoad,#ovLevels,#ovAch,#ovPerk,#ovArmy,#ovTower{overflow-y:auto}
 /* v2.7 军备商店不暂停：背景压到 50% 透明，边逛商店边看战局 */
 #ovArmy{background:rgba(6,9,18,.5)}
 #ovLevels>h2,#ovAch>h2,#ovPerk>h2,#ovArmy>h2,#ovTower>h2{margin-top:30px}
 .back:hover{color:var(--txt);border-color:rgba(120,160,255,.5)}
 
+/* v4.31 矮屏修复：.ov 是 flex 列，手机横屏时可用高度只有 240px 左右，
+   flex 会把这些内容块直接压扁 —— .shop 里的 .item 被压到 44px 高，
+   名字那一行只剩 6px（字号 11px 根本放不下），表现就是「看不到皮肤 / 套餐名字」。
+   让它们按内容撑开，超出部分交给 .ov 自己的滚动条（pointer:coarse 下已开启）。
+   桌面因为高度富余看不出来，但小窗口同样受益。 */
+.shop,.help,.cardgrid,.grid,.roomwrap,.tabs{flex-shrink:0}
 .shop{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;width:100%;max-width:800px}
 .item{cursor:pointer;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:9px;text-align:center;transition:.15s;position:relative}
 .item:hover{border-color:rgba(120,160,255,.55);transform:translateY(-2px)}
 .item.own{border-color:rgba(52,211,153,.45)}
 .item.eq{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold)}
-.item .pv{height:62px;display:flex;align-items:center;justify-content:center}
-.item .nm{font-size:11px;margin-top:4px;font-weight:700}
+/* v4.31 预览框原来是写死 62px 高，但套装画布是 90×112、散件是 60×75，
+   溢出的画布正好压在下面那行名字上——手机上看着就是「套装没有名字」。
+   现在高度统一到 96px，画布按高度等比缩放（高度用 !important 压过 HTML 上的内联尺寸，
+   宽度 auto 保持 4:5 比例），名字回到画布下方。 */
+.item .pv{height:96px;display:flex;align-items:center;justify-content:center}
+.item .pv canvas{height:100%!important;width:auto!important;max-width:100%;display:block}
+.item .nm{font-size:11px;margin-top:4px;font-weight:700;line-height:1.4;
+  overflow:hidden;text-overflow:ellipsis}
 .item .pr{font-size:10.5px;color:#ffd98a;margin-top:3px}
 .item.can .pr{color:#7ff0c4}
 .item .st{position:absolute;top:5px;left:6px;font-size:9px;color:#7ff0c4}
@@ -247,6 +262,10 @@ h2{font-size:22px;letter-spacing:3px;margin-bottom:4px}
 .sinfo:hover{background:rgba(120,160,255,.3);color:#dbe5ff}
 .sinfo:active{transform:scale(.92);background:rgba(120,160,255,.42)}
 .item .st.eq{color:var(--gold)}
+/* 套装卡片比散件宽一倍：桌面上 5 列时正好是一张「整装」的尺寸 */
+.item.suit{grid-column:span 2}
+/* 套装页整页改成 4 列：一行两个整套，右边不留空 */
+.shop.suitPage{grid-template-columns:repeat(4,1fr)}
 
 .tabs{display:flex;gap:8px;margin-bottom:12px}
 .tab{cursor:pointer;padding:7px 18px;border-radius:20px;font-size:12.5px;border:1px solid var(--line);color:var(--dim)}
@@ -272,6 +291,9 @@ h2{font-size:22px;letter-spacing:3px;margin-bottom:4px}
 
 .pvwrap{display:flex;align-items:center;justify-content:center}
 canvas.pv{width:64px;height:80px;display:block}
+/* v4.31 皮肤商店是「预览 + .shop」并排的 flex 行，行宽由内容撑 —— grid 一旦缩列，
+   行宽跟着缩、卡片被挤成一条。给这两行一个明确宽度，让 .shop 的 100% 有参照。 */
+#ovSkin>.row,#ovLoad>.row{width:100%;max-width:1020px;justify-content:center}
 
 #tip{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);font-size:11.5px;color:#9fb3dd;
   background:rgba(10,14,28,.85);border:1px solid var(--line);border-radius:20px;padding:5px 16px;opacity:0;transition:.25s;pointer-events:none;z-index:9}
@@ -299,8 +321,21 @@ canvas.pv{width:64px;height:80px;display:block}
 .big-word{font-size:52px;font-weight:900;letter-spacing:10px;color:var(--gold);text-shadow:0 0 34px rgba(251,191,36,.6)}
 
 /* ============ 开房间式准备界面（角色卡） ============ */
-.roomwrap{width:100%;max-width:940px;display:flex;flex-direction:column;align-items:center}
-.roomwrap h2{font-size:20px;letter-spacing:3px;margin:6px 0 4px}
+.roomwrap{position:relative;width:100%;max-width:940px;display:flex;flex-direction:column;align-items:center}
+.roomwrap h2{font-size:20px;letter-spacing:3px;margin:6px 0 4px;padding:0 96px}
+/* v4.31 房间右上角「模式介绍」：进房就能查当前模式的玩法，
+   不必退回主菜单翻帮助（帮助里那一段也随之删掉了）。 */
+.ruleinfo{position:absolute;right:2px;top:8px;z-index:3;cursor:pointer;
+  font-size:12px;letter-spacing:1px;padding:6px 13px;border-radius:20px;
+  background:rgba(120,160,255,.14);border:1px solid rgba(120,160,255,.45);color:#bcd0ff;transition:.15s}
+.ruleinfo:hover{background:rgba(120,160,255,.28);border-color:rgba(160,200,255,.85);color:#fff}
+.ruleinfo:active{transform:scale(.96)}
+/* 弹窗正文：模式说明动辄两三段，所以左侧对齐 + 可滚动 */
+.rdesc{font-size:13px;line-height:1.95;color:#c6d4ef;text-align:left;max-height:56vh;overflow-y:auto;padding-right:6px}
+.rdesc b{color:#fff;font-weight:700}
+.rdesc .rhead{font-size:15px;color:#fff;letter-spacing:1px;margin-bottom:10px}
+.rdesc .rhead .mtag{display:inline-block;font-size:11px;letter-spacing:0;padding:1px 9px;margin-left:8px;
+  border-radius:10px;background:rgba(120,160,255,.16);border:1px solid rgba(120,160,255,.4);color:#9fb6ff;vertical-align:middle}
 .rulebar{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:8px 0 4px;max-width:940px}
 .rule{display:flex;flex-direction:column;align-items:flex-start;gap:2px;max-width:300px;text-align:left;
   background:rgba(12,18,36,.72);border:1px solid var(--line);border-radius:10px;padding:7px 11px;cursor:pointer;color:var(--txt)}
@@ -556,6 +591,18 @@ body.pad .bartxt{font-size:9px}
   /* 菜单内容在小屏可滚动，避免顶部/底部点不到 */
   .ov{overflow-y:auto;-webkit-overflow-scrolling:touch}
   .ov::-webkit-scrollbar{width:0}
+  /* v4.31 商店在手机上 5 列太挤：手机横屏整个舞台只放大到 0.6 倍左右，
+     .nm 的 11px 落到屏幕上只剩 7px，「套装名字看不见」就是这么来的。
+     改成 2 列 + 放字号，宁可贵一点滚动，也别让名字糊成一条灰线
+     （套装卡片在手机上退回单列，一行两个）。 */
+  .shop{grid-template-columns:repeat(2,1fr);gap:9px;max-width:620px}
+  .shop.suitPage{grid-template-columns:repeat(2,1fr)}
+  .item.suit{grid-column:span 1}
+  .item{padding:8px 6px}
+  .item .pv{height:72px}
+  .item .nm{font-size:14px;line-height:1.3;margin-top:6px}
+  .item .pr{font-size:12.5px;margin-top:4px}
+  .tabs .tab{font-size:14px;padding:8px 16px}
 }
 
 /* ---- 竖屏引导：请横屏游玩 ---- */
@@ -639,6 +686,10 @@ body.pad .bartxt{font-size:9px}
 .ov.glass .mmodal .mhead{color:#fff}
 .ov.glass .mmodal .mclose{color:rgba(255,255,255,.65)}
 .ov.glass .mmodal .mclose:hover{color:#fff}
+.ov.glass .ruleinfo{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.42);color:rgba(255,255,255,.94)}
+.ov.glass .ruleinfo:hover{background:rgba(255,255,255,.18);border-color:#fff;color:#fff}
+.ov.glass .rdesc{color:rgba(255,255,255,.84)}
+.ov.glass .rdesc .rhead .mtag{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.4);color:rgba(255,255,255,.88)}
 
 /* ---- 主按钮：白底墨字（整屏只有一处高对比，视线自然落上去） ---- */
 .ov.glass .btn{
@@ -727,7 +778,7 @@ body.pad .bartxt{font-size:9px}
         <div class="mItem" id="mHelp"><i class="mArrow"></i><span class="mLab">游戏帮助</span></div>
       </nav>
 
-      <div class="mpFoot"><span>Ver. __VERSION__</span><span>RikkaLove0721</span></div>
+      <div class="mpFoot"><span>单机 · 局域网 2-4 人</span><span>RikkaLove0721</span></div>
     </div>
   </div>
 
@@ -736,11 +787,11 @@ body.pad .bartxt{font-size:9px}
     <div class="back" data-back="ovMenu">‹ 返回</div>
     <div class="coinbar"><i class="coin"></i><span class="coinNum">0</span></div>
     <h2>单人游戏</h2>
-    <div class="sub">两个模式，技能与皮肤通用</div>
+    <div class="sub">闯关、格斗、死战与教程，配装通用</div>
     <div class="hr"></div>
     <div class="grid g2" style="max-width:640px">
       <div class="card" id="sDrag"><div class="t">🗺️ 闯关模式</div><div class="d">关卡制讨伐战。普通 / 困难两档难度，通关得金币</div></div>
-      <div class="card" id="sDuel"><div class="t">🤖 勇者格斗</div><div class="d">角色卡房间：编排人机、选模式，9 种对战规则</div></div>
+      <div class="card" id="sDuel"><div class="t">🤖 勇者格斗</div><div class="d">角色卡房间：编排人机、选模式，进房可查每种玩法</div></div>
     </div>
     <div class="hr"></div>
     <div class="grid g2" style="max-width:640px">
@@ -778,7 +829,7 @@ body.pad .bartxt{font-size:9px}
       <div class="card" id="btnGoJoin"><div class="t">🔗 加入房间</div><div class="d">输入朋友给的 4 位房号，直接进房</div></div>
     </div>
     <div class="sub" style="margin-top:14px;font-size:11.5px">
-      同一 Wi-Fi 下：房主创建房间并把地址+房号发给朋友（1-3 位挑战者，2-4 人开打）；朋友用浏览器打开该地址即可，不需要安装任何东西。
+      同一 Wi-Fi 下房主创建房间，把地址和房号发给朋友（最多 3 人加入）；朋友用浏览器打开即可，不需要安装任何东西。
     </div>
   </div>
 
@@ -792,7 +843,7 @@ body.pad .bartxt{font-size:9px}
       <button class="btn primary" id="btnJoin">加入房间</button>
     </div>
     <div class="sub" style="margin-top:14px;font-size:11.5px" id="joinTip">
-      房号只有 4 位数字，不区分大小写。加入后会先进入准备房间，房主点「开始对决」才开打。
+      房号是 4 位数字。加入后先进入准备房间，房主点「开始对决」才开打。
     </div>
   </div>
 

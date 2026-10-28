@@ -88,6 +88,29 @@
       '<div class="mhead">' + title + '<span class="mclose" data-mclose>✕</span></div>' +
       body + '</div></div>';
   }
+
+  /* ---------------- v4.31 模式介绍 ----------------
+   * 帮助页里那二十多条模式说明搬到了房间界面：进房、选中模式、点右上角就能看，
+   * 不用先退回主菜单再翻帮助。数据仍然只有 LD.RULES 一份，改文案不用改两处。
+   * 说明里混着 `**加粗**` 和少量内联 <b>（历史写法不统一），这里统一成 <b>。 */
+  function ruleDescHtml(id) {
+    const r = LD.ruleInfo(id);
+    return String((r && r.desc) || "")
+      .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
+      .replace(/\n/g, "<br>");
+  }
+  function modeInfoBtn() {
+    return '<button class="ruleinfo" data-mopen="ruleModal" title="查看当前模式怎么玩">📖 模式介绍</button>';
+  }
+  function modeInfoModal(ruleId) {
+    const r = LD.ruleInfo(ruleId);
+    const cat = (r.cat || "combat") === "casual" ? "娱乐模式" : "战斗模式";
+    return modalHtml("ruleModal", "模式介绍",
+      '<div class="rdesc"><div class="rhead">' + r.icon + " " + r.name +
+      '<span class="mtag">' + cat + '</span></div>' + ruleDescHtml(ruleId) + "</div>");
+  }
+  /* 挂到 UI 上只是为了让测试能直接断言（也方便控制台里试着渲染一段文案） */
+  UI.ruleDescHtml = ruleDescHtml;
   function bindModals(host, who) {
     const attr = who === "net" ? "data-nset" : "data-lset";
     host.querySelectorAll("[" + attr + "]").forEach(el => {
@@ -99,6 +122,14 @@
     });
     host.querySelectorAll("[data-mclose]").forEach(el => {
       el.onclick = () => { const m = el.closest(".mmodal"); if (m) m.classList.add("hide"); };
+    });
+    /* v4.31：通用「打开某个弹窗」钩子（模式介绍用；以后再加弹窗直接复用） */
+    host.querySelectorAll("[data-mopen]").forEach(el => {
+      el.onclick = () => {
+        A.ui();
+        const m = host.querySelector("#" + el.getAttribute("data-mopen"));
+        if (m) m.classList.remove("hide");
+      };
     });
     host.querySelectorAll(".mmodal").forEach(m => {
       m.addEventListener("click", e => { if (e.target === m) m.classList.add("hide"); });
@@ -295,13 +326,14 @@
     const cards = [cardHtml(0, null, { kind: "me", name: (P.d.name || "你"), look: P.look(), team: myTeam(), teamSel: true, twho: "me", level: null, loadout: P.d.loadout, rule: room.rule })]
       .concat(room.bots.map((bb, i) => cardHtml(i, null, { kind: "bot", name: "人机 " + (i + 1), look: bb.look, team: botTeam(i), teamSel: true, twho: "b" + i, level: bb.level, loadout: bb.loadout, rule: room.rule })));
     host.innerHTML =
-      '<h2>创建房间 · 选择模式</h2>' + ruleBar + modsBar + matchBar +
+      modeInfoBtn() + '<h2>创建房间 · 选择模式</h2>' + ruleBar + modsBar + matchBar +
       '<div class="cardgrid">' + cards.join("") +
       (room.bots.length < 5 ? '<div class="card add" id="roomAddBot">+<span>添加人机</span></div>' : '') +
       '</div>' +
       '<div class="roomfoot">' +
       '<div class="btnrow"><div class="back" data-back="ovMenu">‹ 返回</div>' +
-      '<button class="btn" id="roomStart">开始对决</button></div></div>';
+      '<button class="btn" id="roomStart">开始对决</button></div></div>' +
+      modeInfoModal(room.rule);
 
     const list = [{ look: P.look() }].concat(room.bots.map(bb => ({ look: bb.look })));
     drawPreviews(host, list);
@@ -554,17 +586,17 @@
         ? '<div class="hint" style="opacity:.7">正在读取本机局域网地址…</div>'
         : '') + '</div>';
     host.innerHTML =
-      '<h2>房间准备 · ' + players.length + ' 名玩家' + (R.bots.length ? " + " + R.bots.length + " 个人机" : "") + '</h2>' + ruleBar + netModsBar +
+      modeInfoBtn() + '<h2>房间准备 · ' + players.length + ' 名玩家' + (R.bots.length ? " + " + R.bots.length + " 个人机" : "") + '</h2>' + ruleBar + netModsBar +
       '<div class="cardgrid">' + cards.join("") +
       (canAdd ? '<div class="card add" id="netAddBot">+<span>添加人机</span></div>' : '') + '</div>' +
       '<div class="roomfoot">' +
       '<div class="addrwrap"><div class="hint">房号 <b>' + (N.room || "----") + '</b>　' +
-      '把这个网址和房号发给朋友，他打开后输入房号即可加入（家用/公司网络一般选 192.168.x.x，拿不准就多发几个让朋友试）</div>' +
+      '把网址和房号发给朋友，他打开后输入房号即可加入。不确定选哪个地址就多发几个让他试（家用网络一般是 192.168.x.x）。</div>' +
       addrList +
       '<div class="btnrow"><button class="btn sm ghost" id="netCopy">复制网址+房号</button>' +
       '<div class="back" data-back="ovMulti">‹ 返回大厅</div>' +
       (isHost ? '<button class="btn" id="netStart">开始对决</button>' : '<div class="hint">等房主开始…</div>') + '</div></div>' +
-      '</div>';
+      '</div>' + modeInfoModal(R.rule);
 
     drawPreviews(host, players.concat(R.bots));
     bindNetRoom(host);
