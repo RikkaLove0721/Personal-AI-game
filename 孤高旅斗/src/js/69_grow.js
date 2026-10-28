@@ -46,10 +46,16 @@
     count() { const self = this; return DEF.filter(x => self.done(x.key)).length; },
     allDone() { return this.count() >= DEF.length; },
 
-    /* 卡片要不要出现在主菜单：教程没过之前不出现。
-     * 没通关时主菜单第一行本来就是「新手教程」，玩家还没有「该去逛逛」的语境；
-     * 三条任务一起糊上去只会让人更不知道先点哪个。 */
-    visible() { return !!LD.Profile.d.tutDone; },
+    /* 卡片要不要出现在主菜单：两头都不出现。
+     *
+     * 教程没过之前 —— 那时主菜单第一行本来就是「新手教程」，玩家还没有
+     * 「该去逛逛」的语境，三条任务一起糊上去只会让人更不知道先点哪个。
+     *
+     * 三条做完之后 —— 它的全部意义就是提醒新手「还有这些没试过」。活干完
+     * 了还赖在主菜单上，就成了一句永久占着左下角的废话；何况那儿本来就
+     * 是插画的地盘。所以做完即退休，不再回来（进度记在存档里，不会因为
+     * 消失而重来）。 */
+    visible() { return !!LD.Profile.d.tutDone && !this.allDone(); },
 
     /* 完成一项。重复调用 / 未知 key 都直接返回 false，不发钱。
      * 返回 true 表示「这一次真的完成了」。 */
@@ -72,8 +78,14 @@
       }
       if (this.allDone() && LD.UI && LD.UI.toast) {
         /* 三条全绿只说一句，不弹面板 —— 玩家此刻多半在商店或房间里，
-         * 拦住他去路只为报个喜，反而烦。 */
-        setTimeout(() => { try { LD.UI.toast("成长任务全部完成　共 " + (REWARD * DEF.length) + " 金币", true, 2600); } catch (e) {} }, 900);
+         * 拦住他去路只为报个喜，反而烦。
+         * 末尾点明「卡片已收起」：不然回到主菜单发现左下角空了，
+         * 第一反应是这卡坏了，而不是它功成身退。 */
+        setTimeout(() => {
+          try {
+            LD.UI.toast("成长任务全部完成　共 " + (REWARD * DEF.length) + " 金币　卡片已收起", true, 2600);
+          } catch (e) {}
+        }, 900);
       }
       return true;
     },
@@ -89,12 +101,17 @@
       return false;
     },
 
-    /* 测试 / 调试用：把三条重置成未完成（不发不退金币） */
+    /* 测试 / 调试用：把三条重置成未完成（不发不退金币）。
+     * 顺手把会话内的收起状态清掉 —— 卡片已经收起来过一次的话，
+     * 重置后应当直接看到完整三行，而不是一条「成长任务 0 / 3」的小条。 */
     reset() {
       const P = LD.Profile;
       P.d.grow = { shop: 0, skill: 0, room: 0 };
       P.save();
-      if (LD.UI && LD.UI.renderGrow) LD.UI.renderGrow();
+      if (LD.UI) {
+        LD.UI.growFold = false;
+        if (LD.UI.renderGrow) LD.UI.renderGrow();
+      }
     }
   };
 })(window.LD = window.LD || {});

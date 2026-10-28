@@ -277,7 +277,11 @@ console.log("\n=== 7.5 推掉两塔后 AI 仍会推水晶 / 满血不冥想 ==="
   check("距离由调用方计算（prop 上没有 .d）", ord && ord.d === undefined);
 
   /* v3.9 新规则：没有兵线顶着时 AI 不会一个人钻进水晶火力圈，所以这里持续补兵压到水晶前。
-   * 小兵 dmg 设为 0 —— 水晶掉下来的血必须来自英雄，否则这条断言会被兵线蒙混过关。 */
+   * 小兵 dmg 设为 0 —— 水晶掉下来的血必须来自英雄，否则这条断言会被兵线蒙混过关。
+   * 小兵血量拉满且每帧回满：水晶会优先点兵，兵被点光的话 AI 就没有「顶在前面」的
+   * 许可，一路在外围瞄着不动，二十秒下来水晶一滴血不掉 —— 这条断言于是变成
+   * 「兵线活得够不够久」的抽奖（实测四次挂一次）。把兵钉成点不死的肉盾，
+   * 测的就只剩「AI 肯不肯上手打水晶」这一件事。 */
   const topLane = () => {
     const mins = B.fighters.filter(f => f.kind === "laneMinion" && f.team === 0 && !f.dead);
     if (mins.length < 3) B.spawnTowerWave(0);
@@ -285,6 +289,8 @@ console.log("\n=== 7.5 推掉两塔后 AI 仍会推水晶 / 满血不冥想 ==="
       m.x = cry.x - 170 - (i % 3) * 22;
       m.y = C.laneY + (Math.floor(i / 3) * 22 - 11);
       m.dmg = 0;
+      m.maxHp = m.hp = 9999;
+      m.invuln = 0;
     });
   };
   topLane();

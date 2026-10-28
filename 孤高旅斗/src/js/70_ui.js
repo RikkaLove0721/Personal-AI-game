@@ -934,7 +934,8 @@
    * ========================================================== */
 
   /* 主菜单左下角的三行小卡：买皮肤 / 装技能 / 开房间。
-   * 教程没通关时整块不出现 —— 那时候玩家该做的事是先把教程走完。
+   * 教程没通关、或者三条都做完了，整块都不出现 —— 它只在「有人需要被
+   * 提醒」的那段时间里存在（判定在 Grow.visible）。
    *
    * 为什么不逐行绑 onclick：整块 innerHTML 每次重画，绑在子元素上的
    * 监听器会跟着一起没。卡片本体只绑一次（见 UI.init），点击靠
@@ -948,10 +949,15 @@
     const show = G.visible(), fold = !!UI.growFold;
     card.classList.toggle("hide", !show || fold);
     if (mini) mini.classList.toggle("hide", !show || !fold);
-    if (!show) return;
+    if (!show) {
+      /* 退休后连 DOM 一起清掉：留着旧内容只会让「已领」「3 / 3」在看不见的
+       * 地方继续存在，日后想查它到底还在不在就得多读一遍 CSS 才知道。 */
+      card.innerHTML = "";
+      return;
+    }
 
     const tot = G.DEF.length, n = G.count();
-    if (mini) mini.textContent = n >= tot ? "成长任务 · 已完成" : "成长任务 " + n + " / " + tot;
+    if (mini) mini.textContent = "成长任务 " + n + " / " + tot;
     if (fold) return;
 
     let html = '<div class="ghd"><span class="gtt">成长任务</span>'
@@ -964,7 +970,6 @@
         + '<span class="gname">' + d.name + '</span>'
         + '<span class="gpay">' + (ok ? "已领" : "+" + G.REWARD) + '</span></div>';
     });
-    if (n >= tot) html += '<div class="gfoot">三条都做完，接下来随便玩</div>';
     card.innerHTML = html;
   };
 

@@ -54,7 +54,8 @@ console.log("\n=== 2. 通关教程后卡片出现，并画出三行 ===");
   check("三条都还是未完成的圆点", (html.match(/○/g) || []).length === 3);
   check("每条右侧标着 +10", (html.match(/\+\d/g) || []).length === 3);
   check("收起按钮也在", html.indexOf("data-gfold") >= 0);
-  check("没做完时不显示收尾那句", html.indexOf("三条都做完") < 0);
+  /* 没有「全部完成」的收尾行：三条做完卡片直接退休，那行永远不会被看到 */
+  check("卡片里没有常驻的收尾行", html.indexOf("gfoot") < 0);
 }
 
 console.log("\n=== 3. 完成一项：加钱、打勾、不重复 ===");
@@ -81,20 +82,37 @@ console.log("\n=== 3. 完成一项：加钱、打勾、不重复 ===");
   check("进度更新成 1 / 3", html.indexOf("1 / 3") >= 0);
 }
 
-console.log("\n=== 4. 三条全做完 ===");
+console.log("\n=== 4. 三条全做完：发满 30 金币，然后卡片退休 ===");
 {
   const sb = makeSandbox("grow-all");
   const LD = sb.LD, P = LD.Profile, G = LD.Grow, UI = LD.UI;
   P.d.tutDone = true;
   const c0 = P.d.coins;
-  G.hit("shop"); G.hit("skill"); G.hit("room");
+  const card = sb.document.getElementById("growCard");
+  const mini = sb.document.getElementById("growMini");
+
+  G.hit("shop"); G.hit("skill");
+  UI.renderGrow();
+  check("做完两项时卡片还在", G.visible() === true && !card.classList.contains("hide"));
+
+  G.hit("room");
   check("全部完成", G.allDone() && G.count() === 3);
   check("总共发了 30 金币", P.d.coins === c0 + 30, c0 + " → " + P.d.coins);
+  check("三条做完后不再可见", G.visible() === false);
+  check("大卡隐藏", card.classList.contains("hide"));
+  check("收起小条也一起隐藏", mini.classList.contains("hide"));
+  check("内容已清空，不留「已领」残影", card.innerHTML === "", card.innerHTML.slice(0, 60));
+
+  /* 收起态做完最后一项：小条也不该冒出来 */
+  UI.growFold = true;
   UI.renderGrow();
-  const html = sb.document.getElementById("growCard").innerHTML;
-  check("三行都是已领", (html.match(/已领/g) || []).length === 3);
-  check("出现了收尾那句", html.indexOf("三条都做完") >= 0);
-  check("进度是 3 / 3", html.indexOf("3 / 3") >= 0);
+  check("收起态下做完也不显示小条", mini.classList.contains("hide"));
+  UI.growFold = false;
+
+  /* 退出再进主菜单，不会重新长出来 */
+  UI.show("ovMenu");
+  check("重开主菜单仍不出现", card.classList.contains("hide") && G.visible() === false);
+  check("进度仍记在存档里", P.d.grow.shop === 1 && P.d.grow.skill === 1 && P.d.grow.room === 1);
 }
 
 console.log("\n=== 5. 装配技能会推进「装一个技能」 ===");
